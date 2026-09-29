@@ -1,7 +1,7 @@
 # Contrato da fatia F6 — Edição de dados
 
 - **Data:** 2026-09-29
-- **Status:** Proposto; aguarda respostas do Eric (seção 8) antes de qualquer código.
+- **Status:** Aprovado pelo Eric em 2026-09-29 (seção 9). Status anterior: Proposto; aguarda respostas do Eric (seção 8) antes de qualquer código.
 - **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F6), documento 02 (seções 1.1, 1.2, 4.3 e 7.3), documento 03 (seções 6, 9.6 e 10.3; P-03, P-05, P-06, P-07, P-10, P-11, P-14), documento 01 (R2, R4, R5), decisões [0002](../decisoes/0002-fonte-da-verdade.md), [0004](../decisoes/0004-revisoes-e-reativacao.md), [0006](../decisoes/0006-nome-e-areas.md), [0007](../decisoes/0007-usuarios-e-perfis.md), [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md), [0012](../decisoes/0012-recebimento-automatico-e-metas-de-ciclo.md), [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md) e [0015](../decisoes/0015-cartao-estilo-planner.md); contratos da [F3](f3-painel-kanban.md), [F4](f4-detalhes-historico.md) (seção 3.3: formato do evento `EDICAO` que a linha do tempo já lê) e [F5](f5-mudanca-de-status.md) (ordem de decisão, idempotência, conflito de versão e rodapé do modal, seções 13 e 14).
 
 Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compartilhado`) e a parte interface (`apps/web`). Tudo o que a interface consome está tipado em `packages/compartilhado`; nenhuma das duas partes inventa campo fora daqui. Mudança neste contrato durante a F6 é feita aqui primeiro, depois no código.
@@ -285,3 +285,12 @@ A vitrine (`apps/web/e2e/vitrine/`) ganha `?editar=1` (abre os detalhes do docum
 2. **Aprovado e Cancelado não se editam** (nem pelo Administrador). Aprovado é final (decisão 0004): erro em documento aprovado vira revisão nova (F8); Cancelado se reativa antes (P-17). **Proposta:** manter. Alternativa: liberar Aprovado só para o Administrador, com a mesma trilha "antes → depois".
 3. **Código e N° de revisão editáveis?** O antigo permitia (e unificava cartões, P-06). **Proposta:** sim, como **correção de digitação**, com unicidade código + revisão conferida e conflito recusado (nunca mescla). Quando a F8 chegar, um documento que já tem revisão vinculada pode ter esses dois campos travados; até lá, editáveis.
 4. **Justificativa na edição?** A reprogramação e o cancelamento pedem; o antigo não pedia para editar dados. **Proposta:** **não** — o registro "antes → depois" com autor e hora já é a evidência, e pedir texto a cada correção de acento desestimula corrigir. Se a Qualidade precisar, entra depois como campo opcional "Motivo" no mesmo evento (sem migração).
+
+## 9. Respostas do Eric (2026-09-29) — aprovado
+
+1. Quem edita: como proposto (Administrador e Qualidade; Solicitante só quando devolvido para a sua área, sem mudar a área; Leitor não).
+2. Aprovado e Cancelado não se editam, nem pelo Administrador.
+3. Código e N.º de revisão editáveis como correção, com unicidade conferida e conflito recusado.
+4. Sem justificativa na edição.
+
+Nota de processo: sem créditos do Fable, a parte servidor da F6 é implementada com Opus (registrado no relatório).
