@@ -5,9 +5,11 @@ import {
   STATUS_INICIAL,
   calcularPrazoAutomatico,
   filtrarCartoes,
+  formatarDataCurta,
   lerReprogramacao,
   nomeDownloadPrincipal,
   pode,
+  podeReprogramarAgora,
   sanitizarNomePasta,
   validarArquivo,
   validarConjuntoArquivos,
@@ -400,6 +402,7 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           statusAnterior: null,
           destino: null,
           responsavel: null,
+          responsavelId: null,
           autorId: eu.id, // Autor sempre do token.
           autorNome: eu.nome,
           // O histórico mostra de onde veio o prazo (contrato F3, 2.2).
@@ -618,6 +621,16 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
         if (STATUS_SEM_PRAZO.has(documento.status)) {
           throw new ErroNegocio(409, { codigo: 'acao_nao_permitida', mensagem: 'Documento não tem prazo a reprogramar.' });
         }
+        // Decisão 0015 (item 5): reprogramar só com prazo vencido. Depois da idempotência
+        // (o reenvio de uma reprogramação aplicada encontra o prazo já no futuro) e do
+        // conflito de versão (quem viu o prazo velho recebe o estado atual). Mesma função
+        // pura que mostra ou esconde o botão na interface.
+        if (!podeReprogramarAgora(documento, hoje)) {
+          throw new ErroNegocio(409, {
+            codigo: 'acao_nao_permitida',
+            mensagem: `O prazo (${formatarDataCurta(documento.dataRevisao!)}) ainda não venceu: a reprogramação só é permitida com prazo vencido.`,
+          });
+        }
         // "Só adia" (decisão 0012), contra o prazo atual da linha bloqueada.
         const erroPrazo = validarNovoPrazo(pedido.novoPrazo, documento.dataRevisao, hoje);
         if (erroPrazo) {
@@ -640,6 +653,7 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           statusAnterior: null,
           destino: null,
           responsavel: null,
+          responsavelId: null,
           autorId: eu.id, // Autor sempre do token.
           autorNome: eu.nome,
           detalhes: [{ campo: 'dataRevisao', antes: documento.dataRevisao, depois: pedido.novoPrazo }],

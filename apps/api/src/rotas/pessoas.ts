@@ -11,13 +11,14 @@ import {
   inserirUsuario,
   listarAreasAtivas,
   listarAuditoria,
+  listarResponsaveis,
   listarUsuarios,
   paraPessoa,
   registrarAuditoria,
   type CamposUsuario,
 } from '../banco/pessoas.ts';
 import { enviarErro, exigir } from '../autenticacao/plugin.ts';
-import { validarAlteracaoPessoa, validarNovaPessoa } from '../validacao.ts';
+import { validarAlteracaoPessoa, validarNovaPessoa, validarQueryVazia } from '../validacao.ts';
 
 /** Violação de unicidade no PostgreSQL. */
 const VIOLACAO_UNICA = '23505';
@@ -136,6 +137,15 @@ export function registrarRotasPessoas(escopo: FastifyInstance, banco: Banco) {
       if (erro instanceof ErroNegocio) return enviarErro(resposta, erro.status, erro.corpo);
       throw erro;
     }
+  });
+
+  // F5 (contrato 3.5): pessoas elegíveis a responsável pela etapa, sem e-mail (LGPD).
+  // Quem pode: quem muda status (Administrador, Qualidade, Solicitante); Leitor → 403.
+  // Sem HEAD automático (padrão das rotas de leitura desde a F4) e query fechada.
+  escopo.get('/responsaveis', { exposeHeadRoute: false, preHandler: exigir('mudarStatus') }, async (requisicao, resposta) => {
+    const query = validarQueryVazia(requisicao.query);
+    if (!query.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: query.campos });
+    return listarResponsaveis(banco);
   });
 
   escopo.get<{ Params: { id: string } }>('/pessoas/:id/auditoria', soAdministrador, async (requisicao, resposta) => {

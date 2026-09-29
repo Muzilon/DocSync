@@ -3,22 +3,16 @@
  *
  * O fuso é constante (America/Sao_Paulo): não é segredo nem configuração. É a
  * única fonte de "hoje" da API: cadastro (data de recebimento e prazo), validação
- * da reprogramação e `RespostaPainel.hoje`.
+ * da reprogramação, `RespostaPainel.hoje` e `DetalheDocumento.hoje`. A conversão
+ * é a mesma `diaEmSaoPaulo` do pacote compartilhado (F5), para o SQL do painel, a
+ * API e a interface concordarem sobre "que dia foi".
  */
 
-export const FUSO_HORARIO = 'America/Sao_Paulo';
+import { FUSO_SAO_PAULO, diaEmSaoPaulo } from '@docsync/compartilhado';
 
-const formatador = new Intl.DateTimeFormat('en-CA', {
-  timeZone: FUSO_HORARIO,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+export const FUSO_HORARIO = FUSO_SAO_PAULO;
 
 /** Dia de hoje em 'AAAA-MM-DD' no fuso de São Paulo. `agora` é injetável para testes. */
 export function hojeNoFuso(agora: Date = new Date()): string {
-  // en-CA formata como 'AAAA-MM-DD'; as partes garantem o resultado mesmo se o formato mudar.
-  const partes = formatador.formatToParts(agora);
-  const pegar = (tipo: string) => partes.find((p) => p.type === tipo)!.value;
-  return `${pegar('year')}-${pegar('month')}-${pegar('day')}`;
+  return diaEmSaoPaulo(agora);
 }

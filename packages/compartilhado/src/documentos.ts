@@ -106,6 +106,13 @@ export interface Documento {
   qtdAnexos: number;
   /** Documento revisado por este (decisão 0004); null em documento novo. */
   idDocumentoOrigem: string | null;
+  /**
+   * Responsável atual pela etapa (F5, contrato 2.4): pessoa cadastrada (`USR-uuid`).
+   * null em Recebido (ninguém ainda), Aprovado (fluxo concluído) e importados.
+   */
+  responsavelId: string | null;
+  /** Nome ATUAL do responsável (por JOIN); o nome no momento de cada etapa fica no evento. */
+  responsavel: string | null;
   /** Número de versão para concorrência otimista (decisão 0002). Começa em 1. */
   versao: number;
   /** ID (`USR-uuid`) de quem cadastrou, vindo do token. */
@@ -129,7 +136,10 @@ export interface EventoHistorico {
   statusAnterior: StatusDocumento | null;
   dataHora: string;
   destino: string | null;
+  /** Nome do responsável pela etapa no momento do evento (F5); null quando não há. */
   responsavel: string | null;
+  /** ID (`USR-uuid`) do responsável pela etapa (F5, migração 0005); null quando não há. */
+  responsavelId: string | null;
   /** Sempre da identidade autenticada, nunca do corpo da requisição. */
   autorId: string;
   /** Nome do autor no momento do evento. */
@@ -228,6 +238,44 @@ export function diferencaEmDias(inicio: string, fim: string): number {
 /** Prazo automático de um cadastro feito no dia `dataCadastro` ('AAAA-MM-DD'). */
 export function calcularPrazoAutomatico(dataCadastro: string): string {
   return somarDias(dataCadastro, DIAS_PRAZO_PADRAO);
+}
+
+/** Fuso de referência de todas as datas só-dia do DocSync (decisão 0012). */
+export const FUSO_SAO_PAULO = 'America/Sao_Paulo';
+
+const formatadorDiaSaoPaulo = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO_SAO_PAULO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Dia ('AAAA-MM-DD') no fuso de São Paulo de um instante (ISO 8601 UTC ou `Date`).
+ * A mesma conversão do SQL `AT TIME ZONE 'America/Sao_Paulo'` do painel: um evento
+ * às 02:00 UTC de 10/10 é 09/10 em São Paulo.
+ */
+export function diaEmSaoPaulo(instante: string | Date): string {
+  // en-CA formata como 'AAAA-MM-DD'; as partes garantem o resultado mesmo se o formato mudar.
+  const partes = formatadorDiaSaoPaulo.formatToParts(typeof instante === 'string' ? new Date(instante) : instante);
+  const pegar = (tipo: string) => partes.find((p) => p.type === tipo)!.value;
+  return `${pegar('year')}-${pegar('month')}-${pegar('day')}`;
+}
+
+/** Documento ainda em tramitação (nem Aprovado nem Cancelado): o único que tem prazo a acompanhar. */
+export function emTramitacao(documento: Pick<Documento, 'status'>): boolean {
+  return documento.status !== 'Cancelado' && documento.status !== 'Aprovado';
+}
+
+/**
+ * Reprogramar só com prazo vencido (decisão 0015, item 5): documento em tramitação
+ * cujo prazo é anterior a hoje ("vence hoje" ainda não venceu). Documento em
+ * tramitação SEM prazo (importado) pode receber um: não há prazo a esperar vencer.
+ * A mesma regra decide o botão na interface e o 409 `acao_nao_permitida` na API.
+ */
+export function podeReprogramarAgora(documento: Pick<Documento, 'status' | 'dataRevisao'>, hoje: string): boolean {
+  if (!emTramitacao(documento)) return false;
+  return documento.dataRevisao === null || documento.dataRevisao < hoje;
 }
 
 /** Corpo de POST /documentos/:id/reprogramacoes. Campo desconhecido é rejeitado. */

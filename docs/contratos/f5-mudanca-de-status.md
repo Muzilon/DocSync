@@ -254,6 +254,8 @@ export function validarObservacao(texto: unknown): string | null;
 
 O Solicitante da própria área que tenta uma transição fora da sua lista recebe `403`; o de outra área nunca chega a saber que o documento existe (`404` no passo 2).
 
+> **Nota de implementação (2026-09-29, parte servidor), vale para 3.2, 3.3 e 3.4:** o passo 4 (estado final antes do corpo) e o passo 6.1 (reenvio → 200) se contradizem quando o reenvio é justamente da ação que levou ao estado final (duplo clique em "Aprovar" ou em "Sim, cancelar"; reenvio do "Desfazer"). A API pula a checagem de estado **antes da transação** quando o pedido pode ser um reenvio (corpo com `versao === versaoAtual − 1`) e deixa a transação decidir na ordem idempotência (200) → conflito de versão (409) → estado (409). Nos demais casos o passo 4 responde antes de o corpo ser validado, como escrito. Resultado observável: reenvio idêntico sempre 200; qualquer outro pedido sobre Aprovado/Cancelado continua 409 `acao_nao_permitida`.
+
 ### 3.3 `POST /documentos/:id/cancelamentos`
 
 1–2. Como em 3.2.

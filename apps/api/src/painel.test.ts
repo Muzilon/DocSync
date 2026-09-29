@@ -43,6 +43,7 @@ afterEach(async () => {
 });
 
 const HOJE = hojeNoFuso();
+const ONTEM = somarDias(HOJE, -1);
 const PRAZO_PADRAO = calcularPrazoAutomatico(HOJE);
 const NOVO_PRAZO = somarDias(PRAZO_PADRAO, 10);
 const JUSTIFICATIVA = 'Aguardando parecer técnico da engenharia.';
@@ -86,7 +87,11 @@ async function cadastrar(extra: Partial<NovoDocumento> = {}, quem: JWTPayload = 
   return resposta.json<Documento>();
 }
 
-/** Muda o status direto no banco e grava o evento (a F5 ainda não existe). */
+/**
+ * Muda o status direto no banco e grava o evento com `data_hora` escolhida: só para os
+ * casos que as rotas da F5 não produzem (hora fixa para o fuso; dados "migrados"). O fluxo
+ * normal está em transicoes.test.ts, pelas rotas.
+ */
 async function mudarStatusNoBanco(id: string, status: string, statusAnterior: string | null, dataHora?: string) {
   await amb.banco.query('UPDATE documentos SET status = $2 WHERE id = $1', [id, status]);
   const eu = (await amb.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
@@ -99,6 +104,22 @@ async function mudarStatusNoBanco(id: string, status: string, statusAnterior: st
 
 function reprogramar(quem: JWTPayload, id: string, corpo: unknown) {
   return amb.chamar(quem, 'POST', `/documentos/${id}/reprogramacoes`, corpo);
+}
+
+/**
+ * Decisão 0015: reprogramar só com prazo vencido. Os testes de reprogramação vencem o
+ * prazo direto no banco (ontem), sem mexer na versão; o prazo real continua sendo o
+ * automático do cadastro (testado à parte).
+ */
+async function vencerPrazo(id: string, prazo = ONTEM) {
+  await amb.banco.query('UPDATE documentos SET data_revisao = $2 WHERE id = $1', [id, prazo]);
+}
+
+/** Cadastra e vence o prazo: o caso normal dos testes de reprogramação. */
+async function cadastrarVencido(extra: Partial<NovoDocumento> = {}): Promise<Documento> {
+  const doc = await cadastrar(extra);
+  await vencerPrazo(doc.id);
+  return { ...doc, dataRevisao: ONTEM };
 }
 
 async function eventosDe(id: string): Promise<EventoHistorico[]> {
@@ -122,7 +143,7 @@ describe('POST /documentos — prazo automático (decisões 0011 e 0012)', () =>
 describe('POST /documentos/:id/reprogramacoes', () => {
   it('201: documento com versão +1, reprogramado e contagem; evento REPROGRAMACAO com autor do token', async () => {
     const qualidade = await pessoaComPerfil('qualidade', 'Qualidade');
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     const resposta = await reprogramar(qualidade, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: `  ${JUSTIFICATIVA}  `, versao: 1 });
     expect(resposta.statusCode).toBe(201);
     const { documento, evento } = resposta.json<ResultadoReprogramacao>();
@@ -138,27 +159,28 @@ describe('POST /documentos/:id/reprogramacoes', () => {
       statusAnterior: null,
       autorId: eu.id,
       autorNome: 'Pessoa qualidade',
-      detalhes: [{ campo: 'dataRevisao', antes: PRAZO_PADRAO, depois: NOVO_PRAZO }],
+      detalhes: [{ campo: 'dataRevisao', antes: ONTEM, depois: NOVO_PRAZO }],
       observacao: JUSTIFICATIVA, // aparada
     });
     const eventos = await eventosDe(doc.id);
     expect(eventos.map((e) => e.tipoAcao)).toEqual(['CRIACAO', 'REPROGRAMACAO']);
 
-    // Segunda reprogramação: só adia de novo; contagem 2, versão 3.
+    // Segunda reprogramação (com o prazo vencido de novo): contagem 2, versão 3.
+    await vencerPrazo(doc.id);
     const segunda = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(NOVO_PRAZO, 1), justificativa: JUSTIFICATIVA, versao: 2 });
     expect(segunda.statusCode).toBe(201);
     expect(segunda.json<ResultadoReprogramacao>().documento).toMatchObject({ qtdReprogramacoes: 2, versao: 3 });
   });
 
   it('autorId no corpo → 400 por campo desconhecido (autor sempre do token)', async () => {
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     const resposta = await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1, autorId: 'USR-x' });
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json().campos).toEqual({ autorId: 'Campo não permitido.' });
   });
 
-  it('reenvio idêntico → 200 com o estado atual, sem novo evento', async () => {
-    const doc = await cadastrar();
+  it('reenvio idêntico → 200 com o estado atual, sem novo evento (mesmo com o prazo já no futuro)', async () => {
+    const doc = await cadastrarVencido();
     const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
     const primeiro = await reprogramar(ADMIN, doc.id, corpo);
     expect(primeiro.statusCode).toBe(201);
@@ -169,7 +191,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
   });
 
   it('versão velha (mesmo com outros dados) → 409 conflito_versao com o documento atual', async () => {
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
     const outro = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(NOVO_PRAZO, 5), justificativa: 'Outra justificativa longa.', versao: 1 });
     expect(outro.statusCode).toBe(409);
@@ -186,7 +208,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
 
   it('mesmo pedido por outro autor não é reenvio: versão velha → 409 conflito_versao e nada é gravado', async () => {
     const qualidade = await pessoaComPerfil('q2', 'Qualidade');
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
     expect((await reprogramar(ADMIN, doc.id, corpo)).statusCode).toBe(201);
     const outro = await reprogramar(qualidade, doc.id, corpo);
@@ -195,22 +217,37 @@ describe('POST /documentos/:id/reprogramacoes', () => {
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
-  it('B1: versão velha com prazo não posterior ao atual → 409 conflito_versao (antes da regra "só adia")', async () => {
-    // A vê prazo P (versão 1); B reprograma para P+10; A envia P+5 com versão 1.
-    const doc = await cadastrar();
+  it('B1: versão velha → 409 conflito_versao antes de qualquer regra de prazo; com a versão atual, prazo não vencido → 409 acao_nao_permitida', async () => {
+    // A vê prazo vencido (versão 1); B reprograma para P+10; A envia P+5 com versão 1.
+    const doc = await cadastrarVencido();
     expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
     const deA = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 1 });
     expect(deA.statusCode).toBe(409);
     expect(deA.json()).toMatchObject({ codigo: 'conflito_versao', documento: { id: doc.id, versao: 2, dataRevisao: NOVO_PRAZO } });
-    // Com a versão atual, o mesmo prazo reprova na regra "só adia" (400), não em conflito.
+    // Com a versão atual, o prazo novo (futuro) ainda não venceu: decisão 0015 recusa.
     const comVersaoAtual = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 2 });
-    expect(comVersaoAtual.statusCode).toBe(400);
-    expect(comVersaoAtual.json().campos).toEqual({ novoPrazo: expect.stringMatching(/posterior ao prazo atual/) });
+    expect(comVersaoAtual.statusCode).toBe(409);
+    expect(comVersaoAtual.json()).toMatchObject({ codigo: 'acao_nao_permitida', mensagem: expect.stringMatching(/ainda não venceu/) });
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
+  it('decisão 0015: prazo ainda não vencido (hoje ou futuro) → 409 acao_nao_permitida; vencido ontem → 201; sem prazo (importado) → 201', async () => {
+    const futuro = await cadastrar(); // prazo = hoje + 30
+    const recusado = await reprogramar(ADMIN, futuro.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
+    expect(recusado.statusCode).toBe(409);
+    expect(recusado.json()).toEqual({
+      codigo: 'acao_nao_permitida',
+      mensagem: expect.stringMatching(/ainda não venceu.*só é permitida com prazo vencido/),
+    });
+    await vencerPrazo(futuro.id, HOJE); // "vence hoje" ainda não venceu
+    expect((await reprogramar(ADMIN, futuro.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(409);
+    await vencerPrazo(futuro.id, ONTEM);
+    expect((await reprogramar(ADMIN, futuro.id, { novoPrazo: HOJE, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
+    expect(await eventosDe(futuro.id)).toHaveLength(2);
+  });
+
   it('B2: reenvio idêntico com campo extra → 400 dados_invalidos (esquema fechado antes da idempotência)', async () => {
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
     expect((await reprogramar(ADMIN, doc.id, corpo)).statusCode).toBe(201);
     const comExtra = await reprogramar(ADMIN, doc.id, { ...corpo, autorId: 'USR-x' });
@@ -223,7 +260,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
   });
 
   it('reenvio com a mesma versão mas justificativa diferente → 409 conflito_versao', async () => {
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
     const outro = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(NOVO_PRAZO, 3), justificativa: 'Justificativa diferente da primeira.', versao: 1 });
     expect(outro.statusCode).toBe(409);
@@ -244,19 +281,16 @@ describe('POST /documentos/:id/reprogramacoes', () => {
     expect(r2.json()).toMatchObject({ codigo: 'acao_nao_permitida', mensagem: expect.stringMatching(/cancelado/) });
   });
 
-  it('validação: justificativa curta, prazo passado, igual/anterior ao atual, versão inválida, campo extra', async () => {
-    const doc = await cadastrar();
+  it('validação: justificativa curta, prazo passado, versão inválida, campo extra', async () => {
+    const doc = await cadastrarVencido();
     const curta = await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: 'curta', versao: 1 });
     expect(curta.statusCode).toBe(400);
     expect(curta.json().campos).toEqual({ justificativa: 'A justificativa precisa ter ao menos 10 caracteres.' });
 
     const passado = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(HOJE, -1), justificativa: JUSTIFICATIVA, versao: 1 });
     expect(passado.json().campos.novoPrazo).toMatch(/anterior a hoje/);
-
-    const igual = await reprogramar(ADMIN, doc.id, { novoPrazo: PRAZO_PADRAO, justificativa: JUSTIFICATIVA, versao: 1 });
-    expect(igual.json().campos.novoPrazo).toMatch(/posterior ao prazo atual/);
-    const anterior = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, -1), justificativa: JUSTIFICATIVA, versao: 1 });
-    expect(anterior.json().campos.novoPrazo).toMatch(/posterior ao prazo atual/);
+    // Com o prazo vencido, qualquer data de hoje em diante é posterior ao prazo atual: a
+    // regra "só adia" (decisão 0012) fica coberta pelo teste puro de `validarNovoPrazo`.
 
     const invalida = await reprogramar(ADMIN, doc.id, { novoPrazo: '2026-02-30', justificativa: JUSTIFICATIVA, versao: '1', extra: true });
     expect(invalida.json().campos).toEqual({
@@ -274,7 +308,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
     expect(await eventosDe(doc.id)).toHaveLength(1);
   });
 
-  it('documento sem prazo (importado): aceita hoje como novo prazo', async () => {
+  it('documento sem prazo (importado): aceita hoje como novo prazo (não há prazo a vencer, decisão 0015)', async () => {
     const doc = await cadastrar();
     await amb.banco.query('UPDATE documentos SET data_revisao = NULL WHERE id = $1', [doc.id]);
     const resposta = await reprogramar(ADMIN, doc.id, { novoPrazo: HOJE, justificativa: JUSTIFICATIVA, versao: 1 });
@@ -285,8 +319,8 @@ describe('POST /documentos/:id/reprogramacoes', () => {
   it('permissões: Solicitante 403 na própria área e 404 em área alheia; Leitor 403; inexistente 404; sem perfil 403', async () => {
     const solicitante = await pessoaComPerfil('sol', 'Solicitante', 'Engenharia');
     const leitor = await pessoaComPerfil('lei', 'Leitor');
-    const daEngenharia = await cadastrar({ areaId: await idDaArea('Engenharia') });
-    const deCustos = await cadastrar({ areaId: await idDaArea('Custos') });
+    const daEngenharia = await cadastrarVencido({ areaId: await idDaArea('Engenharia') });
+    const deCustos = await cadastrarVencido({ areaId: await idDaArea('Custos') });
     const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
 
     const propria = await reprogramar(solicitante, daEngenharia.id, corpo);
@@ -303,7 +337,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
   });
 
   it('evento REPROGRAMACAO não pode ser alterado nem apagado (gatilho)', async () => {
-    const doc = await cadastrar();
+    const doc = await cadastrarVencido();
     await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
     await expect(
       amb.banco.query("UPDATE eventos_historico SET observacao = 'x' WHERE tipo_acao = 'REPROGRAMACAO'"),
@@ -320,7 +354,7 @@ describe('GET /painel', () => {
   }
 
   it('cartões só com campos de exibição, fase resolvida, hoje presente e ordem por prazo', async () => {
-    const a = await cadastrar({ titulo: 'Segundo', codigo: 'B-2' });
+    const a = await cadastrarVencido({ titulo: 'Segundo', codigo: 'B-2' });
     const b = await cadastrar({ titulo: 'Primeiro', codigo: 'A-1' });
     await reprogramar(ADMIN, a.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
 
@@ -346,6 +380,10 @@ describe('GET /painel', () => {
       qtdReprogramacoes: 1,
       qtdDevolucoes: 0,
       dataAprovacao: null,
+      dataInicioRevisao: null,
+      responsavelId: null,
+      responsavel: null,
+      statusAntesDoCancelamento: null,
       versao: 2,
       criadoEm: a.criadoEm,
       dataModificacao: expect.any(String),
@@ -431,7 +469,7 @@ describe('GET /painel', () => {
     expect((await amb.chamar(pessoaFicticia('sem2'), 'GET', '/painel')).statusCode).toBe(403);
   });
 
-  it('qtdDevolucoes e dataAprovacao calculados dos eventos (inseridos direto no banco)', async () => {
+  it('qtdDevolucoes e dataAprovacao calculados dos eventos (inseridos direto no banco, com hora fixa para o fuso)', async () => {
     const doc = await cadastrar();
     // Entra em devolvido, muda dentro da fase (não conta), sai, volta (conta de novo) e é aprovado.
     await mudarStatusNoBanco(doc.id, 'Em revisão da qualidade', 'Recebido');
@@ -444,6 +482,6 @@ describe('GET /painel', () => {
     await mudarStatusNoBanco(doc.id, 'Aprovado', 'Para aprovação qualidade', '2026-10-10T02:00:00Z');
 
     const [cartao] = (await painel(ADMIN)).cartoes;
-    expect(cartao).toMatchObject({ status: 'Aprovado', fase: 'aprovado', qtdDevolucoes: 2, dataAprovacao: '2026-10-09' });
+    expect(cartao).toMatchObject({ status: 'Aprovado', fase: 'aprovado', qtdDevolucoes: 2, dataAprovacao: '2026-10-09', dataInicioRevisao: HOJE });
   });
 });

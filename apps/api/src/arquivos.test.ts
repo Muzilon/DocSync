@@ -123,6 +123,8 @@ describe('GET /documentos/:id — detalhe estendido (contrato F4, seção 2)', (
   it('eventos ficam em ordem de gravação (reprogramação depois do cadastro)', async () => {
     const detalhe = await cadastrarComArquivos();
     const doc = detalhe.documento;
+    // Decisão 0015: reprogramar só com prazo vencido; vence o prazo direto no banco.
+    await amb.banco.query("UPDATE documentos SET data_revisao = '2026-01-01' WHERE id = $1", [doc.id]);
     const reprogramada = await amb.chamar(ADMIN, 'POST', `/documentos/${doc.id}/reprogramacoes`, {
       novoPrazo: '2030-01-01',
       justificativa: 'Justificativa suficiente para o teste.',

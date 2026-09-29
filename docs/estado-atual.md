@@ -17,7 +17,7 @@ Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios 
 
 ## F5: em andamento
 
-Mudança de status (plano-fundacao.md), com o KPI "Aprovados no mês" e as metas de 14/40 dias (decisão 0012). Primeiro passo: contrato em `docs/contratos/f5-mudanca-de-status.md`, aprovado pelo Eric antes do código. Em paralelo, ajustes finais da F4 ("Revisa o documento" escondido; frase do Leitor).
+Mudança de status (plano-fundacao.md), com o KPI "Aprovados no mês" e as metas de 14/40 dias (decisão 0012). Contrato em `docs/contratos/f5-mudanca-de-status.md`, aprovado pelo Eric (seção 11 prevalece). **Parte servidor entregue** em 2026-09-29 (relatório `relatorios/2026-09-29-f5-api-status.md`): tipos e regras no compartilhado, migração 0005, rotas de transição/cancelamento/reativação, `GET /responsaveis`, reprogramação só com prazo vencido (decisão 0015). Parte interface em andamento por outro agente (typecheck da web pendente até ela absorver `Documento.responsavelId/responsavel` e as funções novas do cliente). Depois: verificação integrada, QA e roteiro para o Eric.
 
 ## Contas de teste no Entra
 
@@ -49,4 +49,6 @@ Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cor
 
 - Envio de arquivos fica todo em memória (até ~120 MB por requisição): trocar por streaming antes da produção.
 - Regra do último administrador usa `pg_advisory_xact_lock`: validar com PostgreSQL real antes da produção.
+- F9: chave de idempotência por evento gerada pelo cliente (`HIST-uuid` criado na origem), com migração própria. A detecção de reenvio da F3/F5 (versão + último evento do mesmo autor) cobre duplo clique e reenvio imediato, não um reenvio depois de outra ação intermediária (contrato F5, 3.6).
+- Regra "só adia" da reprogramação (decisão 0012) ficou inalcançável pela API depois da decisão 0015 (com prazo vencido, qualquer data de hoje em diante é posterior ao prazo): continua em `validarNovoPrazo` e testada no puro; sem efeito prático.
 - Sem verificação de conteúdo/antivírus dos arquivos. Download fica em memória (arquivo até 20 MB): streaming antes da produção. Histórico sem paginação (rota `?apos=` quando a F12 importar centenas de eventos). Sem tela para `registros_acesso_arquivos` (fatia futura).

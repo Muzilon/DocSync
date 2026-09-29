@@ -9,6 +9,7 @@
 
 import {
   FASE_DO_STATUS,
+  diaEmSaoPaulo,
   ehDataSoDia,
   lerReprogramacao,
   type EventoHistorico,
@@ -63,7 +64,7 @@ export interface DescricaoEvento {
   diferencas: DiferencaExibida[];
   /** observacao aparada, ou null. Em REPROGRAMACAO é a justificativa. */
   observacao: string | null;
-  /** Rótulo do campo `observacao` na tela: 'Justificativa' em REPROGRAMACAO, 'Observação' nos demais. */
+  /** Rótulo do campo `observacao` na tela: 'Justificativa' em REPROGRAMACAO, 'Motivo' em CANCELAMENTO, 'Observação' nos demais. */
   rotuloObservacao: string;
   destino: string | null;
   responsavel: string | null;
@@ -72,6 +73,12 @@ export interface DescricaoEvento {
 }
 
 const VAZIO = '—';
+
+/** Rótulo do campo `observacao` por tipo de evento (os demais usam 'Observação'). */
+const ROTULO_OBSERVACAO: Partial<Record<TipoAcaoHistorico, string>> = {
+  REPROGRAMACAO: 'Justificativa',
+  CANCELAMENTO: 'Motivo',
+};
 
 /** Valor de `detalhes[]` formatado: null → '—'; campo `data*` com 'AAAA-MM-DD' → dd/mm/aaaa; o resto como texto. */
 export function formatarValorHistorico(campo: string, valor: string | null): string {
@@ -132,7 +139,7 @@ export function descreverEvento(evento: EventoHistorico): DescricaoEvento {
     statusAnterior,
     diferencas,
     observacao,
-    rotuloObservacao: evento.tipoAcao === 'REPROGRAMACAO' ? 'Justificativa' : 'Observação',
+    rotuloObservacao: ROTULO_OBSERVACAO[evento.tipoAcao] ?? 'Observação',
     destino,
     responsavel,
     temDetalhes: diferencas.length > 0 || observacao !== null || destino !== null || responsavel !== null,
@@ -153,4 +160,27 @@ export function contarDevolucoes(eventos: readonly EventoHistorico[]): number {
     total++;
   }
   return total;
+}
+
+/**
+ * Dia (São Paulo) do PRIMEIRO evento STATUS cujo status está na fase 'revisao'
+ * (mesma regra do SQL de `listarCartoes`: `min(data_hora)`); null se nunca entrou.
+ * Base da meta de 14 dias (decisão 0012). `eventos` em ordem de gravação.
+ */
+export function dataInicioRevisao(eventos: readonly EventoHistorico[]): string | null {
+  const primeiro = eventos.find((e) => e.tipoAcao === 'STATUS' && FASE_DO_STATUS[e.status] === 'revisao');
+  return primeiro ? diaEmSaoPaulo(primeiro.dataHora) : null;
+}
+
+/**
+ * Dia (São Paulo) do ÚLTIMO evento STATUS com status 'Aprovado' (mesma regra do SQL:
+ * `max(data_hora)`); null se nunca aprovado. Documento reativado e aprovado de novo
+ * conta pela última aprovação.
+ */
+export function dataAprovacao(eventos: readonly EventoHistorico[]): string | null {
+  let ultimo: EventoHistorico | undefined;
+  for (const e of eventos) {
+    if (e.tipoAcao === 'STATUS' && e.status === 'Aprovado') ultimo = e;
+  }
+  return ultimo ? diaEmSaoPaulo(ultimo.dataHora) : null;
 }

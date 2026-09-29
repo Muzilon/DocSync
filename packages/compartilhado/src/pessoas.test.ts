@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PERFIS, acessoLiberado, ehPerfil, pode, type Acao, type Perfil, type Pessoa } from './pessoas.ts';
+import { STATUS_DOCUMENTO, type StatusDocumento } from './documentos.ts';
+import { PERFIS, TRANSICOES_SOLICITANTE, acessoLiberado, ehPerfil, pode, type Acao, type Perfil, type Pessoa } from './pessoas.ts';
 
 function pessoa(perfil: Perfil | null, extra: Partial<Pessoa> = {}): Pessoa {
   return {
@@ -24,6 +25,11 @@ describe('pode — tabela de permissões (sem contexto)', () => {
     reprogramarPrazo: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
     // Decisão 0014: Leitor não baixa; Solicitante só com contexto da sua área (bloco seguinte).
     baixarArquivo: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: false },
+    // Contrato F5 (2.3): Solicitante muda status só na sua área e só nos pares de
+    // TRANSICOES_SOLICITANTE (bloco próprio abaixo); nunca cancela nem reativa.
+    mudarStatus: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: false },
+    cancelarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
+    reativarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
   };
 
   for (const [acao, porPerfil] of Object.entries(tabela) as [Acao, Record<Perfil, boolean>][]) {
@@ -123,6 +129,64 @@ describe('pode — com contexto de área (documento 02, seção 7.3)', () => {
     expect(pode(pessoa('Solicitante'), 'baixarArquivo', suaArea)).toBe(true);
     expect(pode(pessoa('Solicitante'), 'baixarArquivo', outraArea)).toBe(false);
     expect(pode(pessoa('Solicitante', { areaId: null, area: null }), 'baixarArquivo', suaArea)).toBe(false);
+  });
+
+  describe('mudarStatus (contrato F5, 2.3)', () => {
+    const comTransicao = (de: StatusDocumento, para: StatusDocumento, areaId = 'AREA-teste') => ({
+      areaId,
+      transicao: { de, para },
+    });
+
+    it('Administrador e Qualidade: sim, com ou sem área e com qualquer transição (a máquina é conferida à parte)', () => {
+      for (const perfil of ['Administrador', 'Qualidade'] as const) {
+        expect(pode(pessoa(perfil), 'mudarStatus')).toBe(true);
+        expect(pode(pessoa(perfil), 'mudarStatus', outraArea)).toBe(true);
+        expect(pode(pessoa(perfil), 'mudarStatus', comTransicao('Recebido', 'Aprovado', 'AREA-outra'))).toBe(true);
+      }
+    });
+
+    it('Leitor: nunca', () => {
+      expect(pode(pessoa('Leitor'), 'mudarStatus')).toBe(false);
+      expect(pode(pessoa('Leitor'), 'mudarStatus', suaArea)).toBe(false);
+      expect(pode(pessoa('Leitor'), 'mudarStatus', comTransicao('Devolvido para correção', 'Em revisão da qualidade'))).toBe(false);
+    });
+
+    it('Solicitante: pergunta genérica sim sem contexto e na sua área; não em outra área', () => {
+      expect(pode(pessoa('Solicitante'), 'mudarStatus')).toBe(true);
+      expect(pode(pessoa('Solicitante'), 'mudarStatus', suaArea)).toBe(true);
+      expect(pode(pessoa('Solicitante'), 'mudarStatus', outraArea)).toBe(false);
+      expect(pode(pessoa('Solicitante', { areaId: null, area: null }), 'mudarStatus', suaArea)).toBe(false);
+    });
+
+    it('Solicitante: cada par de TRANSICOES_SOLICITANTE na sua área → sim; em outra área → não', () => {
+      expect(TRANSICOES_SOLICITANTE).toHaveLength(4);
+      for (const [de, para] of TRANSICOES_SOLICITANTE) {
+        expect(pode(pessoa('Solicitante'), 'mudarStatus', comTransicao(de, para))).toBe(true);
+        expect(pode(pessoa('Solicitante'), 'mudarStatus', comTransicao(de, para, 'AREA-outra'))).toBe(false);
+      }
+    });
+
+    it('Solicitante: par fora da lista → não; nunca → Aprovado', () => {
+      expect(pode(pessoa('Solicitante'), 'mudarStatus', comTransicao('Recebido', 'Em revisão da qualidade'))).toBe(false);
+      expect(pode(pessoa('Solicitante'), 'mudarStatus', comTransicao('Devolvido para correção', 'Em revisão junto à área'))).toBe(false);
+      for (const de of STATUS_DOCUMENTO) {
+        expect(pode(pessoa('Solicitante'), 'mudarStatus', comTransicao(de, 'Aprovado'))).toBe(false);
+      }
+      expect(TRANSICOES_SOLICITANTE.some(([, para]) => para === 'Aprovado')).toBe(false);
+    });
+  });
+
+  it('cancelarDocumento e reativarDocumento: Administrador e Qualidade em qualquer área; Solicitante e Leitor nunca', () => {
+    for (const acao of ['cancelarDocumento', 'reativarDocumento'] as const) {
+      for (const perfil of ['Administrador', 'Qualidade'] as const) {
+        expect(pode(pessoa(perfil), acao, suaArea)).toBe(true);
+        expect(pode(pessoa(perfil), acao, outraArea)).toBe(true);
+      }
+      for (const perfil of ['Solicitante', 'Leitor'] as const) {
+        expect(pode(pessoa(perfil), acao)).toBe(false);
+        expect(pode(pessoa(perfil), acao, suaArea)).toBe(false);
+      }
+    }
   });
 
   it('Administrador sem área continua podendo cadastrar e ver com contexto', () => {

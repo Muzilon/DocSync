@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { EventoHistorico } from './documentos.ts';
+import { diaEmSaoPaulo, type EventoHistorico } from './documentos.ts';
 import {
   ROTULO_CAMPO_HISTORICO,
   ROTULO_TIPO_ACAO,
   contarDevolucoes,
+  dataAprovacao,
+  dataInicioRevisao,
   descreverEvento,
   formatarValorHistorico,
 } from './historico.ts';
@@ -21,6 +23,7 @@ function evento(extra: Partial<EventoHistorico> = {}): EventoHistorico {
     dataHora: '2026-09-29T12:00:00.000Z',
     destino: null,
     responsavel: null,
+    responsavelId: null,
     autorId: 'USR-1',
     autorNome: 'Pessoa Fictícia',
     detalhes: [],
@@ -94,13 +97,46 @@ describe('descreverEvento — um caso por tipo (contrato F4, 3.3)', () => {
     expect(igual.statusAnterior).toBeNull();
   });
 
-  it('CANCELAMENTO: resumo com o status anterior (decisão 0004)', () => {
+  it('CANCELAMENTO: resumo com o status anterior (decisão 0004) e motivo como observação', () => {
     const d = descreverEvento(
-      evento({ tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Em revisão junto à área' }),
+      evento({
+        tipoAcao: 'CANCELAMENTO',
+        status: 'Cancelado',
+        statusAnterior: 'Em revisão junto à área',
+        observacao: 'Documento substituído pela revisão 2.',
+      }),
     );
     expect(d.titulo).toBe('Cancelamento');
     expect(d.resumo).toBe('Cancelado (estava em Em revisão junto à área)');
     expect(d.statusAnterior).toBe('Em revisão junto à área');
+    expect(d.rotuloObservacao).toBe('Motivo');
+    expect(d.observacao).toBe('Documento substituído pela revisão 2.');
+  });
+
+  it('STATUS de transição (F5) com responsável e observação', () => {
+    const d = descreverEvento(
+      evento({
+        tipoAcao: 'STATUS',
+        status: 'Devolvido para correção',
+        statusAnterior: 'Em revisão da qualidade',
+        responsavel: 'Solicitante Fictício',
+        responsavelId: 'USR-2',
+        observacao: 'Faltou a assinatura da página 3.',
+      }),
+    );
+    expect(d.resumo).toBe('De Em revisão da qualidade para Devolvido para correção');
+    expect(d.responsavel).toBe('Solicitante Fictício');
+    expect(d.rotuloObservacao).toBe('Observação');
+    expect(d.temDetalhes).toBe(true);
+  });
+
+  it('reativação (STATUS com statusAnterior Cancelado): "De Cancelado para X"', () => {
+    const d = descreverEvento(
+      evento({ tipoAcao: 'STATUS', status: 'Em revisão da qualidade', statusAnterior: 'Cancelado', observacao: 'Cancelamento desfeito.' }),
+    );
+    expect(d.resumo).toBe('De Cancelado para Em revisão da qualidade');
+    expect(d.statusAnterior).toBe('Cancelado');
+    expect(d.observacao).toBe('Cancelamento desfeito.');
   });
 
   it('EDICAO com 3 campos, incluindo data e null', () => {
@@ -199,5 +235,49 @@ describe('contarDevolucoes — mesma regra do SQL de listarCartoes', () => {
     expect(contarDevolucoes([status('Devolvido para correção', null)])).toBe(1);
     // EDICAO com status devolvido não é entrada na fase.
     expect(contarDevolucoes([evento({ tipoAcao: 'EDICAO', status: 'Devolvido para correção', statusAnterior: 'Recebido' })])).toBe(0);
+  });
+});
+
+describe('dataInicioRevisao e dataAprovacao — mesma regra do SQL de listarCartoes (F5)', () => {
+  const status = (s: EventoHistorico['status'], anterior: EventoHistorico['statusAnterior'], dataHora: string) =>
+    evento({ tipoAcao: 'STATUS', status: s, statusAnterior: anterior, dataHora });
+
+  it('nunca em revisão → null; sem aprovação → null', () => {
+    const eventos = [evento({ tipoAcao: 'CRIACAO', dataHora: '2026-09-01T12:00:00Z' }), status('Devolvido para correção', 'Recebido', '2026-09-02T12:00:00Z')];
+    expect(dataInicioRevisao(eventos)).toBeNull();
+    expect(dataAprovacao(eventos)).toBeNull();
+  });
+
+  it('primeiro STATUS em fase revisao (a 1.ª entrada, não a última)', () => {
+    const eventos = [
+      evento({ tipoAcao: 'CRIACAO', dataHora: '2026-09-01T12:00:00Z' }),
+      status('Em revisão da qualidade', 'Recebido', '2026-09-03T12:00:00Z'),
+      status('Devolvido para correção', 'Em revisão da qualidade', '2026-09-05T12:00:00Z'),
+      status('Em revisão junto à área', 'Devolvido para correção', '2026-09-08T12:00:00Z'),
+    ];
+    expect(dataInicioRevisao(eventos)).toBe('2026-09-03');
+  });
+
+  it('aprovado, reativado e aprovado de novo → última aprovação', () => {
+    const eventos = [
+      status('Aprovado', 'Para aprovação qualidade', '2026-09-10T12:00:00Z'),
+      evento({ tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Aprovado', dataHora: '2026-09-11T12:00:00Z' }),
+      status('Aprovado', 'Cancelado', '2026-09-20T12:00:00Z'),
+    ];
+    expect(dataAprovacao(eventos)).toBe('2026-09-20');
+  });
+
+  it('evento às 23:30 de São Paulo gravado em UTC no dia seguinte → dia de São Paulo', () => {
+    // 02:30 UTC de 10/10 = 23:30 de 09/10 em São Paulo.
+    expect(dataInicioRevisao([status('Em revisão da qualidade', 'Recebido', '2026-10-10T02:30:00Z')])).toBe('2026-10-09');
+    expect(dataAprovacao([status('Aprovado', 'Para aprovação qualidade', '2026-10-10T02:30:00Z')])).toBe('2026-10-09');
+    expect(diaEmSaoPaulo('2026-10-10T02:30:00.000Z')).toBe('2026-10-09');
+    expect(diaEmSaoPaulo('2026-10-10T03:00:00.000Z')).toBe('2026-10-10');
+    expect(diaEmSaoPaulo(new Date('2026-01-01T02:59:59Z'))).toBe('2025-12-31');
+  });
+
+  it('só eventos STATUS contam (CANCELAMENTO, EDICAO e REPROGRAMACAO com status de revisão não são entrada)', () => {
+    expect(dataInicioRevisao([evento({ tipoAcao: 'REPROGRAMACAO', status: 'Em revisão da qualidade', dataHora: '2026-09-03T12:00:00Z' })])).toBeNull();
+    expect(dataAprovacao([evento({ tipoAcao: 'EDICAO', status: 'Aprovado', dataHora: '2026-09-03T12:00:00Z' })])).toBeNull();
   });
 });

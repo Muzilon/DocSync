@@ -14,6 +14,8 @@ import {
   TIPO_MIME_GENERICO,
   TIPO_MIME_POR_EXTENSAO,
   calcularPrazoAutomatico,
+  emTramitacao,
+  podeReprogramarAgora,
   diferencaEmDias,
   ehDataSoDia,
   ehPdf,
@@ -207,6 +209,7 @@ describe('lerReprogramacao', () => {
     dataHora: '2026-09-29T12:00:00.000Z',
     destino: null,
     responsavel: null,
+    responsavelId: null,
     autorId: 'USR-1',
     autorNome: 'Pessoa',
     detalhes: [{ campo: 'dataRevisao', antes: '2026-10-29', depois: '2026-11-10' }],
@@ -356,5 +359,21 @@ describe('nomeDownloadPrincipal (decisão 0014, item 4)', () => {
     const quaseLimite = 'C'.repeat(195);
     const nome2 = nomeDownloadPrincipal({ codigo: quaseLimite, titulo: 'Título longo', revisao: 1 }, 'a.pdf');
     expect(Array.from(nome2).length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+  });
+});
+
+describe('podeReprogramarAgora (decisão 0015, item 5: só com prazo vencido)', () => {
+  const hoje = '2026-09-29';
+  it('prazo anterior a hoje → sim; hoje ou futuro → não', () => {
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-28' }, hoje)).toBe(true);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-29' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Em revisão da qualidade', dataRevisao: '2026-10-29' }, hoje)).toBe(false);
+  });
+  it('Aprovado e Cancelado nunca, mesmo vencidos; sem prazo (importado) pode receber um', () => {
+    expect(podeReprogramarAgora({ status: 'Aprovado', dataRevisao: '2026-01-01' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Cancelado', dataRevisao: '2026-01-01' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: null }, hoje)).toBe(true);
+    expect(emTramitacao({ status: 'Aprovado' })).toBe(false);
+    expect(emTramitacao({ status: 'Devolvido para correção' })).toBe(true);
   });
 });
