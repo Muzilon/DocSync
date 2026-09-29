@@ -522,3 +522,9 @@ Sem dados a preencher: documentos existentes ficam com `responsavel_id NULL` (o 
 ## 12. Confirmações do Eric (2026-09-29)
 
 Mantidos os três pontos decididos na implementação do servidor: (1) documento em tramitação sem prazo pode ser reprogramado; (2) reativação com status anterior inválido volta para "Recebido"; (3) a busca do Painel inclui o responsável.
+
+## 13. Aprovações do Eric após a implementação (2026-09-29)
+
+1. Rodapé do modal enxuto: ação principal, "Atualizar etapa…", "Cancelar", "Reprogramar" (só vencido) e "Fechar"; as demais transições ficam dentro de "Atualizar etapa…".
+2. Reativar dos cancelados fica nos detalhes (cartão sem botões).
+3. KPIs em 2 colunas abaixo de 1200px.
