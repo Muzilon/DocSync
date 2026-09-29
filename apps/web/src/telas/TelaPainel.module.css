@@ -69,6 +69,23 @@
   min-width: 0;
 }
 
+/* Solicitante: área fixa em texto, alinhada à altura dos campos (sem controle). */
+.areaFixa {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--campo-altura);
+  min-width: 0;
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.areaFixaRotulo {
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
 .botaoCancelados {
   min-height: var(--campo-altura);
 }

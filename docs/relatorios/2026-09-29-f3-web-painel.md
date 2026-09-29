@@ -129,3 +129,15 @@ Defeitos do [relatório de QA](2026-09-29-f3-qa.md) corrigidos só em `apps/web`
 Arquivos: `apps/web/src/componentes/JanelaCancelados.tsx`, `apps/web/src/telas/TelaPainel.tsx`, `apps/web/src/telas/TelaPainel.module.css`, `apps/web/src/telas/TelaPainel.test.tsx` (testes de B4, B5, B6 e de `ordenarCartoesPainel`), `apps/web/e2e/painel.spec.ts` (B10), `CHANGELOG.md`.
 
 Validação: `npm run typecheck` ok; `npm test` 15 arquivos, 262 testes passando; `npm run build` ok; `npm run segredos` limpo; e2e 55 passando e 17 ignorados (capturas), com configuração temporária apontando para o Chromium de `/opt/pw-browsers` (apagada depois).
+
+## Ajustes pedidos pelo Eric
+
+Só em `apps/web`; API e pacote compartilhado intocados.
+
+- **Cartão enxuto, como o Planner:** mantém código ou "S/ código" + "Rev. N", título e `BadgeStatus`. Na linha de etiquetas entra a nova **etiqueta de área** (neutra: `--bg-hover`, `--text-strong` e borda `--border-subtle`; #1E293B sobre #F1F5F9 no claro e #F1F5F9 sobre #193942 no escuro, ambas acima de 4,5:1; prefixo "Área: " só para leitor de tela), seguida das etiquetas de prazo, "Reprogramado" e "↺ N×". Rodapé sempre "Recebido em dd/mm/aaaa". Saíram tipo de documento, remetente e "Revisão até" (a data do prazo já está na etiqueta). A busca continua procurando no remetente (`filtrarCartoes` intocada). Responsável atual não foi criado (vem na F5).
+- **Filtro de área do Solicitante:** a seleção "Área" não aparece para o Solicitante; no lugar, o texto "Área: <área dele>" (de `eu.area`), sem controle. Os demais perfis seguem com "Todas as áreas" + áreas ativas em ordem pt-BR. Provisório até existir um painel próprio para quem só acompanha (decisão futura).
+- **Vitrine:** com `?perfil=Solicitante`, o painel simulado devolve só os documentos da área da pessoa, como a API.
+- **Testes:** `TelaPainel.test.tsx` (cartão enxuto sem tipo, remetente e "Revisão até"; Solicitante sem a seleção e com "Área: Engenharia"); `e2e/painel.spec.ts` (cartão enxuto; Solicitante claro e escuro com axe).
+- **Capturas regeneradas:** `painel-1440-*`, `painel-768-*`, `painel-cancelados-*` e `painel-reprogramar-*` (claro e escuro).
+
+Arquivos: `apps/web/src/componentes/CartaoDocumento.tsx` e `.module.css`, `apps/web/src/telas/TelaPainel.tsx` e `.module.css`, `apps/web/src/telas/TelaPainel.test.tsx`, `apps/web/e2e/painel.spec.ts`, `apps/web/e2e/vitrine/vitrine.tsx`, `docs/contratos/f3-painel-kanban.md` (seção 5), capturas, `CHANGELOG.md`.

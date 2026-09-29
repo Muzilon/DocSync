@@ -272,16 +272,24 @@ export function TelaPainel() {
             onChange={(e) => setBusca(e.target.value)}
           />
         </div>
-        <div className={estilos.area}>
-          <CampoSelecao id="painel-area" rotulo="Área" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
-            <option value="">Todas as áreas</option>
-            {areas.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nome}
-              </option>
-            ))}
-          </CampoSelecao>
-        </div>
+        {/* Provisório: o Solicitante só vê a própria área, então não há o que escolher (até existir
+            um painel próprio para quem só acompanha). Demais perfis escolhem entre as áreas ativas. */}
+        {eu.perfil === 'Solicitante' ? (
+          <p className={estilos.areaFixa}>
+            <span className={estilos.areaFixaRotulo}>Área:</span> {eu.area ?? '—'}
+          </p>
+        ) : (
+          <div className={estilos.area}>
+            <CampoSelecao id="painel-area" rotulo="Área" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+              <option value="">Todas as áreas</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
+              ))}
+            </CampoSelecao>
+          </div>
+        )}
         <Botao
           className={estilos.botaoCancelados}
           icone={<Archive size={16} aria-hidden="true" />}

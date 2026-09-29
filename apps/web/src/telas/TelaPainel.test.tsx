@@ -178,7 +178,7 @@ describe('TelaPainel', () => {
     expect(within(coluna(/^Recebido/)).getAllByRole('article')).toHaveLength(2);
   });
 
-  it('cartão mostra etiquetas de prazo, Reprogramado, devoluções e datas', async () => {
+  it('cartão enxuto: área, etiquetas de prazo, Reprogramado, devoluções e data de recebimento', async () => {
     renderizar(apiSimulada());
     await quadro();
     expect(within(cartaoDe('Procedimento de auditoria')).getByText('Prazo: 19/10/2026')).toBeInTheDocument();
@@ -191,6 +191,13 @@ describe('TelaPainel', () => {
     expect(within(devolvido).getByText('Vence hoje')).toBeInTheDocument();
     expect(within(devolvido).getByText('Devolvido 2 vezes')).toBeInTheDocument();
     expect(within(cartaoDe('Relatório de clientes')).getByText('Recebido em 01/09/2026')).toBeInTheDocument();
+    // Enxuto (pedido do Eric): área como etiqueta; recebimento sempre; sem tipo, remetente nem "Revisão até".
+    const auditoria = cartaoDe('Procedimento de auditoria');
+    expect(within(auditoria).getByText('Qualidade')).toBeInTheDocument();
+    expect(within(auditoria).getByText('Área:')).toHaveClass('visualmente-oculto');
+    expect(within(auditoria).getByText('Recebido em 01/09/2026')).toBeInTheDocument();
+    expect(auditoria).not.toHaveTextContent(/Revisão até|PR - Procedimento|Ana Exemplo|Remetente/);
+    expect(devolvido).not.toHaveTextContent('José Ação');
     // Aprovado não tem etiqueta de prazo.
     expect(within(cartaoDe('Manual do SGI')).queryByText(/Atrasado|Vence|Prazo:/)).not.toBeInTheDocument();
     // Nada decorativo: nenhum outro botão além de Reprogramar.
@@ -228,6 +235,16 @@ describe('TelaPainel', () => {
     await usuario.click(screen.getByRole('button', { name: 'Limpar filtros' }));
     expect(screen.getAllByRole('article')).toHaveLength(6);
     expect(area).toHaveValue('');
+  });
+
+  it('Solicitante: sem seleção de área; mostra "Área: <a dele>" em texto (provisório)', async () => {
+    renderizar(apiSimulada(), SOLICITANTE);
+    await quadro();
+    expect(screen.queryByRole('combobox', { name: 'Área' })).not.toBeInTheDocument();
+    const filtros = screen.getByRole('search', { name: 'Filtrar documentos' });
+    expect(filtros).toHaveTextContent('Área: Engenharia');
+    // A busca continua procurando no remetente, mesmo sem ele aparecer no cartão.
+    expect(screen.getByRole('searchbox', { name: 'Buscar por título, código ou remetente' })).toBeInTheDocument();
   });
 
   it('Cancelados (N) abre a janela com os cancelados, respeitando a área', async () => {

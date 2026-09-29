@@ -19,7 +19,9 @@ interface Props {
 }
 
 /**
- * Cartão do Painel (contrato F3, seção 5): só leitura + Reprogramar. Sem "Detalhes", "Histórico",
+ * Cartão do Painel (contrato F3, seção 5), enxuto como o Planner: código e revisão, título,
+ * status, etiquetas (área, prazo, reprogramado, devoluções) e data de recebimento. Tipo e
+ * remetente não aparecem (a busca continua procurando no remetente). Só leitura + Reprogramar. Sem "Detalhes", "Histórico",
  * "Editar" nem ações de status (F4, F5, F6). Clicar no cartão só dá foco.
  * Todo texto vem da base e é exibido como texto (React escapa; nada de HTML cru).
  */
@@ -46,30 +48,22 @@ export function CartaoDocumento({ cartao, hoje, podeReprogramar, aoReprogramar, 
         <div className={estilos.linhaStatus}>
           <BadgeStatus status={cartao.status} />
         </div>
-        <p className={estilos.tipo}>{cartao.tipoDocumento}</p>
+        <div className={estilos.etiquetas}>
+          <span className={estilos.area}>
+            <span className="visualmente-oculto">Área: </span>
+            {cartao.area}
+          </span>
+          {etiqueta && <EtiquetaPrazo etiqueta={etiqueta} />}
+          {cartao.reprogramado && <EtiquetaReprogramado vezes={cartao.qtdReprogramacoes} />}
+          {devolucoes > 0 && (
+            <span className={estilos.devolucoes} title={`Devolvido ${devolucoes === 1 ? '1 vez' : `${devolucoes} vezes`}`}>
+              <span aria-hidden="true">↺ {devolucoes}×</span>
+              <span className="visualmente-oculto">Devolvido {devolucoes === 1 ? '1 vez' : `${devolucoes} vezes`}</span>
+            </span>
+          )}
+        </div>
 
-        {(etiqueta || cartao.reprogramado || devolucoes > 0) && (
-          <div className={estilos.etiquetas}>
-            {etiqueta && <EtiquetaPrazo etiqueta={etiqueta} />}
-            {cartao.reprogramado && <EtiquetaReprogramado vezes={cartao.qtdReprogramacoes} />}
-            {devolucoes > 0 && (
-              <span className={estilos.devolucoes} title={`Devolvido ${devolucoes === 1 ? '1 vez' : `${devolucoes} vezes`}`}>
-                <span aria-hidden="true">↺ {devolucoes}×</span>
-                <span className="visualmente-oculto">Devolvido {devolucoes === 1 ? '1 vez' : `${devolucoes} vezes`}</span>
-              </span>
-            )}
-          </div>
-        )}
-
-        <p className={estilos.remetente}>
-          <span className="visualmente-oculto">Remetente: </span>
-          {cartao.remetente}
-        </p>
-        <p className={estilos.data}>
-          {cartao.dataRevisao
-            ? `Revisão até ${formatarData(cartao.dataRevisao)}`
-            : `Recebido em ${formatarData(cartao.dataRecebimento)}`}
-        </p>
+        <p className={estilos.data}>Recebido em {formatarData(cartao.dataRecebimento)}</p>
 
         {podeReprogramar && aoReprogramar && (
           <div className={estilos.acoes}>

@@ -87,22 +87,32 @@
   white-space: normal;
 }
 
-.tipo,
-.remetente,
 .data {
   font-size: var(--fs-caption);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
-.remetente {
-  color: var(--text-strong);
-}
-
 .etiquetas {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
+}
+
+/* Etiqueta neutra de área: #1E293B sobre #F1F5F9 (claro), #F1F5F9 sobre #193942 (escuro). */
+.area {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-hover);
+  color: var(--text-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-base);
+  overflow-wrap: anywhere;
 }
 
 .devolucoes {

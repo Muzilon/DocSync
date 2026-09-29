@@ -122,7 +122,9 @@ const api: Api = {
     await esperar(150);
     if (modoPainel === 'erro') throw new ErroApi(0, 'sem_conexao');
     const filtro = { busca: consulta.busca ?? '', areaId: consulta.areaId ?? null };
-    const visiveis = filtrarCartoes(cartoes, filtro);
+    // Como a API: o Solicitante só vê os documentos da sua área.
+    const daPessoa = perfil === 'Solicitante' ? cartoes.filter((c) => c.areaId === eu.areaId) : cartoes;
+    const visiveis = filtrarCartoes(daPessoa, filtro);
     return {
       cartoes: consulta.cancelados ? visiveis : visiveis.filter((c) => c.fase !== 'cancelado'),
       qtdCancelados: visiveis.filter((c) => c.fase === 'cancelado').length,

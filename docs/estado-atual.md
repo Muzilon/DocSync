@@ -9,15 +9,27 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F0 Configuração inicial | Validada | `cb3eab4` |
 | F1 Login Microsoft, casca, pessoas e perfis, visual Vigen | Validada | `a8a8d7a`, `9617d33` |
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
-| **F3 Painel Kanban** | **Em andamento: contrato aprovado, implementação em curso** | — |
+| **F3 Painel Kanban** | **Pronta, QA aprovado com ressalvas corrigidas; aguardando validação do Eric** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
-## F3: como começar
+## F3: o que falta
 
-1. Respostas do Eric aos pontos da [decisão 0011](decisoes/0011-prazo-automatico-e-reprogramacao.md) (onde fica "Reprogramado", dias corridos ou úteis, quem reprograma, prazo dos documentos já cadastrados).
-2. Proposta de cor nova para Devolvido ou Cancelado (decisão 0009, atualização de 2026-09-29), com contraste conferido, aprovada pelo Eric.
-3. Contrato da F3 por escrito (rotas, tipos, KPIs, prazo automático no cadastro, reprogramação); depois agente de servidor (Fable) e de interface (Opus) em paralelo, verificação integrada, `agente-qa-revisao`, capturas e roteiro para o Eric.
+1. O Eric roda o roteiro abaixo com o login real (e, se possível, com as contas de teste).
+2. Se ele disser "F3 validada": marcar no plano, linha no CHANGELOG, commit e seguir para a F4.
+
+Contrato: [contratos/f3-painel-kanban.md](contratos/f3-painel-kanban.md). Relatórios: `relatorios/2026-09-29-f3-*.md`. Capturas: `relatorios/capturas/painel-*.png`.
+
+Roteiro de testes da F3 (com `npm run dev` reiniciado; a migração 0003 roda sozinha na subida):
+- documentos já cadastrados na F2 aparecem no Painel com prazo = cadastro + 30;
+- cadastrar um documento: o formulário não tem mais "Data de recebimento" e o toast mostra "Prazo: <hoje + 30>";
+- Painel (menu, abaixo de Início): 5 colunas, cartão com código, título, status, etiquetas de área e prazo, "Recebido em";
+- reprogramar: prazo igual/anterior ao atual ou justificativa com menos de 10 caracteres é recusado; prazo válido → toast e etiqueta "Reprogramado";
+- duas abas, reprogramar o mesmo documento nas duas: a segunda avisa que alguém alterou o documento;
+- busca sem acento e filtro de área mudam KPIs e contagem; "Cancelados (N)" abre a janela, Esc fecha;
+- janela menor que ~1430px: o quadro rola por dentro, a página não;
+- tema escuro: Cancelado em grafite, Devolvido em vermelho;
+- com as contas de teste: Solicitante vê só a sua área (sem seleção de área) e não vê Reprogramar; Leitor não vê Reprogramar.
 
 ## Contas de teste no Entra
 

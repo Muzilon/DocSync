@@ -118,6 +118,27 @@ test('busca e área filtram o quadro e a contagem de cancelados', async ({ page 
   await expect(page.getByRole('region', { name: 'Quadro de tramitação' }).getByRole('article')).toHaveCount(2);
 });
 
+test('cartão enxuto: etiqueta de área e "Recebido em", sem tipo, remetente nem "Revisão até"', async ({ page }) => {
+  await abrir(page);
+  const cartao = page.getByRole('article', { name: 'Procedimento de auditoria interna' });
+  await expect(cartao.getByText('Área: Qualidade')).toBeVisible();
+  await expect(cartao.getByText('Recebido em 08/09/2026')).toBeVisible();
+  await expect(cartao).not.toContainText('Revisão até');
+  await expect(cartao).not.toContainText('PR - Procedimento');
+  await expect(cartao).not.toContainText('Bruno Teste');
+});
+
+for (const tema of TEMAS) {
+  test(`Solicitante ${tema}: "Área: <a dele>" em texto, sem seleção de área, axe`, async ({ page }) => {
+    await abrir(page, { tema, extra: '&perfil=Solicitante' });
+    const filtros = page.getByRole('search', { name: 'Filtrar documentos' });
+    await expect(filtros).toContainText('Área: Qualidade');
+    await expect(page.getByRole('combobox', { name: 'Área' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Quadro de tramitação' }).getByRole('article')).toHaveCount(3);
+    await axe(page);
+  });
+}
+
 test('Tab alcança filtros, cartões e o botão Reprogramar', async ({ page }) => {
   await abrir(page);
   await expect(page.getByRole('article').first()).toBeVisible();
