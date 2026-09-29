@@ -6,11 +6,9 @@
 }
 
 .rotulo {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--ls-caixa-alta);
-  color: var(--text-secondary);
+  color: var(--text-strong);
 }
 
 .obrigatorio {
@@ -23,20 +21,20 @@
   min-height: var(--campo-altura);
   padding: 0 var(--space-3);
   border: var(--borda-fina) solid var(--border-input);
-  border-radius: var(--radius-md);
-  background-color: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-campo);
   color: var(--text-primary);
   font-size: var(--fs-body);
 }
 
 .controle:hover {
-  background-color: var(--bg-card);
+  border-color: var(--border-forte);
 }
 
 .controle:focus-visible {
   outline: none;
   border-color: var(--cor-foco);
-  box-shadow: 0 0 0 var(--anel-campo) var(--cor-pessego-anel);
+  box-shadow: 0 0 0 var(--anel-campo) var(--cor-marca-anel);
 }
 
 select.controle {

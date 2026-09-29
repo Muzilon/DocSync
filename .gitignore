@@ -30,3 +30,6 @@ Thumbs.db
 
 # Configurações locais do Claude Code
 .claude/settings.local.json
+
+# Arquivos de design exportados (grandes; ficam só na máquina)
+docs/design/*.pdf

@@ -1,13 +1,13 @@
 .grade {
   display: flex;
   flex-direction: column;
-  gap: var(--space-7);
+  gap: var(--space-6);
 }
 
 .formulario {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px var(--space-4);
+  gap: var(--space-4);
 }
 
 .rodapeFormulario {
@@ -18,12 +18,14 @@
   gap: var(--space-3);
 }
 
-.resumoErros {
+.resumoErros,
+.erroDialogo {
   grid-column: 1 / -1;
   padding: var(--space-3) var(--space-4);
-  border-left: var(--borda-destaque) solid var(--cor-erro);
+  border: var(--borda-fina) solid var(--cor-erro-ponto);
+  border-left-width: var(--borda-destaque);
   border-radius: var(--radius-sm);
-  background: var(--cor-erro-suave);
+  background: var(--cor-erro-fundo);
   color: var(--text-primary);
   font-size: var(--fs-body-sm);
 }
@@ -38,24 +40,17 @@
   font-weight: var(--fw-semibold);
 }
 
-.erroDialogo {
-  padding: var(--space-3) var(--space-4);
-  border-left: var(--borda-destaque) solid var(--cor-erro);
-  border-radius: var(--radius-sm);
-  background: var(--cor-erro-suave);
-  font-size: var(--fs-body-sm);
-}
-
-.barraLista {
+/* Filtros acima da tabela, como no Vigen. */
+.filtros {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 
-.barraLista h2 {
+.filtros h2 {
   margin-bottom: 0;
 }
 
@@ -68,7 +63,7 @@
 .buscaIcone {
   position: absolute;
   left: var(--space-3);
-  bottom: 14px;
+  bottom: var(--space-3);
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -77,7 +72,11 @@
   padding-left: var(--space-10);
 }
 
-.rolagemTabela {
+.cartaoTabela {
+  background: var(--bg-card);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   overflow-x: auto;
 }
 
@@ -87,11 +86,13 @@
   font-size: var(--fs-body-sm);
 }
 
+/* Cabeçalho sobre --bg-subtle (#F8FAFC): --text-secondary por segurança de contraste. */
 .tabela th {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-subtle);
   border-bottom: var(--borda-fina) solid var(--border-subtle);
   font-size: var(--fs-micro);
-  font-weight: var(--fw-bold);
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: var(--ls-caixa-alta);
   color: var(--text-secondary);
@@ -100,9 +101,23 @@
 }
 
 .tabela td {
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-bottom: var(--borda-fina) solid var(--border-soft);
   vertical-align: middle;
+  color: var(--text-strong);
+}
+
+.tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabela tbody tr:hover td {
+  background: var(--bg-subtle);
+}
+
+.nome {
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
 }
 
 .email {
@@ -116,23 +131,42 @@
   gap: var(--space-2);
 }
 
+/* Badge com ponto colorido (o ponto é decorativo; o texto diz o estado). */
 .badge {
-  display: inline-block;
-  padding: var(--space-1) 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: calc(var(--space-1) / 2) var(--space-2);
   border-radius: var(--radius-pill);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
 
+.badge::before {
+  content: '';
+  width: var(--ponto);
+  height: var(--ponto);
+  border-radius: var(--radius-circle);
+  background: currentColor;
+}
+
 .ativo {
-  background: var(--status-aprovado-bg);
-  color: var(--status-aprovado-cor);
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
+}
+
+.ativo::before {
+  background: var(--cor-sucesso-ponto);
 }
 
 .inativo {
   background: var(--status-recebido-bg);
   color: var(--status-recebido-cor);
+}
+
+.inativo::before {
+  background: var(--status-recebido-borda);
 }
 
 .semPerfil {

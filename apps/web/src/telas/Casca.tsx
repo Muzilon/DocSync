@@ -28,7 +28,9 @@ export function Casca() {
       <div className={estilos.casca}>
         <aside className={estilos.barra} aria-label="Navegação principal">
           <div className={estilos.logo}>
-            <FileText className={estilos.logoIcone} size={18} aria-hidden="true" />
+            <span className={estilos.logoMarca} aria-hidden="true">
+              <FileText size={14} />
+            </span>
             <span className={estilos.textoOcultavel}>DocSync</span>
           </div>
 
@@ -37,11 +39,17 @@ export function Casca() {
               <House size={18} aria-hidden="true" />
               <span className={estilos.textoOcultavel}>Início</span>
             </NavLink>
+            {/* Grupo só aparece quando tem ao menos um destino (decisão 0009, item 4). */}
             {pode(eu, 'gerenciarPessoas') && (
-              <NavLink to="/pessoas" className={classeLink} title="Pessoas">
-                <Users size={18} aria-hidden="true" />
-                <span className={estilos.textoOcultavel}>Pessoas</span>
-              </NavLink>
+              <div className={estilos.grupo} role="group" aria-labelledby="grupo-administracao">
+                <p id="grupo-administracao" className={`${estilos.rotuloGrupo} ${estilos.textoOcultavel}`}>
+                  Administração
+                </p>
+                <NavLink to="/pessoas" className={classeLink} title="Pessoas">
+                  <Users size={18} aria-hidden="true" />
+                  <span className={estilos.textoOcultavel}>Pessoas</span>
+                </NavLink>
+              </div>
             )}
           </nav>
 

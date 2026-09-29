@@ -1,4 +1,7 @@
-/* Casca e barra lateral ESTÁTICA (04, seção 4). Sem colapso, sem animação, sem JS de aparência. */
+/*
+ * Casca e barra lateral ESTÁTICA (04, seção 4; cores da decisão 0009).
+ * Sem colapso, sem animação, sem JS de aparência: 236px, 76px abaixo de 860px só por media query.
+ */
 .casca {
   display: flex;
   min-height: 100vh;
@@ -12,24 +15,37 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
-  border-right: var(--borda-fina) solid var(--border-subtle);
+  background: var(--sidebar-bg);
+  border-right: var(--borda-fina) solid var(--sidebar-borda);
+  color: var(--sidebar-texto);
   z-index: var(--z-sidebar);
+  overflow-y: auto;
+}
+
+.barra :focus-visible {
+  outline-color: var(--sidebar-foco);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--nav-gap);
   padding: var(--logo-padding);
   font-size: var(--fs-h3);
-  font-weight: var(--fw-extrabold);
-  color: var(--text-primary);
+  font-weight: var(--fw-bold);
+  color: var(--sidebar-texto-forte);
 }
 
-.logoIcone {
-  color: var(--cor-primaria);
+.logoMarca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: var(--logo-marca);
+  height: var(--logo-marca);
+  border-radius: var(--radius-sm);
+  background: var(--sidebar-logo-bg);
+  color: var(--cor-texto-sobre-marca);
 }
 
 .nav {
@@ -40,49 +56,74 @@
   padding: var(--space-2) var(--space-3);
 }
 
+.grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+}
+
+.rotuloGrupo {
+  padding: 0 var(--space-3) var(--space-1);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--sidebar-rotulo);
+}
+
 .link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--nav-gap);
   min-height: var(--alvo-toque);
   padding: var(--nav-link-padding);
-  border: var(--borda-fina) solid transparent;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-texto);
   font-size: var(--fs-nav);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   text-decoration: none;
 }
 
-:root[data-tema='escuro'] .link {
-  color: var(--text-secondary);
+.link svg {
+  color: var(--sidebar-icone);
+  flex-shrink: 0;
 }
 
 .link:hover {
-  background: var(--cor-chumbo-suave);
-  color: var(--text-primary);
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-texto-forte);
 }
 
-/* Item ativo: só muda de cor (04, 4.2 e 4.4). */
-.link.ativo,
-:root[data-tema='escuro'] .link.ativo {
-  background: var(--cor-pessego-suave);
-  border-color: var(--cor-pessego-borda);
-  color: var(--cor-nav-ativo-texto);
-  font-weight: var(--fw-bold);
+/* Item ativo: só muda de cor e ganha o marcador à esquerda (sem animação). */
+.link.ativo {
+  background: var(--sidebar-ativo-bg);
+  color: var(--sidebar-texto-forte);
+  font-weight: var(--fw-semibold);
+}
+
+.link.ativo::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: var(--marcador-largura);
+  border-radius: var(--radius-xs);
+  background: var(--sidebar-marcador);
 }
 
 .link.ativo svg {
-  color: var(--cor-nav-ativo-icone);
+  color: var(--sidebar-texto-forte);
 }
 
 .rodape {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border-top: var(--borda-fina) solid var(--border-soft);
+  gap: var(--space-1);
+  padding: var(--space-3);
 }
 
 .usuario {
@@ -90,6 +131,9 @@
   align-items: center;
   gap: var(--nav-gap);
   min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--sidebar-ativo-bg);
 }
 
 .avatar {
@@ -100,32 +144,31 @@
   width: var(--avatar);
   height: var(--avatar);
   border-radius: var(--radius-circle);
-  background: var(--cor-pessego-suave);
-  color: var(--status-revisao-cor);
+  background: var(--sidebar-logo-bg);
+  color: var(--cor-texto-sobre-marca);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
-  box-shadow: var(--shadow-sm);
 }
 
 .usuarioTexto {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  line-height: var(--lh-titulo);
 }
 
 .usuarioNome {
-  font-size: var(--fs-body-sm);
+  font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  color: var(--text-primary);
+  color: var(--sidebar-texto-forte);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .usuarioPerfil {
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  color: var(--sidebar-texto);
 }
 
 .acao {
@@ -136,18 +179,22 @@
   min-height: var(--alvo-toque);
   padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--sidebar-texto);
   font-size: var(--fs-body-sm);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   cursor: pointer;
   text-align: left;
 }
 
+.acao svg {
+  color: var(--sidebar-icone);
+}
+
 .acao:hover {
-  background: var(--cor-chumbo-suave);
-  color: var(--text-primary);
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-texto-forte);
 }
 
 .principal {
@@ -181,15 +228,22 @@
     justify-content: center;
   }
 
+  .usuario {
+    padding: var(--space-2) 0;
+  }
+
   .link,
   .acao {
     justify-content: center;
     padding: var(--space-3);
   }
 
+  .rotuloGrupo {
+    padding: 0;
+  }
+
   .rodape {
-    padding: var(--space-4) var(--space-2);
-    align-items: center;
+    padding: var(--space-3) var(--space-2);
   }
 
   .conteudo {

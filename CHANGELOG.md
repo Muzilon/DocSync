@@ -12,3 +12,9 @@ Uma linha por mudança relevante, na data em que aconteceu, com link para a deci
 - F1 (parte interface, `apps/web`): tokens claro/escuro do documento 04 num único arquivo; login Microsoft (MSAL, redirecionamento) com rota protegida e destino seguro; casca com barra lateral estática; Início com dados reais de `/eu`; telas de acesso não liberado e inativo; tela Pessoas (pré-cadastro, edição de perfil/área, inativar/reativar); testes Vitest e Playwright + axe. Cores do Figma ainda não conferidas (limite do MCP). Relatório: [docs/relatorios/2026-09-28-f1-web-login-casca-pessoas.md](docs/relatorios/2026-09-28-f1-web-login-casca-pessoas.md).
 - F1: correções pós-QA. `areaId` passa a vir em `Pessoa` (diálogo mostra área inativa como "(inativa)"); bloqueio contra concorrência na regra do último Administrador e no bootstrap; tipos de pessoas da web vêm do pacote compartilhado. Relatório: [docs/relatorios/2026-09-28-f1-api-login-pessoas.md](docs/relatorios/2026-09-28-f1-api-login-pessoas.md).
 - Correção do pre-commit: chama o secretlint direto pelo Node (o GitHub Desktop não tem bash para o npx) e separa "segredo encontrado" de "verificação não rodou".
+- Decisão [0009](docs/decisoes/0009-identidade-visual-vigen.md): identidade visual do Vigen (azul-petróleo) no lugar da paleta pêssego; nome, escopo e login Microsoft mantidos. PDF de design fora do Git (`docs/design/*.pdf`).
+- F1: visual Vigen (decisão 0009) na interface: tokens petróleo claro/escuro, barra lateral #0F2B34 com marcador, login com painel da marca, tabela e badges com ponto; vitrine de testes da casca (axe 768/1024/1440, dois temas). Relatório: docs/relatorios/2026-09-28-f1-web-login-casca-pessoas.md.
+
+## 2026-09-29
+
+- F1 validada pelo Eric com o login real (locatário de teste): login Microsoft, pessoas e perfis, casca com visual Vigen.

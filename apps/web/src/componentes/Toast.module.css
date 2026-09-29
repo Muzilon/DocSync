@@ -13,7 +13,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   background: var(--bg-toast);
   color: var(--text-toast);
   box-shadow: var(--shadow-toast);
@@ -24,7 +24,7 @@
 }
 
 .icone {
-  color: var(--cor-verde);
+  color: var(--cor-sucesso-ponto);
   flex-shrink: 0;
 }
 
@@ -42,7 +42,7 @@
 }
 
 .fechar:focus-visible {
-  outline-color: var(--cor-pessego-claro);
+  outline-color: var(--text-toast-link);
 }
 
 @keyframes entrar {

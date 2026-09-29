@@ -22,7 +22,7 @@
 .spinner {
   width: var(--icone-md);
   height: var(--icone-md);
-  border: var(--foco-largura) solid var(--cor-primaria);
+  border: var(--foco-largura) solid var(--cor-marca);
   border-right-color: transparent;
   border-radius: var(--radius-circle);
   animation: girar var(--duracao-spinner) linear infinite;

@@ -62,7 +62,8 @@ Toda decisão de arquitetura, tecnologia, modelo de dados ou escopo vira um arqu
 ## 7. Stack e convenções (decisão [0001](docs/decisoes/0001-stack.md))
 
 - Monorepo com npm workspaces: `apps/web` (React + TypeScript + Vite), `apps/api` (Node + TypeScript + Fastify), `packages/compartilhado` (tipos e regras usados pelos dois).
-- Estilos: variáveis CSS (tokens do documento 04) + CSS Modules. **Sem Tailwind.** Todo valor visual sai de um token.
+- Estilos: variáveis CSS + CSS Modules. Cores pela [decisão 0009](docs/decisoes/0009-identidade-visual-vigen.md) (Vigen, azul-petróleo, substitui a paleta pêssego do documento 04); estrutura, tipografia, espaçamento e componentes pelo documento 04. **Sem Tailwind.** Todo valor visual sai de um token. `#64748B` nunca como texto sobre `#F1F5F9` (reprova contraste; usar `#475569`).
+- Interface (F1): a casca (barra lateral, Início, Pessoas) é testada sem sessão real pela vitrine `apps/web/e2e/vitrine/`, fora do build; o Playwright sobe um Vite próprio na porta 5174 para isso.
 - Banco: PostgreSQL (fonte da verdade, decisão [0002](docs/decisoes/0002-fonte-da-verdade.md)). Identidade: Microsoft Entra ID. Arquivos: armazenamento local atrás de uma interface, até o SharePoint ser liberado ([0003](docs/decisoes/0003-ambiente-local.md)).
 - Testes: Vitest (regras e API), Playwright + axe (telas e acessibilidade, a partir da F1).
 - Node 24. Comandos na raiz: `npm run dev`, `npm run build`, `npm test` (só Vitest), `npm run test:e2e` (Playwright + axe; na primeira vez, `npx playwright install chromium` em `apps/web`), `npm run typecheck`, `npm run segredos`.

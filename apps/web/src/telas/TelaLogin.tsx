@@ -33,15 +33,27 @@ export function TelaLogin() {
   }
 
   return (
-    <main className={estilos.pagina}>
+    <main className={estilos.login}>
+      <div className={estilos.painelMarca}>
+        <p className={estilos.marca}>
+          <span className={estilos.marcaIcone} aria-hidden="true">
+            <FileText size={14} />
+          </span>
+          DocSync
+        </p>
+        <p className={estilos.frase}>Qualidade, meio ambiente e segurança num só lugar.</p>
+        <p className={estilos.apoio}>Documentos do SGI com tramitação, histórico e evidência prontos para o auditor.</p>
+        <ul className={estilos.selos} aria-label="Normas do SGI">
+          <li>ISO 9001</li>
+          <li>ISO 14001</li>
+          <li>ISO 45001</li>
+        </ul>
+      </div>
+      <div className={estilos.ladoCartao}>
       <div className={estilos.topo}>
         <BotaoTema className={estilos.botaoTema} />
       </div>
       <div className={estilos.cartao}>
-        <p className={estilos.logo}>
-          <FileText className={estilos.logoIcone} size={18} aria-hidden="true" />
-          DocSync
-        </p>
         <h1 className={estilos.titulo}>Acesse sua conta</h1>
         <p className={estilos.texto}>Entre com a sua conta Microsoft corporativa.</p>
 
@@ -70,6 +82,7 @@ export function TelaLogin() {
         >
           {entrando ? 'Abrindo o login…' : 'Entrar com a conta Microsoft'}
         </Botao>
+      </div>
       </div>
     </main>
   );

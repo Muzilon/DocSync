@@ -10,12 +10,12 @@ import { TelaAviso } from '../telas/TelaAviso.tsx';
 import { ESCOPOS_API } from './msal.ts';
 import { urlDeLogin } from './redirecionamento.ts';
 
-interface Sessao {
+export interface Sessao {
   eu: Pessoa;
   sair: () => void;
 }
 
-const ContextoSessao = createContext<Sessao | null>(null);
+export const ContextoSessao = createContext<Sessao | null>(null);
 
 export function useSessao(): Sessao {
   const sessao = useContext(ContextoSessao);

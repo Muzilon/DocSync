@@ -19,7 +19,9 @@ export function TelaAviso({ titulo, children, aoSair }: Props) {
       </div>
       <div className={estilos.cartao}>
         <p className={estilos.logo}>
-          <FileText className={estilos.logoIcone} size={18} aria-hidden="true" />
+          <span className={estilos.marcaIcone} aria-hidden="true">
+            <FileText size={14} />
+          </span>
           DocSync
         </p>
         <h1 className={estilos.titulo}>{titulo}</h1>

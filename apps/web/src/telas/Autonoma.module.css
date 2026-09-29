@@ -1,13 +1,90 @@
-/* Telas fora da casca (login, acesso não liberado, inativo): cartão central. */
+/* Telas fora da casca: login (painel da marca + cartão) e avisos de acesso (cartão central). */
 .pagina {
+  position: relative;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-6);
   padding: var(--space-10) var(--space-4);
   background: var(--bg-page);
+}
+
+/* Login: painel petróleo à esquerda, cartão à direita (decisão 0009). */
+.login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--painel-marca-largura) minmax(0, 1fr);
+  background: var(--bg-page);
+}
+
+.painelMarca {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-12) var(--space-10);
+  background: var(--painel-marca-bg);
+  color: var(--painel-marca-texto);
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  color: var(--painel-marca-texto);
+}
+
+.marcaIcone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--logo-marca);
+  height: var(--logo-marca);
+  border-radius: var(--radius-sm);
+  background: var(--sidebar-logo-bg);
+  color: var(--cor-texto-sobre-marca);
+}
+
+.frase {
+  max-width: 16em;
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-titulo);
+  letter-spacing: var(--ls-titulo);
+}
+
+.apoio {
+  max-width: 32em;
+  font-size: var(--fs-body-sm);
+  color: var(--painel-marca-apoio);
+}
+
+.selos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.selos li {
+  padding: var(--space-1) var(--space-2);
+  border: var(--borda-fina) solid var(--painel-marca-selo-borda);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--painel-marca-apoio);
+}
+
+.ladoCartao {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-15) var(--space-6) var(--space-10);
 }
 
 .topo {
@@ -22,19 +99,17 @@
   gap: var(--space-2);
   min-height: var(--alvo-toque);
   padding: 0 var(--space-4);
-  border: var(--borda-fina) solid var(--border-subtle);
-  border-radius: var(--radius-pill);
+  border: var(--borda-fina) solid var(--border-input);
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
-  color: var(--text-secondary);
+  color: var(--text-strong);
   font-size: var(--fs-body-sm);
   font-weight: var(--fw-semibold);
-  box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 
 .botaoTema:hover {
-  color: var(--text-primary);
-  background: var(--cor-chumbo-suave);
+  background: var(--bg-hover);
 }
 
 .cartao {
@@ -42,34 +117,32 @@
   max-width: var(--cartao-autonomo-largura);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-10) var(--space-8);
+  gap: var(--space-4);
+  padding: var(--space-6);
   background: var(--bg-card);
   border: var(--borda-fina) solid var(--border-subtle);
-  border-radius: var(--radius-2xl);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--nav-gap);
   font-size: var(--fs-h3);
-  font-weight: var(--fw-extrabold);
+  font-weight: var(--fw-bold);
   color: var(--text-primary);
 }
 
-.logoIcone {
-  color: var(--cor-primaria);
-}
-
 .titulo {
-  font-size: var(--fs-h1);
-  font-weight: var(--fw-extrabold);
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
   letter-spacing: var(--ls-titulo);
+  color: var(--text-primary);
 }
 
 .texto {
+  font-size: var(--fs-body-sm);
   color: var(--text-secondary);
 }
 
@@ -77,20 +150,32 @@
   width: 100%;
 }
 
-.aviso {
+.aviso,
+.erro {
   padding: var(--space-3) var(--space-4);
-  border-left: var(--borda-destaque) solid var(--cor-alerta);
+  border: var(--borda-fina) solid var(--cor-alerta-ponto);
+  border-left-width: var(--borda-destaque);
   border-radius: var(--radius-sm);
-  background: var(--cor-alerta-suave);
+  background: var(--cor-alerta-fundo);
   color: var(--text-primary);
   font-size: var(--fs-body-sm);
 }
 
 .erro {
-  padding: var(--space-3) var(--space-4);
-  border-left: var(--borda-destaque) solid var(--cor-erro);
-  border-radius: var(--radius-sm);
-  background: var(--cor-erro-suave);
-  color: var(--text-primary);
-  font-size: var(--fs-body-sm);
+  border-color: var(--cor-erro-ponto);
+  background: var(--cor-erro-fundo);
+}
+
+@media (max-width: 860px) {
+  .login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .painelMarca {
+    padding: var(--space-10) var(--space-8);
+  }
+
+  .frase {
+    font-size: var(--fs-h1);
+  }
 }

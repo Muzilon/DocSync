@@ -1,96 +1,110 @@
 /*
- * Tokens do design system do DocSync (documento 04, seções 2 e 3).
- * ÚNICO lugar com valores visuais: componentes usam só var(--...).
- * Tema escuro = troca de tokens em :root[data-tema='escuro'] (nenhuma regra paralela por componente).
- * Cores: documento 04. O Figma (decisão 0005) não pôde ser lido na F1 (limite do plano do MCP);
- * conferir divergências quando houver acesso (relatório 2026-09-28-f1-web-login-casca-pessoas).
+ * Tokens do design system do DocSync. ÚNICO lugar com valores visuais: componentes usam só var(--...).
+ * Cores: decisão 0009 (visual "Vigen", azul-petróleo), que substitui a paleta pêssego do documento 04.
+ * Estrutura, tipografia, espaçamento, raios e barra lateral estática: documento 04.
+ * Tema escuro = troca de tokens em :root[data-tema='escuro'] (derivado da mesma família petróleo).
+ * Regra da decisão 0009: #64748B (--text-muted) nunca como texto sobre #F1F5F9; ali use --text-secondary.
  */
 
 :root {
   color-scheme: light;
 
-  /* 2.1 Primitivas */
-  --cor-vinho: #b85057;
-  --cor-verde: #668d58;
-  --cor-chumbo: #404040;
-  --cor-ambar: #fbba6d;
-  --cor-pessego: #f69463;
-  --cor-pessego-claro: #fbb08a;
-  --cor-coral: #f1655d;
-  --cor-cinza: #808184;
-  --cor-branco: #ffffff;
+  /* Marca (petróleo) */
+  --cor-marca: #4b798f;
+  --cor-marca-hover: #396276;
+  --cor-marca-suave: rgba(75, 121, 143, 0.12);
+  --cor-marca-anel: rgba(75, 121, 143, 0.25);
+  --cor-texto-sobre-marca: #ffffff;
+  --cor-foco: #396276;
+  --cor-link: #396276;
 
-  /* 2.2 Suaves */
-  --cor-vinho-suave: rgba(184, 80, 87, 0.12);
-  --cor-verde-suave: rgba(102, 141, 88, 0.14);
-  --cor-chumbo-suave: rgba(64, 64, 64, 0.08);
-  --cor-ambar-suave: rgba(251, 186, 109, 0.2);
-  --cor-pessego-suave: rgba(246, 148, 99, 0.15);
-  --cor-pessego-borda: rgba(246, 148, 99, 0.35);
-  --cor-pessego-anel: rgba(246, 148, 99, 0.18);
-  --cor-coral-suave: rgba(241, 101, 93, 0.14);
-  --cor-cinza-suave: rgba(128, 129, 132, 0.12);
-  --cor-erro-anel: rgba(194, 58, 50, 0.18);
+  /* Estados semânticos: ponto (não textual) / texto / fundo */
+  --cor-sucesso-ponto: #10b981;
+  --cor-sucesso-texto: #047857;
+  --cor-sucesso-fundo: #ecfdf5;
+  --cor-erro-ponto: #ef4444;
+  --cor-erro: #b91c1c;
+  --cor-erro-fundo: #fef2f2;
+  --cor-erro-anel: rgba(185, 28, 28, 0.18);
+  --cor-alerta-ponto: #f59e0b;
+  --cor-alerta-texto: #b45309;
+  --cor-alerta-fundo: #fffbeb;
+  --cor-info-ponto: #3b82f6;
+  --cor-info-texto: #1d4ed8;
+  --cor-info-fundo: #eff6ff;
+  --cor-risco: #f97316; /* só gráficos e matrizes, nunca texto */
 
-  /* 2.3 Semânticos */
-  --cor-primaria: var(--cor-pessego);
-  --cor-primaria-suave: var(--cor-pessego-suave);
-  --cor-primaria-forte: #b4552a;
-  --cor-primaria-forte-hover: #a84f26;
-  --cor-texto-sobre-primaria: #ffffff;
-  --cor-foco: #b4552a;
-  --cor-erro: #c23a32;
-  --cor-erro-fundo-botao: #c23a32;
-  --cor-erro-fundo-botao-hover: #b2352e;
-  --cor-erro-suave: var(--cor-coral-suave);
-  --cor-sucesso: var(--cor-verde);
-  --cor-sucesso-suave: var(--cor-verde-suave);
-  --cor-sucesso-texto: #4b6b40;
-  --cor-sucesso-fundo-botao: #4b6b40;
-  --cor-alerta: var(--cor-ambar);
-  --cor-alerta-suave: var(--cor-ambar-suave);
-  --cor-perigo: var(--cor-coral);
-  --cor-perigo-suave: var(--cor-coral-suave);
-  /* Texto do item ativo da barra lateral (04, 4.4; decisão 0005): #A84F26 no claro. */
-  --cor-nav-ativo-texto: #a84f26;
-  --cor-nav-ativo-icone: var(--cor-pessego);
+  /* Botões com texto branco */
+  --botao-primario-bg: var(--cor-marca);
+  --botao-primario-hover: var(--cor-marca-hover);
+  --botao-perigo-bg: #b91c1c;
+  --botao-perigo-hover: #991b1b;
+  --botao-sucesso-bg: #047857;
+  --botao-secundario-bg: #ffffff;
+  --botao-secundario-hover: #f1f5f9;
 
-  /* 2.4 Neutros */
-  --bg-page: #fbfbfb;
+  /* Neutros, superfícies e texto */
+  --bg-page: #f8fafc;
   --bg-card: #ffffff;
-  --bg-subtle: #f7f7f8;
-  --bg-elevated: #ffffff;
-  --bg-toast: var(--cor-chumbo);
-  --bg-overlay: rgba(64, 64, 64, 0.55);
-  --border-subtle: #e8eaed;
-  --border-soft: #f1f3f4;
-  --border-input: #d8dadc;
-  --text-primary: #404040;
-  --text-secondary: #6c6d70;
-  --text-muted: #707175;
+  --bg-subtle: #f8fafc;
+  --bg-hover: #f1f5f9;
+  --bg-campo: #ffffff;
+  --bg-toast: #0f2b34;
+  --bg-overlay: rgba(15, 23, 42, 0.55);
+  --border-subtle: #e2e8f0;
+  --border-soft: #f1f5f9;
+  --border-input: #cbd5e1;
+  --border-forte: #94a3b8; /* só elementos não textuais */
+  --text-primary: #0f172a;
+  --text-strong: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b; /* só sobre #FFFFFF ou #F8FAFC */
   --text-toast: #ffffff;
+  --text-toast-link: #90afbd;
 
-  /* 2.5 Status (só os usados na F1 + conjunto completo para as próximas fatias) */
-  --status-recebido-borda: var(--cor-cinza);
-  --status-recebido-bg: var(--cor-cinza-suave);
-  --status-recebido-cor: #5f6064;
-  --status-revisao-borda: var(--cor-pessego);
-  --status-revisao-bg: var(--cor-pessego-suave);
-  --status-revisao-cor: #a84f26;
-  --status-devolvido-borda: var(--cor-vinho);
-  --status-devolvido-bg: var(--cor-vinho-suave);
-  --status-devolvido-cor: #983f46;
-  --status-aprovacao-borda: var(--cor-ambar);
-  --status-aprovacao-bg: var(--cor-ambar-suave);
-  --status-aprovacao-cor: #8a5a10;
-  --status-aprovado-borda: var(--cor-verde);
-  --status-aprovado-bg: var(--cor-verde-suave);
-  --status-aprovado-cor: #4b6b40;
-  --status-cancelado-borda: var(--cor-coral);
-  --status-cancelado-bg: var(--cor-coral-suave);
-  --status-cancelado-cor: #c23a32;
+  /* Barra lateral (decisão 0009) */
+  --sidebar-bg: #0f2b34;
+  --sidebar-ativo-bg: #193942;
+  --sidebar-hover-bg: #193942;
+  --sidebar-borda: #193942;
+  --sidebar-texto: #d9e3e8;
+  --sidebar-texto-forte: #ffffff;
+  --sidebar-icone: #90afbd;
+  --sidebar-rotulo: #90afbd;
+  --sidebar-marcador: #90afbd;
+  --sidebar-foco: #d9e3e8;
+  --sidebar-logo-bg: #4b798f;
 
-  /* 3.1 Tipografia */
+  /* Painel da marca no login */
+  --painel-marca-bg: #0f2b34;
+  --painel-marca-texto: #ffffff;
+  --painel-marca-apoio: #d9e3e8;
+  --painel-marca-selo-borda: #6e94a9;
+
+  /* Fases da tramitação: conjunto ÚNICO --status-{fase}-cor / -bg / -borda (decisão 0009) */
+  --status-recebido-cor: #475569;
+  --status-recebido-bg: #f1f5f9;
+  --status-recebido-borda: #94a3b8;
+  --status-revisao-cor: #1d4ed8;
+  --status-revisao-bg: #eff6ff;
+  --status-revisao-borda: #3b82f6;
+  --status-revisao-area-cor: #1d4ed8;
+  --status-revisao-area-bg: #eff6ff;
+  --status-revisao-area-borda: #3b82f6;
+  --status-devolvido-cor: #b91c1c;
+  --status-devolvido-bg: #fef2f2;
+  --status-devolvido-borda: #ef4444;
+  --status-aprovacao-cor: #b45309;
+  --status-aprovacao-bg: #fffbeb;
+  --status-aprovacao-borda: #f59e0b;
+  --status-aprovado-cor: #047857;
+  --status-aprovado-bg: #ecfdf5;
+  --status-aprovado-borda: #10b981;
+  --status-cancelado-cor: #b91c1c;
+  --status-cancelado-bg: #fef2f2;
+  --status-cancelado-borda: #ef4444;
+
+  /* Tipografia (04, 3.1) */
   --font-primary: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
   --fs-display: 26px;
@@ -102,16 +116,18 @@
   --fs-nav: 13.5px;
   --fs-caption: 12px;
   --fs-micro: 11px;
+  --fs-hero: 30px;
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
   --fw-bold: 700;
   --fw-extrabold: 800;
   --lh-base: 1.5;
+  --lh-titulo: 1.2;
   --ls-titulo: -0.02em;
   --ls-caixa-alta: 0.05em;
 
-  /* 3.2 Espaçamento */
+  /* Espaçamento (04, 3.2) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -121,6 +137,7 @@
   --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
+  --space-12: 48px;
   --space-15: 60px;
 
   /* Medidas de layout */
@@ -128,44 +145,47 @@
   --sidebar-largura-estreita: 76px;
   --conteudo-max: 1680px;
   --alvo-toque: 44px;
+  --botao-altura: 38px;
   --botao-icone: 38px;
-  --avatar: 34px;
+  --avatar: 32px;
+  --logo-marca: 24px;
+  --ponto: 6px;
+  --marcador-largura: 3px;
   --icone-sm: 16px;
   --icone-nav: 18px;
   --icone-md: 20px;
   --dialogo-largura: 440px;
-  --campo-altura: 44px;
+  --campo-altura: 40px;
   --borda-fina: 1px;
-  --borda-campo: 1.5px;
   --borda-destaque: 4px;
-  --cartao-autonomo-largura: 420px;
-  --busca-largura: 320px;
-  --toast-topo: 92px;
-  --nav-gap: 10px;
-  --nav-link-padding: 10px 14px;
-  --logo-padding: 20px 18px;
   --foco-largura: 2px;
   --foco-afastamento: 2px;
   --anel-campo: 3px;
+  --cartao-autonomo-largura: 400px;
+  --painel-marca-largura: 45%;
+  --busca-largura: 320px;
+  --toast-topo: 92px;
+  --nav-gap: 10px;
+  --nav-link-padding: 9px 12px;
+  --logo-padding: 20px 18px;
 
-  /* 3.3 Raios */
+  /* Raios (04, 3.3; botões e campos retangulares como no Vigen) */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 14px;
+  --radius-lg: 12px;
   --radius-xl: 20px;
   --radius-2xl: 28px;
   --radius-pill: 999px;
   --radius-circle: 50%;
 
-  /* 3.4 Sombras */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(64, 64, 64, 0.06);
-  --shadow-hover: 0 8px 24px rgba(64, 64, 64, 0.08);
-  --shadow-cta: 0 6px 16px rgba(246, 148, 99, 0.32);
-  --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-modal: 0 24px 60px rgba(64, 64, 64, 0.3);
-  --shadow-toast: 0 8px 20px rgba(0, 0, 0, 0.22);
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-hover: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-float: 0 12px 34px rgba(15, 23, 42, 0.15);
+  --shadow-modal: 0 24px 60px rgba(15, 23, 42, 0.3);
+  --shadow-toast: 0 8px 20px rgba(15, 23, 42, 0.22);
 
   /* Camadas */
   --z-sidebar: 50;
@@ -179,45 +199,69 @@
   --duracao-spinner-reduzido: 1.5s;
 }
 
+/* Tema escuro: fundos petróleo profundos, textos claros da mesma família. */
 :root[data-tema='escuro'] {
   color-scheme: dark;
 
-  --cor-vinho-suave: rgba(184, 80, 87, 0.28);
-  --cor-verde-suave: rgba(102, 141, 88, 0.28);
-  --cor-chumbo-suave: rgba(255, 255, 255, 0.08);
-  --cor-ambar-suave: rgba(251, 186, 109, 0.28);
-  --cor-pessego-suave: rgba(246, 148, 99, 0.28);
-  --cor-coral-suave: rgba(241, 101, 93, 0.28);
-  --cor-cinza-suave: rgba(128, 129, 132, 0.28);
+  --cor-marca-suave: rgba(144, 175, 189, 0.16);
+  --cor-marca-anel: rgba(144, 175, 189, 0.3);
+  --cor-foco: #90afbd;
+  --cor-link: #90afbd;
 
-  --cor-foco: #f69463;
+  --cor-sucesso-texto: #6ee7b7;
+  --cor-sucesso-fundo: rgba(16, 185, 129, 0.16);
   --cor-erro: #fca5a5;
-  --cor-erro-anel: rgba(252, 165, 165, 0.18);
-  --cor-sucesso-texto: #86efac;
-  /* No escuro o item ativo mantém fundo pêssego 15% e texto #F69463 (04, 4.4). */
-  --cor-nav-ativo-texto: #f69463;
+  --cor-erro-fundo: rgba(239, 68, 68, 0.16);
+  --cor-erro-anel: rgba(252, 165, 165, 0.25);
+  --cor-alerta-texto: #fcd34d;
+  --cor-alerta-fundo: rgba(245, 158, 11, 0.16);
+  --cor-info-texto: #93c5fd;
+  --cor-info-fundo: rgba(59, 130, 246, 0.16);
 
-  --bg-page: #111113;
-  --bg-card: #1c1c22;
-  --bg-subtle: #16161c;
-  --bg-elevated: #1f1f26;
-  --bg-toast: #24242e;
-  --border-subtle: #2e2e38;
-  --border-soft: #25252d;
-  --border-input: #373742;
-  --text-primary: #f3f4f6;
-  --text-secondary: #a1a1aa;
-  --text-muted: #8b8b94;
+  --botao-secundario-bg: transparent;
+  --botao-secundario-hover: #193942;
 
-  --status-recebido-cor: #d1d5db;
-  --status-revisao-cor: #fdba74;
-  --status-devolvido-cor: #f3a5aa;
-  --status-aprovacao-cor: #fbba6d;
-  --status-aprovado-cor: #86efac;
+  --bg-page: #0a1a20;
+  --bg-card: #10262e;
+  --bg-subtle: #0d2128;
+  --bg-hover: #193942;
+  --bg-campo: #0d2128;
+  --bg-toast: #193942;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --border-subtle: #1f3b45;
+  --border-soft: #18323b;
+  --border-input: #36586a;
+  --border-forte: #6e94a9;
+  --text-primary: #e6eef2;
+  --text-strong: #f1f5f9;
+  --text-secondary: #b7c8d0;
+  --text-muted: #90afbd;
+  --text-toast-link: #b7c8d0;
+
+  --sidebar-bg: #071820;
+  --sidebar-ativo-bg: #15323c;
+  --sidebar-hover-bg: #15323c;
+  --sidebar-borda: #15323c;
+
+  --painel-marca-bg: #071820;
+
+  --status-recebido-cor: #cbd5e1;
+  --status-recebido-bg: rgba(148, 163, 184, 0.16);
+  --status-revisao-cor: #93c5fd;
+  --status-revisao-bg: rgba(59, 130, 246, 0.16);
+  --status-revisao-area-cor: #93c5fd;
+  --status-revisao-area-bg: rgba(59, 130, 246, 0.16);
+  --status-devolvido-cor: #fca5a5;
+  --status-devolvido-bg: rgba(239, 68, 68, 0.16);
+  --status-aprovacao-cor: #fcd34d;
+  --status-aprovacao-bg: rgba(245, 158, 11, 0.16);
+  --status-aprovado-cor: #6ee7b7;
+  --status-aprovado-bg: rgba(16, 185, 129, 0.16);
   --status-cancelado-cor: #fca5a5;
+  --status-cancelado-bg: rgba(239, 68, 68, 0.16);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.5);
   --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.6);

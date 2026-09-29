@@ -1,17 +1,18 @@
+/* Botões no estilo Vigen (decisão 0009): retangulares, principal petróleo, secundário com borda. */
 .botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: var(--alvo-toque);
-  padding: 0 var(--space-5);
+  min-height: var(--botao-altura);
+  padding: 0 var(--space-4);
   border: var(--borda-fina) solid transparent;
-  border-radius: var(--radius-pill);
-  font-size: var(--fs-body);
-  font-weight: var(--fw-bold);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   text-decoration: none;
-  transition: background-color var(--duracao-curta), transform var(--duracao-curta);
+  transition: background-color var(--duracao-curta);
   white-space: nowrap;
 }
 
@@ -21,43 +22,42 @@
 }
 
 .primario {
-  background: var(--cor-primaria-forte);
-  color: var(--cor-texto-sobre-primaria);
+  background: var(--botao-primario-bg);
+  color: var(--cor-texto-sobre-marca);
 }
 
 .primario:hover:not(:disabled) {
-  background: var(--cor-primaria-forte-hover);
-  transform: translateY(-1px);
+  background: var(--botao-primario-hover);
 }
 
 .secundario {
-  background: transparent;
-  border-color: var(--border-subtle);
-  color: var(--text-primary);
+  background: var(--botao-secundario-bg);
+  border-color: var(--border-input);
+  color: var(--text-strong);
 }
 
 .secundario:hover:not(:disabled) {
-  background: var(--cor-chumbo-suave);
+  background: var(--botao-secundario-hover);
 }
 
 .perigo {
-  background: var(--cor-erro-fundo-botao);
-  color: var(--cor-texto-sobre-primaria);
+  background: var(--botao-perigo-bg);
+  color: var(--cor-texto-sobre-marca);
 }
 
 .perigo:hover:not(:disabled) {
-  background: var(--cor-erro-fundo-botao-hover);
+  background: var(--botao-perigo-hover);
 }
 
 .sucesso {
-  background: var(--cor-sucesso-fundo-botao);
-  color: var(--cor-texto-sobre-primaria);
+  background: var(--botao-sucesso-bg);
+  color: var(--cor-texto-sobre-marca);
 }
 
 .compacto {
-  border-radius: var(--radius-md);
-  padding: 0 var(--space-4);
-  font-size: var(--fs-body-sm);
+  min-height: var(--botao-icone);
+  padding: 0 var(--space-3);
+  font-size: var(--fs-caption);
 }
 
 .spinner {
@@ -78,8 +78,5 @@
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: var(--duracao-spinner-reduzido);
-  }
-  .primario:hover:not(:disabled) {
-    transform: none;
   }
 }

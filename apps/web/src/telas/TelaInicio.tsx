@@ -5,11 +5,17 @@ import estilos from './Pagina.module.css';
 export function TelaInicio() {
   const { eu } = useSessao();
   const primeiroNome = eu.nome.trim().split(/\s+/)[0] ?? eu.nome;
+  const hoje = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
   return (
     <>
       <header className={estilos.cabecalho}>
-        <h1 className={estilos.titulo}>Olá, {primeiroNome}</h1>
-        <p className={estilos.subtitulo}>Bem-vindo ao DocSync.</p>
+        <div className={estilos.cabecalhoTexto}>
+          <h1 className={estilos.titulo}>Olá, {primeiroNome}</h1>
+          <p className={estilos.subtitulo}>
+            {eu.perfil}
+            {eu.area ? ` · ${eu.area}` : ''} · {hoje}
+          </p>
+        </div>
       </header>
       <section className={estilos.cartao} aria-labelledby="titulo-seus-dados">
         <h2 id="titulo-seus-dados" className={estilos.tituloCartao}>

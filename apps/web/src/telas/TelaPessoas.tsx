@@ -91,8 +91,10 @@ export function TelaPessoas() {
   return (
     <>
       <header className={pagina.cabecalho}>
-        <h1 className={pagina.titulo}>Pessoas</h1>
-        <p className={pagina.subtitulo}>Pré-cadastre pessoas e defina perfil, área e acesso ao DocSync.</p>
+        <div className={pagina.cabecalhoTexto}>
+          <h1 className={pagina.titulo}>Pessoas</h1>
+          <p className={pagina.subtitulo}>Pré-cadastre pessoas e defina perfil, área e acesso ao DocSync.</p>
+        </div>
       </header>
 
       {erroCarga ? (
@@ -103,8 +105,8 @@ export function TelaPessoas() {
         <div className={estilos.grade}>
           <FormularioPreCadastro areas={areasAtivas} aoCriar={(nova) => setPessoas((lista) => [...(lista ?? []), nova])} />
 
-          <section className={pagina.cartao} aria-labelledby="titulo-lista-pessoas">
-            <div className={estilos.barraLista}>
+          <section aria-labelledby="titulo-lista-pessoas">
+            <div className={estilos.filtros}>
               <h2 id="titulo-lista-pessoas" className={pagina.tituloCartao}>
                 Pessoas cadastradas
               </h2>
@@ -122,12 +124,13 @@ export function TelaPessoas() {
             <p className="visualmente-oculto" role="status">
               {visiveis.length === 1 ? '1 pessoa na lista.' : `${visiveis.length} pessoas na lista.`}
             </p>
+            <div className={estilos.cartaoTabela}>
             {visiveis.length === 0 ? (
               <p className={estilos.vazio}>
                 {busca.trim() ? `Nenhuma pessoa encontrada para "${busca.trim()}".` : 'Nenhuma pessoa cadastrada.'}
               </p>
             ) : (
-              <div className={estilos.rolagemTabela}>
+              <>
                 <table className={estilos.tabela}>
                   <thead>
                     <tr>
@@ -142,7 +145,7 @@ export function TelaPessoas() {
                   <tbody>
                     {visiveis.map((p) => (
                       <tr key={p.id}>
-                        <td>{p.nome}</td>
+                        <td className={estilos.nome}>{p.nome}</td>
                         <td className={estilos.email}>{p.email}</td>
                         <td>{p.perfil ?? <span className={estilos.semPerfil}>Não liberado</span>}</td>
                         <td>{p.area ?? <span className={estilos.semPerfil}>Sem área</span>}</td>
@@ -177,8 +180,9 @@ export function TelaPessoas() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </>
             )}
+            </div>
           </section>
         </div>
       )}

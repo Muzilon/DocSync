@@ -20,7 +20,9 @@
 
 Resultados: `npm run typecheck` ok; `npm test` 84 testes ok (6 arquivos, incluindo os da API); `npm run build` ok; `npm run segredos` ok; `npm run test:e2e` 10 testes ok.
 
-### Cores: Figma x documento 04
+### Cores: Figma x documento 04 (superada pela decisão 0009)
+
+> Esta seção descreve a primeira entrega. As cores foram substituídas pelo visual Vigen; ver a seção seguinte.
 
 **O Figma não pôde ser lido nesta sessão**: a chamada ao MCP do Figma (`get_metadata` no arquivo N81a9PbiHbGLvuR5wG3qwW) respondeu "limite de chamadas do plano Starter". Todos os tokens seguem o **documento 04**, sem nenhuma cor do Figma aplicada. Portanto:
 
@@ -28,6 +30,39 @@ Resultados: `npm run typecheck` ok; `npm test` 84 testes ok (6 arquivos, incluin
 - cores rejeitadas por contraste: **nenhuma** (nenhuma cor do Figma foi avaliada).
 
 Tokens criados além do documento 04 (valores derivados, não cores novas): `--cor-pessego-borda` (rgba pêssego 0,35, borda do item ativo, 04 4.2), `--cor-pessego-anel` (pêssego 18%, anel do campo, 04 7.2), `--cor-erro-anel` (erro 18%), `--cor-erro-fundo-botao-hover` (#b2352e, "escurecimento de 8%" do botão de perigo, 04 8.2; branco sobre ele ≈ 6,0:1), `--cor-nav-ativo-texto`/`-icone`, `--bg-toast`, `--bg-overlay`.
+
+### Visual Vigen (decisão 0009)
+
+O Eric enviou o design do Figma em PDF e aprovou o visual Vigen (azul-petróleo), mantendo nome, escopo e login Microsoft.
+
+- **Tokens** (`apps/web/src/estilos/tokens.css`): todas as cores trocadas pelas da decisão 0009; grupos `--sidebar-*`, `--painel-marca-*`, `--botao-*`, estados (sucesso, erro, alerta, informação) em ponto/texto/fundo, `--cor-link`; conjunto único `--status-{fase}-cor/-bg/-borda` com o mapeamento da decisão. Tokens pêssego removidos.
+- **Barra lateral:** fundo #0F2B34, texto #D9E3E8, ícones #90AFBD, logo num quadrado #4B798F, item ativo #193942 com marcador à esquerda (só CSS). Grupo "ADMINISTRAÇÃO" só aparece quando existe o link Pessoas. Continua estática (236px; 76px abaixo de 860px).
+- **Login:** painel petróleo à esquerda com logo, frase e selos ISO; cartão branco à direita com o único botão "Entrar com a conta Microsoft". Empilha abaixo de 860px.
+- **Início e Pessoas:** cabeçalho de página, tabela em cartão com cabeçalho cinza em caixa alta, badges com ponto, botão principal #4B798F (hover #396276), secundário com borda.
+- **Regra #64748B:** só sobre #FFFFFF ou #F8FAFC; sobre #F1F5F9 usa-se #475569.
+- **Tema escuro (aguarda aprovação do Eric):** página #0A1A20, cartão #10262E, campos #0D2128, bordas #1F3B45/#36586A, textos #E6EEF2/#B7C8D0/#90AFBD, barra #071820 com ativo #15323C; botão principal #4B798F.
+- **Vitrine de testes:** `apps/web/e2e/vitrine/` monta a casca, Início e Pessoas com sessão e API simuladas (sem MSAL), servida só pelo Vite do Playwright na porta 5174, fora do build. `e2e/casca.spec.ts`: axe sem violações e sem rolagem horizontal em 768/1024/1440, nos dois temas.
+
+Contrastes medidos (WCAG 2.1):
+
+| Par | Contraste |
+|---|---|
+| #0F172A / #FFFFFF | 17,85:1 |
+| #475569 / #FFFFFF | 7,58:1 |
+| #475569 / #F1F5F9 | 6,92:1 |
+| #64748B / #FFFFFF | 4,76:1 |
+| #64748B / #F8FAFC | 4,55:1 |
+| Branco / #4B798F (botão) | 4,74:1 |
+| Branco / #396276 (hover, link, foco) | 6,60:1 |
+| Branco / #B91C1C (perigo) | 6,47:1 |
+| Barra #D9E3E8 / #0F2B34 | 11,38:1 |
+| Barra #90AFBD / #0F2B34 | 6,40:1 |
+| Barra #D9E3E8 / #193942 (ativo) | 9,44:1 |
+| Login branco / #0F2B34 | 14,84:1 |
+| Fases: #047857/#ECFDF5 5,21 · #475569/#F1F5F9 6,92 · #1D4ED8/#EFF6FF 6,16 · #B91C1C/#FEF2F2 5,91 · #B45309/#FFFBEB 4,84 | — |
+| Escuro: #E6EEF2/#10262E 13,35 · #B7C8D0/#10262E 9,10 · #90AFBD/#0A1A20 7,66 · barra #D9E3E8/#071820 13,88 · badges 7,03 a 8,24 | — |
+
+O par proibido #64748B / #F1F5F9 (4,34:1) não é usado.
 
 ## Arquivos alterados
 

@@ -17,10 +17,12 @@ function SoAdministrador({ children }: { children: ReactNode }) {
 function NaoEncontrada() {
   return (
     <header className={pagina.cabecalho}>
-      <h1 className={pagina.titulo}>Página não encontrada</h1>
+      <div className={pagina.cabecalhoTexto}>
+        <h1 className={pagina.titulo}>Página não encontrada</h1>
       <p className={pagina.subtitulo}>
         Este endereço não existe no DocSync. <Link to="/">Voltar ao início</Link>
       </p>
+      </div>
     </header>
   );
 }

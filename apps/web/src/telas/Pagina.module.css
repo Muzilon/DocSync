@@ -1,19 +1,31 @@
-/* Blocos comuns das telas internas. */
+/* Blocos comuns das telas internas, no estilo do Vigen (decisão 0009). */
 .cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.cabecalhoTexto {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin-bottom: var(--space-7);
 }
 
 .titulo {
-  font-size: var(--fs-display);
-  font-weight: var(--fw-extrabold);
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
   letter-spacing: var(--ls-titulo);
+  line-height: var(--lh-titulo);
+  color: var(--text-primary);
 }
 
+/* --text-muted só sobre --bg-page (#F8FAFC): 4,55:1. */
 .subtitulo {
-  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
 }
 
 .cartao {
@@ -21,13 +33,14 @@
   border: var(--borda-fina) solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  padding: var(--space-6);
+  padding: var(--space-5);
   min-width: 0;
 }
 
 .tituloCartao {
-  font-size: var(--fs-h3);
-  font-weight: var(--fw-bold);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
   margin-bottom: var(--space-4);
 }
 
@@ -39,15 +52,13 @@
 }
 
 .dados dt {
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--ls-caixa-alta);
-  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
 }
 
 .dados dd {
   margin: 0;
-  font-size: var(--fs-body);
+  font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
+  color: var(--text-primary);
 }
