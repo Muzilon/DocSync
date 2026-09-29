@@ -3,14 +3,21 @@ import type { Multipart } from '@fastify/multipart';
 import {
   LIMITES_ARQUIVO,
   STATUS_INICIAL,
+  calcularPrazoAutomatico,
+  filtrarCartoes,
+  lerReprogramacao,
   pode,
   sanitizarNomePasta,
   validarArquivo,
   validarConjuntoArquivos,
+  type CartaoPainel,
   type DetalheDocumento,
   type Documento,
   type ErroApi,
+  type EventoHistorico,
   type NovoDocumento,
+  type RespostaPainel,
+  type ResultadoReprogramacao,
 } from '@docsync/compartilhado';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
@@ -23,19 +30,25 @@ import {
 import { enviarErro } from '../autenticacao/plugin.ts';
 import type { Banco, Executor } from '../banco/conexao.ts';
 import {
+  aplicarReprogramacao,
   buscarDocumento,
+  buscarDocumentoParaAtualizar,
+  buscarEvento,
   buscarOrigemCadastro,
   buscarTipoAtivo,
   existeCodigoRevisao,
   inserirArquivos,
   inserirDocumento,
+  listarCartoes,
   listarEventos,
   listarRecentes,
   listarTiposAtivos,
   registrarEvento,
+  ultimoEvento,
 } from '../banco/documentos.ts';
-import { buscarAreaAtiva, type Usuario } from '../banco/pessoas.ts';
-import { validarNovoDocumento } from '../validacao.ts';
+import { buscarArea, buscarAreaAtiva, type Usuario } from '../banco/pessoas.ts';
+import { hojeNoFuso } from '../datas.ts';
+import { validarNovaReprogramacao, validarNovoDocumento, validarQueryPainel } from '../validacao.ts';
 
 const MB = 1024 * 1024;
 const LIMITE_ARQUIVO_BYTES = LIMITES_ARQUIVO.tamanhoMaximoMB * MB;
@@ -83,8 +96,35 @@ function areaVisivel(eu: Usuario): string | null | 'nenhuma' {
   return eu.areaId ?? 'nenhuma';
 }
 
-function podeVer(eu: Usuario, documento: Documento): boolean {
+function podeVer(eu: Usuario, documento: Pick<Documento, 'areaId'>): boolean {
   return pode(eu, 'verDocumentos', { areaId: documento.areaId });
+}
+
+// ---------------------------------------------------------------------------
+// Reprogramação: detecção de reenvio (contrato F3, 3.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * O pedido já foi aplicado? Sim quando `documento.versao === corpo.versao + 1` e o
+ * último evento do documento é REPROGRAMACAO do mesmo autor, com o mesmo prazo novo
+ * e a mesma justificativa (aparada). Devolve esse evento, ou null.
+ * Lê o corpo cru (ainda não validado): só compara, não grava.
+ */
+async function reprogramacaoJaAplicada(
+  db: Executor,
+  documento: Documento,
+  eu: Usuario,
+  corpo: unknown,
+): Promise<EventoHistorico | null> {
+  if (typeof corpo !== 'object' || corpo === null) return null;
+  const { novoPrazo, justificativa, versao } = corpo as Record<string, unknown>;
+  if (typeof novoPrazo !== 'string' || typeof justificativa !== 'string' || typeof versao !== 'number') return null;
+  if (documento.versao !== versao + 1) return null;
+  const ultimo = await ultimoEvento(db, documento.id);
+  if (!ultimo || ultimo.tipoAcao !== 'REPROGRAMACAO' || ultimo.autorId !== eu.id) return null;
+  if (ultimo.observacao !== justificativa.trim()) return null;
+  const prazo = lerReprogramacao(ultimo);
+  return prazo && prazo.prazoNovo === novoPrazo ? ultimo : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,9 +360,15 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           throw ERRO_CODIGO_REVISAO(dados.codigo, dados.revisao);
         }
 
+        // Decisões 0011 e 0012: data de recebimento = dia do cadastro (fuso de São Paulo);
+        // prazo = esse dia + 30. Nunca vêm do corpo, e não entram no resumo de idempotência.
+        const dataRecebimento = hojeNoFuso();
+        const dataRevisao = calcularPrazoAutomatico(dataRecebimento);
         await inserirDocumento(tx, {
           ...dados,
           status: STATUS_INICIAL, // P-03: nunca vem do corpo.
+          dataRecebimento,
+          dataRevisao,
           nomePasta: sanitizarNomePasta(dados.titulo),
           nomeArquivoPrincipal: p.principal.nomeOriginal,
           qtdAnexos: p.qtdAnexos,
@@ -350,7 +396,8 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           responsavel: null,
           autorId: eu.id, // Autor sempre do token.
           autorNome: eu.nome,
-          detalhes: [],
+          // O histórico mostra de onde veio o prazo (contrato F3, 2.2).
+          detalhes: [{ campo: 'dataRevisao', antes: null, depois: dataRevisao }],
           observacao: dados.observacao,
         });
 
@@ -413,5 +460,116 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
     if (!documento || !podeVer(eu, documento)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
     const detalhe: DetalheDocumento = { documento, eventos: await listarEventos(banco, documento.id) };
     return detalhe;
+  });
+
+  // --- Painel (F3, contrato seção 4) --------------------------------------------------
+
+  escopo.get('/painel', async (requisicao, resposta) => {
+    const eu = requisicao.usuario;
+    const area = areaVisivel(eu);
+    if (area === 'nenhuma') return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+
+    const validacao = validarQueryPainel(requisicao.query);
+    if (!validacao.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: validacao.campos });
+    const filtro = validacao.dados;
+    if (filtro.areaId !== null && !(await buscarArea(banco, filtro.areaId))) {
+      return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: { areaId: 'Área não encontrada.' } });
+    }
+
+    // Carrega tudo o que a pessoa pode ver (com cancelados, para contar) e aplica busca
+    // e área com a mesma função pura da interface. Conferência final por cartão com `pode`.
+    // Pendência anotada: filtrar em SQL quando a base crescer.
+    const visiveis = (await listarCartoes(banco, area, true)).filter((c) => podeVer(eu, c));
+    const filtrados = filtrarCartoes(visiveis, { busca: filtro.busca, areaId: filtro.areaId });
+    const cancelados = filtrados.filter((c) => c.fase === 'cancelado');
+    const cartoes: CartaoPainel[] = filtro.cancelados ? filtrados : filtrados.filter((c) => c.fase !== 'cancelado');
+    const painel: RespostaPainel = { cartoes, qtdCancelados: cancelados.length, hoje: hojeNoFuso() };
+    return painel;
+  });
+
+  // --- Reprogramação do prazo (F3, contrato seção 3) -----------------------------------
+
+  const STATUS_SEM_PRAZO = new Set<Documento['status']>(['Aprovado', 'Cancelado']);
+
+  escopo.post<{ Params: { id: string } }>('/documentos/:id/reprogramacoes', async (requisicao, resposta) => {
+    const eu = requisicao.usuario;
+    // Ordem de decisão do contrato (3.3): permissão geral → existência/visibilidade →
+    // permissão da ação → estado → corpo → transação.
+    if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    const visto = await buscarDocumento(banco, requisicao.params.id);
+    if (!visto || !podeVer(eu, visto)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
+    if (!pode(eu, 'reprogramarPrazo', { areaId: visto.areaId })) {
+      return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    }
+    if (STATUS_SEM_PRAZO.has(visto.status)) {
+      return enviarErro(resposta, 409, {
+        codigo: 'acao_nao_permitida',
+        mensagem: `Documento ${visto.status === 'Aprovado' ? 'aprovado' : 'cancelado'} não tem prazo a reprogramar.`,
+      });
+    }
+    // Idempotência (contrato 3.3) antes de validar o corpo: como a reprogramação só adia,
+    // um reenvio idêntico (fila do cliente) reprovaria na regra "posterior ao prazo atual".
+    // O pedido já foi validado quando foi aplicado; aqui só se confirma que é o mesmo.
+    const repetido = await reprogramacaoJaAplicada(banco, visto, eu, requisicao.body);
+    if (repetido) {
+      const corpo: ResultadoReprogramacao = { documento: visto, evento: repetido };
+      return resposta.code(200).send(corpo);
+    }
+
+    const hoje = hojeNoFuso();
+    const validacao = validarNovaReprogramacao(requisicao.body, visto.dataRevisao, hoje);
+    if (!validacao.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: validacao.campos });
+    const pedido = validacao.dados;
+
+    try {
+      const resultado = await banco.transaction(async (tx) => {
+        const documento = (await buscarDocumentoParaAtualizar(tx, visto.id))!;
+
+        // Conferência final, com a linha bloqueada (corrida entre dois reenvios iguais).
+        const repetidoAgora = await reprogramacaoJaAplicada(tx, documento, eu, pedido);
+        if (repetidoAgora) return { criado: false, documento, evento: repetidoAgora };
+        // Concorrência otimista: versão desatualizada → conflito com o estado atual.
+        if (documento.versao !== pedido.versao) {
+          throw new ErroNegocio(409, {
+            codigo: 'conflito_versao',
+            mensagem: 'Alguém alterou este documento. Veja o prazo atual e tente de novo.',
+            documento,
+          });
+        }
+        // O estado pode ter mudado entre a leitura sem bloqueio e esta (mesma versão = mesmo
+        // prazo e status, mas a conferência é barata e mantém a regra num lugar só).
+        if (STATUS_SEM_PRAZO.has(documento.status)) {
+          throw new ErroNegocio(409, { codigo: 'acao_nao_permitida', mensagem: 'Documento não tem prazo a reprogramar.' });
+        }
+
+        const atualizado = await aplicarReprogramacao(tx, documento.id, pedido.versao, pedido.novoPrazo);
+        if (!atualizado) {
+          throw new ErroNegocio(409, {
+            codigo: 'conflito_versao',
+            mensagem: 'Alguém alterou este documento. Veja o prazo atual e tente de novo.',
+            documento: (await buscarDocumento(tx, documento.id))!,
+          });
+        }
+        const idEvento = await registrarEvento(tx, {
+          idDocumento: documento.id,
+          codigo: documento.codigo,
+          tipoAcao: 'REPROGRAMACAO',
+          status: documento.status,
+          statusAnterior: null,
+          destino: null,
+          responsavel: null,
+          autorId: eu.id, // Autor sempre do token.
+          autorNome: eu.nome,
+          detalhes: [{ campo: 'dataRevisao', antes: documento.dataRevisao, depois: pedido.novoPrazo }],
+          observacao: pedido.justificativa,
+        });
+        return { criado: true, documento: atualizado, evento: (await buscarEvento(tx, idEvento))! };
+      });
+      const corpo: ResultadoReprogramacao = { documento: resultado.documento, evento: resultado.evento };
+      return resposta.code(resultado.criado ? 201 : 200).send(corpo);
+    } catch (erro) {
+      if (erro instanceof ErroNegocio) return enviarErro(resposta, erro.status, erro.corpo);
+      throw erro;
+    }
   });
 }

@@ -6,6 +6,8 @@
  * (que apenas esconde o que a pessoa não pode fazer).
  */
 
+import type { Documento } from './documentos.ts';
+
 export const PERFIS = ['Administrador', 'Qualidade', 'Solicitante', 'Leitor'] as const;
 export type Perfil = (typeof PERFIS)[number];
 
@@ -35,7 +37,7 @@ export interface Area {
  * A lista cresce a cada fatia (mudar status, exportar etc.), sempre com teste
  * na tabela de permissões.
  */
-export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento';
+export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento' | 'reprogramarPrazo';
 
 /**
  * Contexto do registro sobre o qual a ação é feita. Hoje só a área do documento:
@@ -56,6 +58,9 @@ const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   gerenciarPessoas: { Administrador: 'sim', Qualidade: 'nao', Solicitante: 'nao', Leitor: 'nao' },
   verDocumentos: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'sim' },
   cadastrarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'somenteComSuaArea', Leitor: 'nao' },
+  // Decisão 0011: reprogramam Qualidade e Administrador. O contexto de área é aceito
+  // (regra uniforme), mas hoje não altera o resultado.
+  reprogramarPrazo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -145,6 +150,10 @@ export type CodigoErroApi =
   | 'codigo_revisao_existente'
   /** POST /documentos: o ID já foi usado por outro autor ou com outros dados. */
   | 'id_existente'
+  /** 409: a versão enviada está desatualizada; o corpo traz `documento` com o estado atual. */
+  | 'conflito_versao'
+  /** 409: o estado do documento não aceita a ação (ex.: reprogramar prazo de Aprovado/Cancelado). */
+  | 'acao_nao_permitida'
   | 'erro_interno';
 
 export interface ErroApi {
@@ -152,4 +161,6 @@ export interface ErroApi {
   mensagem?: string;
   /** Em 'dados_invalidos': mensagem pt-BR por campo. */
   campos?: Record<string, string>;
+  /** Em 'conflito_versao': o documento como está no servidor. */
+  documento?: Documento;
 }

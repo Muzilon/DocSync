@@ -20,6 +20,8 @@ describe('pode — tabela de permissões (sem contexto)', () => {
     verDocumentos: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: true },
     // Solicitante só cadastra com contexto da sua área (ver o bloco seguinte).
     cadastrarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
+    // Decisão 0011: reprogramam Qualidade e Administrador.
+    reprogramarPrazo: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
   };
 
   for (const [acao, porPerfil] of Object.entries(tabela) as [Acao, Record<Perfil, boolean>][]) {
@@ -93,6 +95,18 @@ describe('pode — com contexto de área (documento 02, seção 7.3)', () => {
     expect(pode(pessoa('Solicitante'), 'verDocumentos', outraArea)).toBe(false);
     for (const perfil of ['Administrador', 'Qualidade', 'Leitor'] as const) {
       expect(pode(pessoa(perfil), 'verDocumentos', outraArea)).toBe(true);
+    }
+  });
+
+  it('reprogramarPrazo: Administrador e Qualidade em qualquer área; Solicitante e Leitor nunca, nem na sua', () => {
+    for (const perfil of ['Administrador', 'Qualidade'] as const) {
+      expect(pode(pessoa(perfil), 'reprogramarPrazo', suaArea)).toBe(true);
+      expect(pode(pessoa(perfil), 'reprogramarPrazo', outraArea)).toBe(true);
+    }
+    for (const perfil of ['Solicitante', 'Leitor'] as const) {
+      expect(pode(pessoa(perfil), 'reprogramarPrazo', suaArea)).toBe(false);
+      expect(pode(pessoa(perfil), 'reprogramarPrazo', outraArea)).toBe(false);
+      expect(pode(pessoa(perfil), 'reprogramarPrazo')).toBe(false);
     }
   });
 

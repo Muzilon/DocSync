@@ -1,4 +1,14 @@
-import { ehPerfil, type AlteracaoPessoa, type NovaPessoa, type NovoDocumento, type Perfil } from '@docsync/compartilhado';
+import {
+  ehDataSoDia,
+  ehPerfil,
+  validarJustificativa,
+  validarNovoPrazo,
+  type AlteracaoPessoa,
+  type NovaPessoa,
+  type NovaReprogramacao,
+  type NovoDocumento,
+  type Perfil,
+} from '@docsync/compartilhado';
 
 /** Resultado de validação: dados limpos ou mensagens pt-BR por campo. */
 export type Validado<T> = { ok: true; dados: T } | { ok: false; campos: Record<string, string> };
@@ -82,7 +92,6 @@ export function validarAlteracaoPessoa(corpo: unknown): Validado<AlteracaoPessoa
 // ---------------------------------------------------------------------------
 
 const ID_DOCUMENTO = /^DOC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const DATA_SO_DIA = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LIMITES_TEXTO = { codigo: 100, titulo: 300, remetente: 200, disciplina: 100, observacao: 2000 } as const;
 const REVISAO_MAXIMA = 999;
 
@@ -92,23 +101,14 @@ const CAMPOS_NOVO_DOCUMENTO = [
   'titulo',
   'tipoDocumentoId',
   'revisao',
-  'dataRecebimento',
-  'dataRevisao',
   'remetente',
   'areaId',
   'disciplina',
   'observacao',
 ] as const satisfies readonly (keyof NovoDocumento)[];
 
-/** Data 'AAAA-MM-DD' que existe no calendário (recusa 2026-02-30). */
-export function ehDataSoDia(valor: unknown): valor is string {
-  if (typeof valor !== 'string') return false;
-  const partes = DATA_SO_DIA.exec(valor);
-  if (!partes) return false;
-  const [ano, mes, dia] = [Number(partes[1]), Number(partes[2]), Number(partes[3])];
-  const data = new Date(Date.UTC(ano, mes - 1, dia));
-  return ano >= 1900 && data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
-}
+/** Data só-dia válida: a mesma regra da interface, em `@docsync/compartilhado`. */
+export { ehDataSoDia };
 
 /**
  * Texto opcional: ausente, null ou só espaços → null. Aparado.
@@ -146,6 +146,8 @@ function textoObrigatorio(
 /**
  * Valida a parte 'dados' do cadastro (documento 03, seção 6). Esquema fechado:
  * campo desconhecido é recusado, e `status` tem mensagem própria (P-03).
+ * `dataRecebimento` e `dataRevisao` são do servidor (decisões 0011 e 0012):
+ * enviá-las é "Campo não permitido.", como qualquer campo fora do esquema.
  */
 export function validarNovoDocumento(corpo: unknown): Validado<NovoDocumento> {
   if (!ehObjeto(corpo)) return { ok: false, campos: { dados: 'Envie os dados do documento.' } };
@@ -177,17 +179,6 @@ export function validarNovoDocumento(corpo: unknown): Validado<NovoDocumento> {
     campos.revisao = `O número de revisão deve ser um inteiro de 0 a ${REVISAO_MAXIMA}.`;
   }
 
-  const dataRecebimento = corpo.dataRecebimento;
-  if (dataRecebimento === undefined || dataRecebimento === null || dataRecebimento === '') {
-    campos.dataRecebimento = 'Informe a data de recebimento.';
-  } else if (!ehDataSoDia(dataRecebimento)) {
-    campos.dataRecebimento = 'Data de recebimento inválida.';
-  }
-  const dataRevisao = corpo.dataRevisao ?? null;
-  if (dataRevisao !== null && dataRevisao !== '' && !ehDataSoDia(dataRevisao)) {
-    campos.dataRevisao = 'Data de revisão (prazo) inválida.';
-  }
-
   if (Object.keys(campos).length > 0) return { ok: false, campos };
   return {
     ok: true,
@@ -197,12 +188,89 @@ export function validarNovoDocumento(corpo: unknown): Validado<NovoDocumento> {
       titulo,
       tipoDocumentoId: tipoDocumentoId as string,
       revisao: revisao as number,
-      dataRecebimento: dataRecebimento as string,
-      dataRevisao: dataRevisao === '' ? null : (dataRevisao as string | null),
       remetente,
       areaId: areaId as string,
       disciplina,
       observacao,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Reprogramação de prazo (F3) — corpo de POST /documentos/:id/reprogramacoes
+// ---------------------------------------------------------------------------
+
+const CAMPOS_REPROGRAMACAO = ['novoPrazo', 'justificativa', 'versao'] as const satisfies readonly (keyof NovaReprogramacao)[];
+
+/**
+ * Valida a reprogramação (contrato F3, 3.2) com as regras puras de
+ * `@docsync/compartilhado`. Esquema fechado. Justificativa devolvida aparada.
+ * @param prazoAtual prazo do documento (null = sem prazo: só a regra de hoje).
+ * @param hoje 'AAAA-MM-DD' de `hojeNoFuso()`.
+ */
+export function validarNovaReprogramacao(corpo: unknown, prazoAtual: string | null, hoje: string): Validado<NovaReprogramacao> {
+  if (!ehObjeto(corpo)) return { ok: false, campos: { corpo: 'Envie o novo prazo, a justificativa e a versão.' } };
+  const campos = camposDesconhecidos(corpo, CAMPOS_REPROGRAMACAO);
+
+  const erroPrazo = validarNovoPrazo(corpo.novoPrazo, prazoAtual, hoje);
+  if (erroPrazo) campos.novoPrazo = erroPrazo;
+
+  const erroJustificativa = validarJustificativa(corpo.justificativa);
+  if (erroJustificativa) campos.justificativa = erroJustificativa;
+
+  const versao = corpo.versao;
+  if (typeof versao !== 'number' || !Number.isInteger(versao) || versao < 1) {
+    campos.versao = 'Versão inválida. Recarregue o painel e tente de novo.';
+  }
+
+  if (Object.keys(campos).length > 0) return { ok: false, campos };
+  return {
+    ok: true,
+    dados: {
+      novoPrazo: corpo.novoPrazo as string,
+      justificativa: (corpo.justificativa as string).trim(),
+      versao: versao as number,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Painel (F3) — query de GET /painel
+// ---------------------------------------------------------------------------
+
+export interface FiltroPainelQuery {
+  busca: string;
+  areaId: string | null;
+  cancelados: boolean;
+}
+
+const TAMANHO_MAXIMO_BUSCA = 200;
+const CAMPOS_QUERY_PAINEL = ['busca', 'areaId', 'cancelados'] as const;
+
+/** Esquema fechado também na query: parâmetro desconhecido ou repetido → erro por campo. */
+export function validarQueryPainel(query: unknown): Validado<FiltroPainelQuery> {
+  const corpo = ehObjeto(query) ? query : {};
+  const campos = camposDesconhecidos(corpo, CAMPOS_QUERY_PAINEL);
+
+  let busca = '';
+  if (corpo.busca !== undefined) {
+    if (typeof corpo.busca !== 'string') campos.busca = 'Busca inválida.';
+    else if (corpo.busca.length > TAMANHO_MAXIMO_BUSCA) campos.busca = `A busca pode ter até ${TAMANHO_MAXIMO_BUSCA} caracteres.`;
+    else busca = corpo.busca;
+  }
+
+  let areaId: string | null = null;
+  if (corpo.areaId !== undefined && corpo.areaId !== '') {
+    if (typeof corpo.areaId !== 'string') campos.areaId = 'Área inválida.';
+    else areaId = corpo.areaId;
+  }
+
+  let cancelados = false;
+  if (corpo.cancelados !== undefined) {
+    if (corpo.cancelados === 'true') cancelados = true;
+    else if (corpo.cancelados !== 'false') campos.cancelados = 'Use true ou false.';
+  }
+
+  if (Object.keys(campos).length > 0) return { ok: false, campos };
+  return { ok: true, dados: { busca, areaId, cancelados } };
 }

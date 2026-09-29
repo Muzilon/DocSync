@@ -7,8 +7,10 @@ import type {
   Pessoa,
   TipoDocumento,
 } from '@docsync/compartilhado';
+import { calcularPrazoAutomatico } from '@docsync/compartilhado';
 import type { JWTPayload } from 'jose';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { hojeNoFuso } from './datas.ts';
 import {
   ADMIN,
   criarAmbiente,
@@ -64,8 +66,6 @@ async function novoDocumento(extra: Partial<NovoDocumento> = {}): Promise<NovoDo
     titulo: 'Procedimento: Compras & Contratos',
     tipoDocumentoId: await idDoTipo(),
     revisao: 0,
-    dataRecebimento: '2026-09-29',
-    dataRevisao: '2026-10-15',
     remetente: 'Remetente Fictício',
     areaId: await idDaArea('Qualidade'),
     disciplina: null,
@@ -130,8 +130,11 @@ describe('POST /documentos — cadastro', () => {
       tipoDocumento: 'PR - Procedimento',
       area: 'Qualidade',
       revisao: 0,
-      dataRecebimento: '2026-09-29',
-      dataRevisao: '2026-10-15',
+      // Decisões 0011 e 0012: as duas datas vêm do servidor.
+      dataRecebimento: hojeNoFuso(),
+      dataRevisao: calcularPrazoAutomatico(hojeNoFuso()),
+      reprogramado: false,
+      qtdReprogramacoes: 0,
       nomePasta: 'Procedimento- Compras - Contratos',
       nomeArquivoPrincipal: 'procedimento.pdf',
       qtdAnexos: 3,
@@ -162,9 +165,21 @@ describe('POST /documentos — cadastro', () => {
       statusAnterior: null,
       autorId: eu.id,
       autorNome: 'Admin Fictício',
-      detalhes: [],
+      // O histórico mostra de onde veio o prazo (contrato F3, 2.2).
+      detalhes: [{ campo: 'dataRevisao', antes: null, depois: doc.dataRevisao }],
       observacao: 'Cadastro inicial de teste',
     });
+  });
+
+  it('decisões 0011/0012: enviar dataRecebimento ou dataRevisao → 400 por campo (esquema fechado)', async () => {
+    const dados = await novoDocumento();
+    const resposta = await cadastrar(ADMIN, { ...dados, dataRecebimento: '2026-09-01', dataRevisao: null });
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json().campos).toEqual({
+      dataRecebimento: 'Campo não permitido.',
+      dataRevisao: 'Campo não permitido.',
+    });
+    expect((await amb.chamar(ADMIN, 'GET', `/documentos/${dados.id}`)).statusCode).toBe(404);
   });
 
   it('P-02: sem arquivo principal → 400 no campo arquivoPrincipal', async () => {
@@ -226,8 +241,6 @@ describe('POST /documentos — cadastro', () => {
       titulo: '  ',
       tipoDocumentoId: '',
       revisao: -1,
-      dataRecebimento: '2026-02-30',
-      dataRevisao: 'amanhã',
       remetente: '',
       areaId: '',
       extra: 1,
@@ -238,8 +251,6 @@ describe('POST /documentos — cadastro', () => {
       titulo: 'Informe o título do documento.',
       tipoDocumentoId: 'Selecione o tipo de documento.',
       revisao: 'O número de revisão deve ser um inteiro de 0 a 999.',
-      dataRecebimento: 'Data de recebimento inválida.',
-      dataRevisao: 'Data de revisão (prazo) inválida.',
       remetente: 'Informe o remetente ou solicitante.',
       areaId: 'Selecione a área.',
       extra: 'Campo não permitido.',
@@ -287,6 +298,8 @@ describe('POST /documentos — idempotência', () => {
     const segundo = await cadastrar(ADMIN, dados, anexos);
     expect(segundo.statusCode).toBe(200);
     expect(segundo.json()).toEqual(primeiro.json());
+    // O prazo original é mantido (o prazo é derivado, não parte do pedido).
+    expect(segundo.json<Documento>().dataRevisao).toBe(primeiro.json<Documento>().dataRevisao);
 
     expect(await eventosDe(dados.id)).toHaveLength(1);
     expect(amb.armazenamento.listar(dados.id)).toEqual(['Anexos/a.docx', 'procedimento.pdf']);
