@@ -27,3 +27,7 @@ O Eric usa o Microsoft Planner e quer o Painel com a mesma leitura rápida: cart
 ## Consequências
 - F5: o cartão é refeito por este padrão junto com as ações de status no modal.
 - Contratos da F3/F4: as partes sobre botões no cartão e conteúdo do cartão ficam superadas por esta decisão.
+
+## Atualização 2026-09-29 (validação da F6)
+- **Rodapé do modal de detalhes só com o necessário:** "Atualizar etapa…" (todas as mudanças de etapa, sem botão de ação principal separado), "Cancelar documento" (ou "Reativar", quando o documento está cancelado) e "Reprogramar". Sem "Fechar" (o ✕ do cabeçalho já fecha). "Editar dados" sai do rodapé e vira um botão discreto "Editar" no título da seção Dados.
+- **Reprogramar também quando o prazo está chegando:** vencido ou vencendo (hoje até 5 dias, a mesma janela do KPI "Vencendo"). Com isso a regra "só adia" volta a ter efeito.

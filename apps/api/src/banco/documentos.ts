@@ -5,6 +5,7 @@ import {
   ordenarAlfabetico,
   type ArquivoDocumento,
   type CartaoPainel,
+  type DadosDocumento,
   type Documento,
   type EventoHistorico,
   type NovoDocumento,
@@ -148,6 +149,23 @@ export async function existeCodigoRevisao(db: Executor, codigo: string, revisao:
 }
 
 /**
+ * Existe OUTRO documento (id diferente de `excetoId`) com o mesmo código e revisão,
+ * sem diferenciar maiúsculas? Usado na edição (contrato F6, 4.2 passo 6.5).
+ */
+export async function existeOutroComCodigoRevisao(
+  db: Executor,
+  codigo: string,
+  revisao: number,
+  excetoId: string,
+): Promise<boolean> {
+  const { rows } = await db.query(
+    'SELECT 1 FROM documentos WHERE lower(codigo) = lower($1) AND revisao = $2 AND id <> $3',
+    [codigo, revisao, excetoId],
+  );
+  return rows.length > 0;
+}
+
+/**
  * Documentos mais recentes (por data de cadastro).
  * @param areaId null = todas as áreas; senão, só os da área.
  */
@@ -223,6 +241,45 @@ export async function aplicarReprogramacao(
             versao = versao + 1, data_modificacao = now()
       WHERE id = $1 AND versao = $2`,
     [id, versaoEsperada, novoPrazo],
+  );
+  if (!affectedRows) return null;
+  return buscarDocumento(tx, id);
+}
+
+// --- Edição de dados (F6) ------------------------------------------------------------
+
+/**
+ * Edição de dados (contrato F6, 4.2 passo 6.7): grava os 8 campos cadastrais, o
+ * `nome_pasta` recalculado (só exibição; a pasta real é pelo ID, P-07) e incrementa a
+ * versão. Só atualiza se a versão for a esperada (`WHERE versao = $n`); devolve o
+ * documento atualizado ou null se já mudou. NÃO toca em status, responsável, datas do
+ * servidor, contadores, `hash_cadastro`, `criado_por` nem `id_documento_origem` (P-14).
+ */
+export async function aplicarEdicao(
+  tx: Executor,
+  id: string,
+  versaoEsperada: number,
+  dados: DadosDocumento,
+  nomePasta: string,
+): Promise<Documento | null> {
+  const { affectedRows } = await tx.query(
+    `UPDATE documentos
+        SET titulo = $3, codigo = $4, tipo_documento_id = $5, revisao = $6, remetente = $7, area_id = $8,
+            disciplina = $9, observacao = $10, nome_pasta = $11, versao = versao + 1, data_modificacao = now()
+      WHERE id = $1 AND versao = $2`,
+    [
+      id,
+      versaoEsperada,
+      dados.titulo,
+      dados.codigo,
+      dados.tipoDocumentoId,
+      dados.revisao,
+      dados.remetente,
+      dados.areaId,
+      dados.disciplina,
+      dados.observacao,
+      nomePasta,
+    ],
   );
   if (!affectedRows) return null;
   return buscarDocumento(tx, id);

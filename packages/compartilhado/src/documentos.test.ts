@@ -15,6 +15,7 @@ import {
   TIPO_MIME_POR_EXTENSAO,
   calcularPrazoAutomatico,
   emTramitacao,
+  DIAS_JANELA_VENCENDO,
   podeReprogramarAgora,
   diferencaEmDias,
   ehDataSoDia,
@@ -362,12 +363,23 @@ describe('nomeDownloadPrincipal (decisão 0014, item 4)', () => {
   });
 });
 
-describe('podeReprogramarAgora (decisão 0015, item 5: só com prazo vencido)', () => {
+describe('podeReprogramarAgora (decisão 0015, atualização 2026-09-29: vencido ou vencendo)', () => {
   const hoje = '2026-09-29';
-  it('prazo anterior a hoje → sim; hoje ou futuro → não', () => {
+  it('vencido, hoje e até hoje + DIAS_JANELA_VENCENDO → sim; hoje + 6 em diante → não', () => {
+    expect(DIAS_JANELA_VENCENDO).toBe(5);
     expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-28' }, hoje)).toBe(true);
-    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-29' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-01-01' }, hoje)).toBe(true);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-29' }, hoje)).toBe(true);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-10-04' }, hoje)).toBe(true); // hoje + 5
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-10-05' }, hoje)).toBe(false); // hoje + 6
     expect(podeReprogramarAgora({ status: 'Em revisão da qualidade', dataRevisao: '2026-10-29' }, hoje)).toBe(false);
+  });
+  it('prazo vencendo: a regra "só adia" volta a valer (novo prazo igual ou anterior ao atual é recusado)', () => {
+    const prazoAtual = '2026-10-02';
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: prazoAtual }, hoje)).toBe(true);
+    expect(validarNovoPrazo('2026-10-01', prazoAtual, hoje)).toMatch(/só adia/);
+    expect(validarNovoPrazo(prazoAtual, prazoAtual, hoje)).toMatch(/só adia/);
+    expect(validarNovoPrazo('2026-10-03', prazoAtual, hoje)).toBeNull();
   });
   it('Aprovado e Cancelado nunca, mesmo vencidos; sem prazo (importado) pode receber um', () => {
     expect(podeReprogramarAgora({ status: 'Aprovado', dataRevisao: '2026-01-01' }, hoje)).toBe(false);

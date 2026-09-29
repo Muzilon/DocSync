@@ -47,8 +47,9 @@ for (const tema of TEMAS) {
     test(`detalhes com ações ${tema} em ${largura}px: rodapé sem rolagem horizontal, metas e axe`, async ({ page }) => {
       await abrir(page, { tema, largura, rota: '/painel?documento=DOC-P1' });
       const dialogo = page.getByRole('dialog', { name: 'Procedimento de auditoria interna' });
-      await expect(dialogo.getByRole('button', { name: 'Iniciar revisão' })).toBeVisible();
-      expect(await rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Cancelar documento', 'Fechar']);
+      await expect(dialogo.getByRole('button', { name: 'Atualizar etapa…' })).toBeVisible();
+      expect(await rodape(dialogo)).toEqual(['Atualizar etapa…', 'Cancelar documento']);
+      await expect(dialogo.getByRole('region', { name: 'Dados' }).getByRole('button', { name: 'Editar dados' })).toBeVisible();
       await expect(dialogo.getByRole('region', { name: 'Metas do ciclo' })).toContainText('Estourada');
       await semRolagemHorizontal(page);
       const caixa = await dialogo.boundingBox();
@@ -60,10 +61,11 @@ for (const tema of TEMAS) {
   test(`"Atualizar etapa" empilhado ${tema}: foco preso, Esc fecha só ele e devolve o foco ao botão, axe`, async ({ page }) => {
     await abrir(page, { tema, rota: '/painel?documento=DOC-P1' });
     const detalhes = page.getByRole('dialog', { name: 'Procedimento de auditoria interna' });
-    const botao = detalhes.getByRole('button', { name: 'Iniciar revisão' });
+    const botao = detalhes.getByRole('button', { name: 'Atualizar etapa…' });
     await botao.click();
     const etapa = page.getByRole('dialog', { name: 'Atualizar etapa' });
-    await expect(etapa.getByRole('combobox', { name: /Etapa/ })).toHaveValue('Em revisão da qualidade');
+    await expect(etapa.getByRole('combobox', { name: /Etapa/ })).toHaveValue('');
+    await etapa.getByRole('combobox', { name: /Etapa/ }).selectOption('Em revisão da qualidade');
     // Sugerido: Qualidade/Administrador, com "eu" (Ana, Administrador) em primeiro.
     await expect(etapa.getByRole('combobox', { name: /Responsável/ })).toHaveValue('p1');
     await axe(page);
@@ -108,8 +110,9 @@ for (const tema of TEMAS) {
 test('registrar etapa: o cartão troca de coluna, ganha o responsável e a linha do tempo mostra o evento', async ({ page }) => {
   await abrir(page, { rota: '/painel?documento=DOC-P1' });
   const detalhes = page.getByRole('dialog', { name: 'Procedimento de auditoria interna' });
-  await detalhes.getByRole('button', { name: 'Iniciar revisão' }).click();
+  await detalhes.getByRole('button', { name: 'Atualizar etapa…' }).click();
   const etapa = page.getByRole('dialog', { name: 'Atualizar etapa' });
+  await etapa.getByRole('combobox', { name: /Etapa/ }).selectOption('Em revisão da qualidade');
   await etapa.getByRole('combobox', { name: /Responsável/ }).selectOption({ label: 'Bruno Teste (Engenharia)' });
   await etapa.getByLabel(/Observação/).fill('Revisão pela Qualidade.');
   await etapa.getByRole('button', { name: 'Registrar etapa' }).click();
@@ -117,8 +120,8 @@ test('registrar etapa: o cartão troca de coluna, ganha o responsável e a linha
   await expect(detalhes.getByRole('status').filter({ hasText: 'Etapa registrada: Em revisão da qualidade.' })).toBeAttached();
   await expect(page.getByRole('region', { name: 'Linha do tempo' }).locator('ol > li').first()).toContainText('De Recebido para Em revisão da qualidade');
   await expect(detalhes.getByRole('region', { name: 'Dados' })).toContainText('Bruno Teste');
-  // O botão usado sumiu (o status mudou): o foco não se perde.
-  await expect(detalhes.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
+  // O botão usado continua ("Atualizar etapa…"): o foco volta a ele.
+  await expect(detalhes.getByRole('button', { name: 'Atualizar etapa…' })).toBeFocused();
   await page.keyboard.press('Escape');
   const cartao = coluna(page, 'revisao').getByRole('article', { name: 'Procedimento de auditoria interna' });
   await expect(cartao.getByText('BT', { exact: true })).toBeVisible();
@@ -139,18 +142,21 @@ test('Atualizar etapa…: sem etapa escolhida, resumo de erros; 409 mostra o sta
   await axe(page);
 });
 
-test('Aprovar pede confirmação e soma no KPI "Aprovados no mês"', async ({ page }) => {
+test('Aprovar dentro de "Atualizar etapa…": avisa que é final, soma no KPI e o foco vai ao ✕ quando o rodapé some', async ({ page }) => {
   await abrir(page, { rota: '/painel?documento=DOC-P7' });
   const kpi = page.getByRole('region', { name: 'Indicadores' });
   await expect(kpi).toContainText('Aprovados no mês2');
   const detalhes = page.getByRole('dialog', { name: 'Relatório de satisfação de clientes' });
-  await detalhes.getByRole('button', { name: 'Aprovar' }).click();
-  const confirmar = page.getByRole('dialog', { name: 'Aprovar documento' });
-  await expect(confirmar).toContainText('A aprovação é final e encerra a tramitação.');
+  await detalhes.getByRole('button', { name: 'Atualizar etapa…' }).click();
+  const etapa = page.getByRole('dialog', { name: 'Atualizar etapa' });
+  await etapa.getByRole('combobox', { name: /Etapa/ }).selectOption('Aprovado');
+  await expect(etapa).toContainText('A aprovação é final e encerra a tramitação.');
   await axe(page);
-  await confirmar.getByRole('button', { name: 'Aprovar' }).click();
-  await expect(confirmar).toBeHidden();
+  await etapa.getByRole('button', { name: 'Aprovar' }).click();
+  await expect(etapa).toBeHidden();
   await expect(detalhes.getByRole('button', { name: 'Cancelar documento' })).toHaveCount(0);
+  expect(await rodape(detalhes)).toEqual([]);
+  await expect(detalhes.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(coluna(page, 'aprovado').getByRole('article', { name: 'Relatório de satisfação de clientes' })).toBeVisible();
   await expect(kpi).toContainText('Aprovados no mês3');
@@ -163,13 +169,15 @@ test('janela de cancelados: Reativar nos detalhes por cima nomeia o status de vo
   await janela.getByRole('button', { name: /^Ata da reunião de análise crítica ?, abrir detalhes$/ }).click();
   const detalhes = page.getByRole('dialog', { name: 'Ata da reunião de análise crítica' });
   await expect(detalhes.getByRole('button', { name: 'Reativar' })).toBeVisible();
-  expect(await rodape(detalhes)).toEqual(['Reativar', 'Fechar']);
+  expect(await rodape(detalhes)).toEqual(['Reativar']);
   await detalhes.getByRole('button', { name: 'Reativar' }).click();
   const confirmar = page.getByRole('dialog', { name: 'Reativar documento' });
   await expect(confirmar).toContainText('Ele volta para Em revisão da qualidade.');
   await axe(page);
   await confirmar.getByRole('button', { name: 'Reativar' }).click();
   await expect(detalhes.getByRole('status').filter({ hasText: 'Documento reativado: Em revisão da qualidade.' })).toBeAttached();
+  // "Reativar" sumiu: o foco vai ao ✕.
+  await expect(detalhes.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Documentos cancelados (1)' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -178,11 +186,11 @@ test('janela de cancelados: Reativar nos detalhes por cima nomeia o status de vo
 });
 
 for (const [perfil, doc, titulo, esperado] of [
-  ['Leitor', 'DOC-P6', 'Controle de informação documentada', ['Fechar']],
-  ['Solicitante', 'DOC-P6', 'Controle de informação documentada', ['Reenviar à Qualidade', 'Atualizar etapa…', 'Fechar']],
-  ['Qualidade', 'DOC-P8', 'Manual do Sistema de Gestão Integrada', ['Fechar']],
+  ['Leitor', 'DOC-P6', 'Controle de informação documentada', []],
+  ['Solicitante', 'DOC-P6', 'Controle de informação documentada', ['Atualizar etapa…']],
+  ['Qualidade', 'DOC-P8', 'Manual do Sistema de Gestão Integrada', []],
 ] as const) {
-  test(`${perfil} em ${doc}: rodapé ${esperado.join(', ')}; axe`, async ({ page }) => {
+  test(`${perfil} em ${doc}: rodapé ${esperado.length ? esperado.join(', ') : 'vazio'}; axe`, async ({ page }) => {
     await abrir(page, { rota: `/painel?documento=${doc}`, extra: `&perfil=${perfil}` });
     const detalhes = page.getByRole('dialog', { name: titulo });
     await expect(detalhes.getByRole('region', { name: 'Metas do ciclo' })).toBeVisible();
@@ -194,8 +202,9 @@ for (const [perfil, doc, titulo, esperado] of [
 
 test('lista de responsáveis com erro: "Tentar de novo" carrega a lista', async ({ page }) => {
   await abrir(page, { rota: '/painel?documento=DOC-P1', extra: '&responsaveis=erro' });
-  await page.getByRole('dialog', { name: 'Procedimento de auditoria interna' }).getByRole('button', { name: 'Iniciar revisão' }).click();
+  await page.getByRole('dialog', { name: 'Procedimento de auditoria interna' }).getByRole('button', { name: 'Atualizar etapa…' }).click();
   const etapa = page.getByRole('dialog', { name: 'Atualizar etapa' });
+  await etapa.getByRole('combobox', { name: /Etapa/ }).selectOption('Em revisão da qualidade');
   await expect(etapa.getByText(/Não foi possível carregar os responsáveis/)).toBeVisible();
   await axe(page);
   await etapa.getByRole('button', { name: 'Tentar de novo' }).click();

@@ -9,15 +9,18 @@ import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
 import {
   FASE_DO_STATUS,
   diaEmSaoPaulo,
+  diferencasDocumento,
   exigeResponsavel,
   filtrarCartoes,
   nomeDownloadPrincipal,
   pode,
+  podeEditarAgora,
   podeReprogramarAgora,
   podeSerCancelado,
   somarDias,
   statusDeReativacao,
   transicaoPermitida,
+  validarDadosDocumento,
   type Area,
   type ArquivoDocumento,
   type CartaoPainel,
@@ -54,6 +57,8 @@ const parametros = new URLSearchParams(location.search);
 // Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?download=erro.
 // Status (F5): ?status=conflito faz a 1ª etapa dar 409 conflito_versao; ?responsaveis=erro faz a lista falhar
 // uma vez; ?desfazer=conflito faz o "Desfazer" dar 409.
+// Edição (F6): ?editar=1 abre o diálogo "Editar dados" assim que o botão aparece (use com ?rota=/painel?documento=DOC-P6);
+// ?edicao=conflito faz a 1ª edição dar 409 conflito_versao (outra pessoa trocou o remetente e a disciplina).
 const perfil = (parametros.get('perfil') ?? 'Administrador') as Perfil;
 const eu: Pessoa = { id: 'p1', nome: 'Ana Exemplo', email: 'ana@exemplo.test', perfil, area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
 const pessoas: Pessoa[] = [
@@ -290,6 +295,16 @@ function acharArquivo(id: string, arquivoId: string): { documento: Documento; ar
   return { documento: detalhe.documento, arquivo: achado };
 }
 
+// F6: edição de dados com as MESMAS regras puras da API (validarDadosDocumento, diferencasDocumento,
+// podeEditarAgora, pode 'editarDados'), para a vitrine recusar o que a API recusaria.
+let conflitoEdicao = parametros.get('edicao') === 'conflito';
+function aplicarDados(c: CartaoPainel, dados: { titulo: string; codigo: string | null; revisao: number; remetente: string; areaId: string; tipoDocumentoId: string; disciplina: string | null; observacao: string | null }): CartaoPainel {
+  const area = areas.find((a) => a.id === dados.areaId)!;
+  const tipo = tipos.find((t) => t.id === dados.tipoDocumentoId)!;
+  extrasDocumento[c.id] = { ...extrasDocumento[c.id], tipoDocumentoId: tipo.id, disciplina: dados.disciplina, observacao: dados.observacao };
+  return { ...c, titulo: dados.titulo, codigo: dados.codigo, revisao: dados.revisao, remetente: dados.remetente, areaId: area.id, area: area.nome, tipoDocumento: tipo.nome };
+}
+
 const api: Api = {
   eu: async () => eu,
   pessoas: async () => pessoas,
@@ -429,6 +444,39 @@ const api: Api = {
     eventosPorDocumento.set(id, [...(detalheDe(atual).eventos), registrado]);
     return { documento: { ...documentoDoCartao(novo), ...extrasDocumento[id], dataModificacao: '2026-09-29T12:00:00Z' }, evento: registrado };
   },
+  editarDados: async (id, corpo) => {
+    await esperar(300);
+    const atual = cartaoVisivel(id);
+    if (!pode(eu, 'editarDados', { areaId: atual.areaId, status: atual.status })) {
+      throw new ErroApi(403, 'sem_permissao', {}, null, 'Você só pode editar documentos devolvidos à sua área.');
+    }
+    if (conflitoEdicao) {
+      // Outra pessoa editou antes: trocou o remetente e a disciplina.
+      conflitoEdicao = false;
+      const base = documentoCompleto(atual);
+      const alterado = { ...aplicarDados(atual, { ...base, remetente: 'Bruno Teste', disciplina: 'Qualidade' }), versao: atual.versao + 1 };
+      cartoes = cartoes.map((c) => (c.id === id ? alterado : c));
+      throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(alterado));
+    }
+    const { versao, ...resto } = corpo;
+    const { erros, dados } = validarDadosDocumento(resto);
+    if (!dados) throw new ErroApi(400, 'dados_invalidos', erros as Record<string, string>);
+    if (versao !== atual.versao) throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(atual));
+    if (!podeEditarAgora(atual)) throw new ErroApi(409, 'acao_nao_permitida', {}, null, 'Documento aprovado é final. Para corrigir, cadastre uma revisão.');
+    if (dados.areaId !== atual.areaId && !pode(eu, 'editarDados', { areaId: dados.areaId, status: atual.status })) {
+      throw new ErroApi(403, 'sem_permissao', {}, null, 'Seu perfil não pode mover o documento para outra área.');
+    }
+    const repetido = dados.codigo !== null && cartoes.some(
+      (c) => c.id !== id && c.codigo?.toLowerCase() === dados.codigo!.toLowerCase() && c.revisao === dados.revisao,
+    );
+    if (repetido) throw new ErroApi(409, 'codigo_revisao_existente', { codigo: 'Já existe um documento com este código nesta revisão.' });
+    const antes = documentoCompleto(atual);
+    const nomes = { tipoDocumento: tipos.find((t) => t.id === dados.tipoDocumentoId)!.nome, area: areas.find((a) => a.id === dados.areaId)!.nome };
+    const detalhes = diferencasDocumento(antes, dados, nomes);
+    if (detalhes.length === 0) return { documento: antes, evento: null };
+    const novo = { ...aplicarDados(atual, dados), versao: atual.versao + 1 };
+    return gravar(atual, novo, evento(id, 'EDICAO', atual.status, null, AGORA, eu.nome, { codigo: novo.codigo, detalhes }));
+  },
   criarDocumento: async (d, principal, anexos) => {
     await new Promise((r) => setTimeout(r, 300));
     if (falharEnvio) {
@@ -453,6 +501,15 @@ const api: Api = {
 };
 
 aplicarTema(temaSalvo());
+if (parametros.get('editar') === '1') {
+  // Só na vitrine: abre "Editar dados" assim que o modal de detalhes termina de carregar.
+  const abrirEdicao = () => {
+    const botao = document.querySelector<HTMLButtonElement>('dialog[open] button[aria-label="Editar dados"]');
+    if (botao) botao.click();
+    else setTimeout(abrirEdicao, 50);
+  };
+  setTimeout(abrirEdicao, 50);
+}
 const rota = parametros.get('rota') ?? '/';
 
 createRoot(document.getElementById('raiz')!).render(

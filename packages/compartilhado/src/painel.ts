@@ -6,7 +6,7 @@
  * `filtrarCartoes` que a interface, e "hoje" é sempre injetado (vem do servidor).
  */
 
-import { diferencaEmDias, emTramitacao, type Fase, type StatusDocumento } from './documentos.ts';
+import { DIAS_JANELA_VENCENDO, diferencaEmDias, emTramitacao, type Fase, type StatusDocumento } from './documentos.ts';
 import { concluidoNaMeta } from './metas.ts';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,8 @@ export interface RespostaPainel {
 // KPIs (P-12, P-13)
 // ---------------------------------------------------------------------------
 
-export const DIAS_JANELA_VENCENDO = 5;
+// Janela "Vencendo" (hoje até 5 dias): definida em documentos.ts, a mesma da reprogramação (decisão 0015).
+export { DIAS_JANELA_VENCENDO };
 
 export interface Kpis {
   /** Não cancelados e não aprovados (P-13: rótulo "Em tramitação"). */

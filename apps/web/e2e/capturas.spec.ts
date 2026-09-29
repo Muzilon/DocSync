@@ -44,7 +44,7 @@ for (const tema of ['claro', 'escuro'] as const) {
   test(`captura painel-reprogramar-${tema}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
-    // F5 (decisão 0015): Reprogramar fica nos detalhes e só com prazo vencido.
+    // F5 (decisão 0015): Reprogramar fica nos detalhes, com prazo vencido ou vencendo.
     await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P4')}`);
     await page.getByRole('dialog', { name: 'Inspeção de andaimes' }).getByRole('button', { name: 'Reprogramar' }).click();
     await page.getByRole('dialog', { name: 'Reprogramar prazo' }).waitFor();
@@ -128,7 +128,8 @@ for (const tema of ['claro', 'escuro'] as const) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
     await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P1')}`);
-    await page.getByRole('dialog', { name: 'Procedimento de auditoria interna' }).getByRole('button', { name: 'Iniciar revisão' }).click();
+    await page.getByRole('dialog', { name: 'Procedimento de auditoria interna' }).getByRole('button', { name: 'Atualizar etapa…' }).click();
+    await page.getByRole('dialog', { name: 'Atualizar etapa' }).getByRole('combobox', { name: /Etapa/ }).selectOption('Em revisão da qualidade');
     await page.getByRole('dialog', { name: 'Atualizar etapa' }).getByRole('combobox', { name: /Responsável/ }).waitFor();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${pasta}/detalhes-acoes-etapa-${tema}.png` });
@@ -144,5 +145,70 @@ for (const tema of ['claro', 'escuro'] as const) {
     await page.getByRole('button', { name: 'Desfazer' }).waitFor();
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${pasta}/detalhes-acoes-desfazer-${tema}.png` });
+  });
+}
+
+// F6: Editar dados (diálogo empilhado sobre os detalhes do DOC-P6, em devolvido).
+const EDITAR = `/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P6')}&editar=1`;
+for (const tema of ['claro', 'escuro'] as const) {
+  for (const largura of [1440, 1024, 768]) {
+    test(`captura editar-dados-${largura}-${tema}`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+      await page.goto(EDITAR);
+      await page.getByRole('dialog', { name: 'Editar dados' }).getByLabel(/Título do documento/).waitFor();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `${pasta}/editar-dados-${largura}-${tema}.png` });
+    });
+  }
+
+  test(`captura editar-dados-conflito-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`${EDITAR}&edicao=conflito`);
+    const dialogo = page.getByRole('dialog', { name: 'Editar dados' });
+    await dialogo.getByLabel(/Título do documento/).fill('Controle de documentos');
+    await dialogo.getByRole('button', { name: 'Salvar alterações' }).click();
+    await dialogo.getByText('Alguém alterou este documento enquanto você editava.').waitFor();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${pasta}/editar-dados-conflito-${tema}.png` });
+  });
+
+  test(`captura editar-dados-erros-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(EDITAR);
+    const dialogo = page.getByRole('dialog', { name: 'Editar dados' });
+    await dialogo.getByLabel(/Título do documento/).fill('');
+    await dialogo.getByLabel(/Remetente/).fill('');
+    await dialogo.getByRole('button', { name: 'Salvar alterações' }).click();
+    await dialogo.getByText('Corrija 2 campos antes de salvar:').waitFor();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${pasta}/editar-dados-erros-${tema}.png` });
+  });
+
+  test(`captura editar-dados-salvo-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(EDITAR);
+    const dialogo = page.getByRole('dialog', { name: 'Editar dados' });
+    await dialogo.getByLabel(/Título do documento/).fill('Controle de documentos do SGI');
+    await dialogo.getByLabel(/^Área/).selectOption({ label: 'Engenharia' });
+    await dialogo.getByRole('button', { name: 'Salvar alterações' }).click();
+    const linha = page.getByRole('dialog', { name: 'Controle de documentos do SGI' }).getByRole('region', { name: 'Linha do tempo' });
+    const primeiro = linha.locator('ol > li').first();
+    await primeiro.getByText('Edição de dados', { exact: true }).waitFor();
+    await primeiro.getByRole('button', { name: /Detalhes/ }).click();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${pasta}/editar-dados-salvo-${tema}.png` });
+  });
+
+  test(`captura editar-dados-solicitante-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`${EDITAR}&perfil=Solicitante`);
+    await page.getByRole('dialog', { name: 'Editar dados' }).getByLabel(/Título do documento/).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/editar-dados-solicitante-${tema}.png` });
   });
 }

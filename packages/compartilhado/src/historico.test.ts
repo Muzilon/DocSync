@@ -8,6 +8,7 @@ import {
   dataInicioRevisao,
   descreverEvento,
   formatarValorHistorico,
+  resumoEdicao,
 } from './historico.ts';
 
 let sequencia = 0;
@@ -151,14 +152,14 @@ describe('descreverEvento — um caso por tipo (contrato F4, 3.3)', () => {
       }),
     );
     expect(d.titulo).toBe('Edição de dados');
-    expect(d.resumo).toBe('3 campos alterados');
+    expect(d.resumo).toBe('Título, Data de recebimento e Disciplina alterados');
     expect(d.diferencas).toEqual([
       { campo: 'titulo', rotulo: 'Título', antes: 'Antigo', depois: 'Novo' },
       { campo: 'dataRecebimento', rotulo: 'Data de recebimento', antes: '01/09/2026', depois: '02/09/2026' },
       { campo: 'disciplina', rotulo: 'Disciplina', antes: '—', depois: 'Civil' },
     ]);
     expect(descreverEvento(evento({ tipoAcao: 'EDICAO', detalhes: [{ campo: 'titulo', antes: 'a', depois: 'b' }] })).resumo).toBe(
-      '1 campo alterado',
+      'Título alterado',
     );
   });
 
@@ -279,5 +280,41 @@ describe('dataInicioRevisao e dataAprovacao — mesma regra do SQL de listarCart
   it('só eventos STATUS contam (CANCELAMENTO, EDICAO e REPROGRAMACAO com status de revisão não são entrada)', () => {
     expect(dataInicioRevisao([evento({ tipoAcao: 'REPROGRAMACAO', status: 'Em revisão da qualidade', dataHora: '2026-09-03T12:00:00Z' })])).toBeNull();
     expect(dataAprovacao([evento({ tipoAcao: 'EDICAO', status: 'Aprovado', dataHora: '2026-09-03T12:00:00Z' })])).toBeNull();
+  });
+});
+
+describe('resumoEdicao (contrato F6, 4.4)', () => {
+  const campos = (...nomes: string[]) => nomes.map((campo) => ({ campo, antes: 'a', depois: 'b' }));
+
+  it('1, 2, 3 e 5 campos; sem detalhes → "Dados editados"', () => {
+    expect(resumoEdicao(campos('titulo'))).toBe('Título alterado');
+    expect(resumoEdicao(campos('titulo', 'area'))).toBe('Título e Área alterados');
+    expect(resumoEdicao(campos('titulo', 'area', 'disciplina'))).toBe('Título, Área e Disciplina alterados');
+    expect(resumoEdicao(campos('titulo', 'area', 'disciplina', 'codigo', 'revisao'))).toBe(
+      '5 campos alterados: Título, Área, Disciplina e mais 2',
+    );
+    expect(resumoEdicao([])).toBe('Dados editados');
+  });
+
+  it('descreverEvento usa o resumo e formata as diferenças (observação longa inteira, null → —, sem Prazo)', () => {
+    const longa = 'x'.repeat(2000);
+    const d = descreverEvento(
+      evento({
+        tipoAcao: 'EDICAO',
+        detalhes: [
+          { campo: 'tipoDocumento', antes: 'Procedimento', depois: 'Instrução' },
+          { campo: 'revisao', antes: '0', depois: '1' },
+          { campo: 'observacao', antes: null, depois: longa },
+        ],
+      }),
+    );
+    expect(d.resumo).toBe('Tipo de documento, Revisão e Observação alterados');
+    expect(d.diferencas).toEqual([
+      { campo: 'tipoDocumento', rotulo: 'Tipo de documento', antes: 'Procedimento', depois: 'Instrução' },
+      { campo: 'revisao', rotulo: 'Revisão', antes: '0', depois: '1' },
+      { campo: 'observacao', rotulo: 'Observação', antes: '—', depois: longa },
+    ]);
+    expect(d.diferencas.some((x) => x.rotulo === 'Prazo')).toBe(false);
+    expect(descreverEvento(evento({ tipoAcao: 'EDICAO', detalhes: [] })).resumo).toBe('Dados editados');
   });
 });

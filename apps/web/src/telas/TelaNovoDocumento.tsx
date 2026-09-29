@@ -9,6 +9,7 @@ import {
   pode,
   validarArquivo,
   validarConjuntoArquivos,
+  validarDadosDocumento,
   type Area,
   type Documento,
   type NovoDocumento,
@@ -26,6 +27,7 @@ import { Dialogo } from '../componentes/Dialogo.tsx';
 import { Carregando, ErroCarregamento } from '../componentes/Estados.tsx';
 import { useToast } from '../componentes/Toast.tsx';
 import { ArquivoEscolhido, EtiquetasAnexos, ZonaArquivo } from '../componentes/ZonaArquivo.tsx';
+import { MENSAGEM_CODIGO_EXISTENTE, NOME_CAMPO_DOCUMENTO, ORDEM_CAMPOS_DOCUMENTO, type DadosFormDocumento } from '../camposDocumento.ts';
 import pagina from './Pagina.module.css';
 import estilos from './TelaNovoDocumento.module.css';
 
@@ -33,31 +35,12 @@ import estilos from './TelaNovoDocumento.module.css';
 // Campos, textos e validação (documento 03, seção 6; P-02)
 // ---------------------------------------------------------------------------
 
-type CampoTextoForm =
-  | 'titulo'
-  | 'codigo'
-  | 'tipoDocumentoId'
-  | 'remetente'
-  | 'revisao'
-  | 'areaId'
-  | 'disciplina'
-  | 'observacao';
+type CampoTextoForm = keyof DadosFormDocumento;
 type CampoForm = CampoTextoForm | 'arquivoPrincipal' | 'anexos';
 export type ErrosDocumento = { [C in CampoForm]?: string | undefined };
-export type DadosForm = Record<CampoTextoForm, string>;
+export type DadosForm = DadosFormDocumento;
 
-const ORDEM_CAMPOS: CampoForm[] = [
-  'titulo',
-  'codigo',
-  'tipoDocumentoId',
-  'remetente',
-  'areaId',
-  'disciplina',
-  'revisao',
-  'observacao',
-  'arquivoPrincipal',
-  'anexos',
-];
+const ORDEM_CAMPOS: CampoForm[] = [...ORDEM_CAMPOS_DOCUMENTO, 'arquivoPrincipal', 'anexos'];
 
 export const ID_CAMPO: Record<CampoForm, string> = {
   titulo: 'doc-titulo',
@@ -72,20 +55,12 @@ export const ID_CAMPO: Record<CampoForm, string> = {
   anexos: 'doc-anexos',
 };
 
+// Rótulos dos campos cadastrais num módulo comum com o diálogo Editar dados (contrato F6, 5.5).
 const NOME_CAMPO: Record<CampoForm, string> = {
-  titulo: 'Título do documento',
-  codigo: 'Código do documento',
-  tipoDocumentoId: 'Tipo de documento',
-  remetente: 'Remetente / solicitante',
-  revisao: 'N° de revisão',
-  areaId: 'Área',
-  disciplina: 'Disciplina',
-  observacao: 'Observações',
+  ...NOME_CAMPO_DOCUMENTO,
   arquivoPrincipal: 'Arquivo do documento principal',
   anexos: 'Documentos complementares',
 };
-
-const MENSAGEM_CODIGO_EXISTENTE = 'Já existe um documento com este código nesta revisão.';
 const MENSAGEM_UM_ARQUIVO = 'Solte apenas um arquivo. Os demais vão em "Documentos complementares".';
 const FORMATOS = LIMITES_ARQUIVO.extensoes.map((e) => e.toUpperCase()).join(', ');
 const ACEITAR = LIMITES_ARQUIVO.extensoes.map((e) => `.${e}`).join(',');
@@ -104,13 +79,12 @@ export function dadosIniciais(eu: Pessoa): DadosForm {
   };
 }
 
+/**
+ * Campos de texto pela MESMA `validarDadosDocumento` da API (contrato F6, 2.2; P-14); aqui só a
+ * parte de arquivos é própria da tela.
+ */
 export function validarDocumento(dados: DadosForm, principal: File | null, anexos: File[]): ErrosDocumento {
-  const erros: ErrosDocumento = {};
-  if (!dados.titulo.trim()) erros.titulo = 'Informe o título do documento.';
-  if (!dados.tipoDocumentoId) erros.tipoDocumentoId = 'Selecione o tipo de documento.';
-  if (!dados.remetente.trim()) erros.remetente = 'Informe o remetente ou solicitante.';
-  if (!/^\d+$/.test(dados.revisao.trim())) erros.revisao = 'Informe um número inteiro igual ou maior que 0.';
-  if (!dados.areaId) erros.areaId = 'Selecione a área.';
+  const erros: ErrosDocumento = { ...validarDadosDocumento(dados).erros };
   if (!principal) erros.arquivoPrincipal = 'Selecione o arquivo do documento principal.';
   else {
     const problema = validarArquivo(principal.name, principal.size);
@@ -123,20 +97,15 @@ export function validarDocumento(dados: DadosForm, principal: File | null, anexo
   return erros;
 }
 
+/**
+ * Corpo do cadastro: os dados normalizados por `validarDadosDocumento` (aparados, vazio → null,
+ * revisão como número) mais o ID. Decisões 0011 e 0012: data de recebimento e prazo são gravados
+ * pelo servidor (esquema fechado). Só é chamado depois da validação sem erros.
+ */
 function paraEnvio(id: string, dados: DadosForm): NovoDocumento {
-  const opcional = (texto: string) => (texto.trim() === '' ? null : texto.trim());
-  return {
-    id,
-    codigo: opcional(dados.codigo),
-    titulo: dados.titulo.trim(),
-    tipoDocumentoId: dados.tipoDocumentoId,
-    revisao: Number.parseInt(dados.revisao.trim(), 10),
-    // Decisões 0011 e 0012: data de recebimento e prazo são gravados pelo servidor (esquema fechado).
-    remetente: dados.remetente.trim(),
-    areaId: dados.areaId,
-    disciplina: opcional(dados.disciplina),
-    observacao: opcional(dados.observacao),
-  };
+  const normalizados = validarDadosDocumento(dados).dados;
+  if (!normalizados) throw new Error('paraEnvio chamado com dados inválidos.');
+  return { id, ...normalizados };
 }
 
 export { formatarData };
@@ -655,6 +624,7 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
         <CampoTexto
           id={ID_CAMPO.revisao}
           rotulo="N° de revisão"
+          obrigatorio
           type="number"
           inputMode="numeric"
           min={0}

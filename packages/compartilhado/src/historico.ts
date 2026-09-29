@@ -96,6 +96,27 @@ function plural(quantidade: number, singular: string, pluralTexto: string): stri
   return `${quantidade} ${quantidade === 1 ? singular : pluralTexto}`;
 }
 
+/** Quantos rótulos o resumo da edição escreve por extenso antes de "e mais N". */
+const ROTULOS_POR_EXTENSO = 3;
+
+function juntarComE(itens: readonly string[]): string {
+  return itens.length <= 1 ? (itens[0] ?? '') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`;
+}
+
+/**
+ * Resumo de um evento EDICAO (contrato F6, 4.4): "Título alterado"; "Título, Área e
+ * Disciplina alterados"; "5 campos alterados: Título, Área, Disciplina e mais 2".
+ * Sem detalhes (evento importado) → "Dados editados".
+ */
+export function resumoEdicao(diferencas: readonly { campo: string }[]): string {
+  if (diferencas.length === 0) return 'Dados editados';
+  const rotulos = diferencas.map((d) => rotuloCampoHistorico(d.campo));
+  if (rotulos.length === 1) return `${rotulos[0]} alterado`;
+  if (rotulos.length <= ROTULOS_POR_EXTENSO) return `${juntarComE(rotulos)} alterados`;
+  const restantes = rotulos.length - ROTULOS_POR_EXTENSO;
+  return `${rotulos.length} campos alterados: ${rotulos.slice(0, ROTULOS_POR_EXTENSO).join(', ')} e mais ${restantes}`;
+}
+
 function resumoDe(evento: EventoHistorico): string {
   switch (evento.tipoAcao) {
     case 'CRIACAO':
@@ -113,7 +134,7 @@ function resumoDe(evento: EventoHistorico): string {
     case 'CANCELAMENTO':
       return evento.statusAnterior === null ? 'Cancelado' : `Cancelado (estava em ${evento.statusAnterior})`;
     case 'EDICAO':
-      return plural(evento.detalhes.length, 'campo alterado', 'campos alterados');
+      return resumoEdicao(evento.detalhes ?? []);
     case 'ANEXO':
       return plural(evento.detalhes.length, 'arquivo anexado', 'arquivos anexados');
   }

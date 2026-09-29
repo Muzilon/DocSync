@@ -10,6 +10,7 @@ interface Props {
   titulo: string;
   aoFechar: () => void;
   children: ReactNode;
+  /** Rodapé de ações; null = sem rodapé (ex.: detalhes para quem não tem ação). */
   acoes: ReactNode;
   /** Janela larga com conteúdo rolável (ex.: lista de cancelados no Painel). Atalho de `tamanho="larga"`. */
   larga?: boolean;
@@ -131,7 +132,7 @@ export function Dialogo({ aberto, titulo, aoFechar, children, acoes, larga, tama
             )}
             {children}
           </div>
-          <div className={estilos.acoes}>{acoes}</div>
+          {acoes != null && acoes !== false && <div className={estilos.acoes}>{acoes}</div>}
         </>
       )}
     </dialog>

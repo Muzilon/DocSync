@@ -15,7 +15,7 @@ import { ContextoApi, nomeDoCabecalho, type Api } from '../api/cliente.ts';
 import { ErroApi } from '../api/erros.ts';
 import { ContextoSessao } from '../autenticacao/Sessao.tsx';
 import { formatarDataHora } from '../formatacao.ts';
-import { DetalhesDocumento, acoesRapidas, ehIdDocumento } from './DetalhesDocumento.tsx';
+import { DetalhesDocumento, ehIdDocumento } from './DetalhesDocumento.tsx';
 import { textoOpcaoEtapa } from './DialogoAtualizarEtapa.tsx';
 
 
@@ -77,6 +77,7 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
       evento: evento(9),
     })),
     responsaveis: vi.fn().mockResolvedValue(RESPONSAVEIS),
+    editarDados: vi.fn(),
     mudarStatus: vi.fn(async (_id, dados) => resultado({ status: dados.para, responsavelId: dados.responsavelId, versao: 5 })),
     cancelarDocumento: vi.fn(async () => resultado({ status: 'Cancelado', versao: 5 }, 'CANCELAMENTO')),
     reativarDocumento: vi.fn(async () => resultado({ status: 'Devolvido para correção', versao: 6 })),
@@ -123,12 +124,18 @@ function renderizar(
   return { usuario, aoFechar, aoAtualizarDocumento, aoMudarStatus, aoCancelar, aoReativar };
 }
 
-/** Botões do rodapé, na ordem da tela. */
+/** Botões do rodapé, na ordem da tela ([] = sem rodapé). */
 function rodape(dialogo: HTMLElement): string[] {
-  const botoes = within(dialogo).getAllByRole('button');
-  const fechar = botoes.findIndex((b) => b.textContent === 'Fechar');
-  const primeiro = botoes.findIndex((b, i) => i <= fechar && b.parentElement === botoes[fechar]!.parentElement);
-  return botoes.slice(primeiro, fechar + 1).map((b) => b.textContent ?? '');
+  const caixa = dialogo.querySelector<HTMLElement>('[class*="rodape"]');
+  return caixa ? within(caixa).getAllByRole('button').map((b) => b.textContent ?? '') : [];
+}
+
+/** Abre "Atualizar etapa…" e escolhe a etapa. */
+async function escolherEtapa(usuario: ReturnType<typeof userEvent.setup>, dialogo: HTMLElement, para: StatusDocumento) {
+  await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
+  const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+  await usuario.selectOptions(within(etapa).getByRole('combobox', { name: /Etapa/ }), para);
+  return etapa;
 }
 
 const modal = () => screen.findByRole('dialog', { name: 'Controle de informação documentada' });
@@ -195,8 +202,8 @@ describe('DetalhesDocumento', () => {
     expect(valor('Observações complementares')).toHaveTextContent('Linha dois <b>sem HTML</b>.');
     expect(dados.querySelector('b')).toBeNull();
     expect(within(dados).queryByText('Revisão de')).not.toBeInTheDocument();
-    // Nada decorativo: sem Editar, Histórico completo, Anexar (F6, F7).
-    expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar/ })).not.toBeInTheDocument();
+    // Nada decorativo: sem Histórico completo nem Anexar (F7). "Editar dados" (F6) tem teste próprio.
+    expect(within(dialogo).queryByRole('button', { name: /Histórico completo|Anexar/ })).not.toBeInTheDocument();
   });
 
   it('Arquivos: principal primeiro, tamanho e Baixar com o nome devolvido pelo servidor (sem Visualizar)', async () => {
@@ -341,16 +348,16 @@ describe('DetalhesDocumento', () => {
     expect(await screen.findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
   });
 
-  it('Fechar e ✕ chamam aoFechar', async () => {
+  it('só o ✕ fecha (sem botão "Fechar" no rodapé)', async () => {
     const { usuario, aoFechar } = renderizar(apiSimulada());
     const dialogo = await modal();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar' }));
+    expect(within(dialogo).queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument();
     await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar detalhes' }));
-    expect(aoFechar).toHaveBeenCalledTimes(2);
+    expect(aoFechar).toHaveBeenCalledTimes(1);
   });
 
   it('Reprogramar dentro do modal: envia com a versão do documento, atualiza o cartão e recarrega os detalhes', async () => {
-    // Decisão 0015: Reprogramar só aparece com prazo vencido.
+    // Decisão 0015 (atualização de 2026-09-29): Reprogramar com prazo vencido ou vencendo.
     const api = apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao: '2026-09-20' }) });
     const { usuario, aoAtualizarDocumento } = renderizar(api);
     const dialogo = await modal();
@@ -376,10 +383,14 @@ describe('DetalhesDocumento', () => {
     expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
   });
 
-  it('prazo ainda não vencido (inclusive "vence hoje"): sem Reprogramar', async () => {
-    renderizar(apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao: HOJE }) }));
-    await modal();
-    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+  it.each([
+    ['vence hoje', HOJE, true],
+    ['vence em 5 dias', '2026-10-04', true],
+    ['vence em 6 dias', '2026-10-05', false],
+  ])('prazo que %s: Reprogramar visível = %s', async (_nome, dataRevisao, visivel) => {
+    renderizar(apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao }) }));
+    const dialogo = await modal();
+    expect(within(dialogo).queryAllByRole('button', { name: 'Reprogramar' })).toHaveLength(visivel ? 1 : 0);
   });
 
   it('Aprovado não mostra Reprogramar', async () => {
@@ -391,15 +402,7 @@ describe('DetalhesDocumento', () => {
 
 });
 
-describe('funções puras do rodapé (F5)', () => {
-  it('acoesRapidas: só a principal (rodapé enxuto, contrato F5 13.1)', () => {
-    const acao = (para: StatusDocumento, principal = false) => ({ para, rotulo: para, principal, exigeResponsavel: true, exigeConfirmacao: false });
-    const lista = [acao('Em revisão junto à área'), acao('Devolvido para correção'), acao('Em revisão do solicitante'), acao('Para aprovação da área solicitante', true)];
-    expect(acoesRapidas(lista).map((a) => a.para)).toEqual(['Para aprovação da área solicitante']);
-    expect(acoesRapidas(lista.filter((a) => !a.principal))).toEqual([]);
-    expect(acoesRapidas([])).toEqual([]);
-  });
-
+describe('funções puras do diálogo de etapa (F5)', () => {
   it('textoOpcaoEtapa: o rótulo e o status entre parênteses, sem repetir', () => {
     expect(textoOpcaoEtapa('Iniciar revisão', 'Em revisão da qualidade')).toBe('Iniciar revisão (Em revisão da qualidade)');
     expect(textoOpcaoEtapa('Mover para Em revisão do solicitante', 'Em revisão do solicitante')).toBe('Mover para Em revisão do solicitante');
@@ -407,11 +410,11 @@ describe('funções puras do rodapé (F5)', () => {
 });
 
 describe('DetalhesDocumento: ações de status (F5)', () => {
-  it('Qualidade em Recebido: só a principal "Iniciar revisão", Atualizar etapa…, Cancelar documento e Fechar', async () => {
+  it('Qualidade em Recebido: rodapé só com Atualizar etapa… e Cancelar documento (sem ação principal, sem Fechar)', async () => {
     renderizar(apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) }));
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Cancelar documento', 'Fechar']);
-    expect(within(dialogo).getByRole('button', { name: 'Iniciar revisão' })).toHaveClass('primario');
+    expect(rodape(dialogo)).toEqual(['Atualizar etapa…', 'Cancelar documento']);
+    expect(within(dialogo).queryByRole('button', { name: 'Iniciar revisão' })).not.toBeInTheDocument();
     // Nenhum botão desabilitado "de enfeite".
     for (const botao of within(dialogo).getAllByRole('button')) expect(botao).toBeEnabled();
   });
@@ -420,32 +423,44 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
     ['Leitor', LEITOR, 'Devolvido para correção' as StatusDocumento],
     ['Solicitante de outra área', SOLICITANTE_OUTRA_AREA, 'Devolvido para correção' as StatusDocumento],
     ['Qualidade em Aprovado', QUALIDADE, 'Aprovado' as StatusDocumento],
-  ])('%s: rodapé só com Fechar', async (_nome, eu, status) => {
+  ])('%s: sem rodapé (o ✕ fecha)', async (_nome, eu, status) => {
     renderizar(apiSimulada({ documento: comStatus(status) }), { eu });
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Fechar']);
+    expect(rodape(dialogo)).toEqual([]);
+    expect(within(dialogo).getByRole('button', { name: 'Fechar detalhes' })).toBeInTheDocument();
   });
 
-  it('Solicitante da área em Devolvido: só "Reenviar à Qualidade" (principal) e Atualizar etapa…; sem Cancelar', async () => {
-    renderizar(apiSimulada(), { eu: SOLICITANTE_DA_AREA });
+  it('prazo vencido (Administrador): no máximo 3 botões — Atualizar etapa…, Cancelar documento e Reprogramar', async () => {
+    renderizar(apiSimulada({ documento: comStatus('Em revisão da qualidade', { dataRevisao: '2026-09-20' }) }), { eu: ADMIN });
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Reenviar à Qualidade', 'Atualizar etapa…', 'Fechar']);
+    expect(rodape(dialogo)).toEqual(['Atualizar etapa…', 'Cancelar documento', 'Reprogramar']);
+  });
+
+  it('Solicitante da área em Devolvido: só Atualizar etapa… (com "Reenviar à Qualidade" dentro); sem Cancelar', async () => {
+    const { usuario } = renderizar(apiSimulada(), { eu: SOLICITANTE_DA_AREA });
+    const dialogo = await modal();
+    expect(rodape(dialogo)).toEqual(['Atualizar etapa…']);
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    const opcoes = within(within(etapa).getByRole('combobox', { name: /Etapa/ })).getAllByRole('option').map((o) => o.textContent);
+    expect(opcoes.some((t) => t?.startsWith('Reenviar à Qualidade'))).toBe(true);
   });
 
   it('Cancelado: Reativar (Administrador), sem etapas nem Cancelar; Leitor não vê Reativar', async () => {
     const cancelado = comStatus('Cancelado', {}, [...EVENTOS, evento(5, { tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Devolvido para correção' })]);
     renderizar(apiSimulada({ documento: cancelado }), { eu: ADMIN });
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Reativar', 'Fechar']);
+    expect(rodape(dialogo)).toEqual(['Reativar']);
   });
 
-  it('ação rápida abre "Atualizar etapa" já preenchido, com o responsável sugerido; envia { para, responsavelId, observacao, versao }', async () => {
+  it('"Atualizar etapa…" abre sem etapa escolhida; ao escolher, sugere o responsável; envia { para, responsavelId, observacao, versao }', async () => {
     const api = apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) });
     const { usuario, aoMudarStatus, aoAtualizarDocumento } = renderizar(api);
     const dialogo = await modal();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
-    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
-    expect(within(etapa).getByRole('combobox', { name: /Etapa/ })).toHaveValue('Em revisão da qualidade');
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
+    expect(within(await screen.findByRole('dialog', { name: 'Atualizar etapa' })).getByRole('combobox', { name: /Etapa/ })).toHaveValue('');
+    await usuario.selectOptions(within(screen.getByRole('dialog', { name: 'Atualizar etapa' })).getByRole('combobox', { name: /Etapa/ }), 'Em revisão da qualidade');
+    const etapa = screen.getByRole('dialog', { name: 'Atualizar etapa' });
     expect(etapa).toHaveTextContent('De:');
     const responsavel = await within(etapa).findByRole('combobox', { name: /Responsável/ });
     // Revisão: Qualidade/Administrador sugeridos, e "eu" (Bruna, Qualidade) em primeiro.
@@ -496,13 +511,12 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
       .mockResolvedValueOnce(resultado({ status: 'Para aprovação da área solicitante', versao: 8 }));
     const { usuario, aoAtualizarDocumento } = renderizar(apiSimulada({ mudarStatus }));
     const dialogo = await modal();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Retomar revisão' }));
-    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    const etapa = await escolherEtapa(usuario, dialogo, 'Em revisão da qualidade');
     await within(etapa).findByRole('combobox', { name: /Responsável/ });
     await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
     expect(await within(etapa).findByText('Alguém alterou este documento: agora está em Em revisão junto à área.')).toBeInTheDocument();
     expect(aoAtualizarDocumento).toHaveBeenCalledWith(atual);
-    // "Retomar revisão" (Em revisão da qualidade) continua valendo a partir de "Em revisão junto à área".
+    // "Em revisão da qualidade" continua valendo a partir de "Em revisão junto à área".
     const opcoes = within(within(etapa).getByRole('combobox', { name: /Etapa/ })).getAllByRole('option').map((o) => o.getAttribute('value'));
     expect(opcoes).toContain('Aprovado');
     expect(opcoes).not.toContain('Em revisão junto à área');
@@ -514,8 +528,7 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
   it('403 e 409 acao_nao_permitida: mensagem do servidor no diálogo', async () => {
     const mudarStatus = vi.fn().mockRejectedValue(new ErroApi(403, 'sem_permissao', {}, null, 'Seu perfil não pode aplicar esta etapa.'));
     const { usuario } = renderizar(apiSimulada({ mudarStatus }));
-    await usuario.click(within(await modal()).getByRole('button', { name: 'Retomar revisão' }));
-    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    const etapa = await escolherEtapa(usuario, await modal(), 'Em revisão da qualidade');
     await within(etapa).findByRole('combobox', { name: /Responsável/ });
     await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
     expect(await within(etapa).findByText('Seu perfil não pode aplicar esta etapa.')).toBeInTheDocument();
@@ -524,28 +537,27 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
   it('lista de responsáveis com erro: "Tentar de novo" recarrega', async () => {
     const responsaveis = vi.fn().mockRejectedValueOnce(new ErroApi(0, 'sem_conexao')).mockResolvedValue(RESPONSAVEIS);
     const { usuario } = renderizar(apiSimulada({ responsaveis }));
-    await usuario.click(within(await modal()).getByRole('button', { name: 'Retomar revisão' }));
-    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    const etapa = await escolherEtapa(usuario, await modal(), 'Em revisão da qualidade');
     await usuario.click(await within(etapa).findByRole('button', { name: 'Tentar de novo' }));
     expect(await within(etapa).findByRole('combobox', { name: /Responsável/ })).toBeInTheDocument();
   });
 
-  it('Aprovar pede confirmação ("a aprovação é final") e envia responsavelId null', async () => {
-    const api = apiSimulada({ documento: comStatus('Para aprovação qualidade') });
+  it('Aprovar fica dentro de "Atualizar etapa…": avisa que é final, o botão vira "Aprovar" e envia responsavelId null; depois, sem rodapé e foco no ✕', async () => {
+    const aprovado = detalhe({ documento: { ...DOCUMENTO, status: 'Aprovado', responsavelId: null, responsavel: null, versao: 5 } });
+    const api = apiSimulada({ documento: vi.fn().mockResolvedValueOnce(detalhe({ documento: { ...DOCUMENTO, status: 'Para aprovação qualidade' } })).mockResolvedValue(aprovado) });
     const { usuario } = renderizar(api);
     const dialogo = await modal();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Aprovar' }));
-    const confirmar = await screen.findByRole('dialog', { name: 'Aprovar documento' });
-    expect(confirmar).toHaveTextContent('Aprovar Controle de informação documentada?');
-    expect(confirmar).toHaveTextContent('A aprovação é final e encerra a tramitação.');
-    await usuario.click(within(confirmar).getByRole('button', { name: 'Voltar' }));
-    expect(api.mudarStatus).not.toHaveBeenCalled();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Aprovar' }));
-    await usuario.click(within(await screen.findByRole('dialog', { name: 'Aprovar documento' })).getByRole('button', { name: 'Aprovar' }));
+    expect(rodape(dialogo)).toEqual(['Atualizar etapa…', 'Cancelar documento']);
+    const etapa = await escolherEtapa(usuario, dialogo, 'Aprovado');
+    expect(within(etapa).getByRole('combobox', { name: /Etapa/ })).toHaveAccessibleDescription('A aprovação é final e encerra a tramitação.');
+    expect(within(etapa).queryByRole('combobox', { name: /Responsável/ })).not.toBeInTheDocument();
+    await usuario.click(within(etapa).getByRole('button', { name: 'Aprovar' }));
     await waitFor(() =>
       expect(api.mudarStatus).toHaveBeenCalledWith('DOC-1', { para: 'Aprovado', responsavelId: null, observacao: null, versao: 4 }),
     );
     expect(await screen.findByText('Etapa registrada: Aprovado.')).toBeInTheDocument();
+    await waitFor(() => expect(rodape(dialogo)).toEqual([]));
+    await waitFor(() => expect(within(dialogo).getByRole('button', { name: 'Fechar detalhes' })).toHaveFocus());
   });
 
   it('Cancelar exige motivo de 10 a 500 caracteres e entrega o resultado ao Painel', async () => {
@@ -575,7 +587,11 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
       evento(6, { status: 'Em revisão da qualidade', statusAnterior: 'Cancelado' }),
       evento(7, { tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Devolvido para correção' }),
     ];
-    const api = apiSimulada({ documento: comStatus('Cancelado', {}, eventos) });
+    const documento = vi
+      .fn()
+      .mockResolvedValueOnce(detalhe({ documento: { ...DOCUMENTO, status: 'Cancelado' }, eventos }))
+      .mockResolvedValue(detalhe());
+    const api = apiSimulada({ documento });
     const { usuario, aoReativar } = renderizar(api);
     await usuario.click(within(await modal()).getByRole('button', { name: 'Reativar' }));
     const confirmar = await screen.findByRole('dialog', { name: 'Reativar documento' });
@@ -584,6 +600,8 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
     await waitFor(() => expect(api.reativarDocumento).toHaveBeenCalledWith('DOC-1', { observacao: null, versao: 4 }));
     await waitFor(() => expect(aoReativar).toHaveBeenCalled());
     expect(await screen.findByText('Documento reativado: Devolvido para correção.')).toBeInTheDocument();
+    // "Reativar" some com o documento reativado: o foco vai para o ✕.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fechar detalhes' })).toHaveFocus());
   });
 
   it('Metas do ciclo nos três tons, com o estado por extenso', async () => {
