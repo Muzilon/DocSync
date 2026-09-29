@@ -44,9 +44,10 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 
 ## Ambiente local do Eric
 
-- Windows, Node 24. Sem Docker (banco PGlite em `dados-locais/banco`).
-- `.env` na raiz (não versionado) já preenchido: IDs do locatário e do aplicativo de teste, `ADMINISTRADORES_INICIAIS=eric23antony@gmail.com`, `AREA_ADMINISTRADOR_INICIAL=Qualidade`.
-- O Eric faz commits pelo GitHub Desktop; o pre-commit (secretlint) funciona nele.
+- **Máquina principal (a partir de 2026-09-29): notebook da Monto**, Windows, repositório clonado dentro do OneDrive. O PowerShell bloqueia scripts: usar `npm.cmd ...` ou o cmd. Recomendado mover o clone para fora do OneDrive (ex.: `C:\dev\DocSync`), por causa de `node_modules` e `dados-locais/`.
+- `.env` do notebook montado à mão a partir do `.env.example` (IDs do locatário e do aplicativo de teste, `ADMINISTRADORES_INICIAIS`, `AREA_ADMINISTRADOR_INICIAL=Qualidade`). Banco local começa vazio nessa máquina.
+- Risco: a rede/política da Monto pode barrar o login com o locatário de teste; se acontecer, avaliar com a TI ou usar a máquina pessoal.
+- Máquina anterior (`eric2`, pessoal): Node 24, sem Docker, PGlite em `dados-locais/banco`; o Eric faz commits pelo GitHub Desktop; o pre-commit (secretlint) funciona nele.
 - Contas de teste no Entra: script pronto em `scripts/entra/criar-contas-teste.ps1`, falta rodar.
 
 ## Perguntas em aberto com o Eric
