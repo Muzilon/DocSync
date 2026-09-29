@@ -1,7 +1,7 @@
 # Contrato da fatia F4 — Detalhes + histórico
 
 - **Data:** 2026-09-29
-- **Status:** Proposto; aguarda respostas do Eric à seção 8 antes do código
+- **Status:** Aprovado pelo Eric em 2026-09-29, com as mudanças da seção 9 (decisão 0013). Status anterior: Proposto; aguarda respostas do Eric à seção 8 antes do código
 - **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F4), documento 02 (seções 1.2, 4.3 e 7.3), documento 03 (seção 9.6, "Histórico Completo", P-07, P-08, P-09), documento 04 (seções 5.3 e 6, com as cores da decisão [0009](../decisoes/0009-identidade-visual-vigen.md)), decisões [0002](../decisoes/0002-fonte-da-verdade.md), [0003](../decisoes/0003-ambiente-local.md), [0004](../decisoes/0004-revisoes-e-reativacao.md), [0007](../decisoes/0007-usuarios-e-perfis.md), [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md) e [0012](../decisoes/0012-recebimento-automatico-e-metas-de-ciclo.md); contrato da [F3](f3-painel-kanban.md) (formato e regras já em vigor).
 
 Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compartilhado`) e a parte interface (`apps/web`). Tudo o que a interface consome está tipado em `packages/compartilhado`; nenhuma das duas partes inventa campo fora daqui. Mudança neste contrato durante a F4 é feita aqui primeiro, depois no código.
@@ -281,3 +281,14 @@ A vitrine (`apps/web/e2e/vitrine/`) ganha um documento com 6+ eventos de todos o
 6. **Link direto:** **Proposta:** `/painel?documento=<id>` como endereço real (modal sobre o Painel, recarregável e compartilhável) e `/documentos/<id>` como atalho curto que redireciona. Se o Eric preferir uma página própria de documento (sem Painel atrás), ela pode nascer na F5, reaproveitando `DetalhesDocumento`.
 7. **Campos do bloco Dados:** proposta na seção 2.3 (inclusive mostrar o `DOC-uuid` em texto pequeno e "cadastrado em" com hora). O Eric pode cortar ou reordenar antes do código.
 8. **Cartões da janela de cancelados abrem detalhes (modal sobre modal)?** **Proposta:** sim, para ver por que um documento foi cancelado sem ter de reativá-lo (F5). O `<dialog>` nativo empilha; e2e garante foco e Esc. Alternativa mais simples: só o quadro abre detalhes na F4.
+
+## 9. Respostas do Eric (2026-09-29) — prevalecem sobre as seções anteriores
+
+1. Uma só linha do tempo, com eventos expansíveis.
+2. Leitor baixa, pela ação própria `baixarArquivo`. **E o sistema ganha um visualizador de PDF** (decisão [0013](../decisoes/0013-visualizador-marca-dagua-e-registro-de-acesso.md)): botão "Visualizar" nos arquivos PDF abre um `Dialogo` com as páginas renderizadas por `pdfjs-dist`, sem abrir o arquivo solto no navegador. Rota sugerida: `GET /documentos/:id/arquivos/:arquivoId/visualizacao` (mesmas checagens do download, entrega o PDF já com a marca, `Content-Disposition: inline` só para o fetch do visualizador, com `no-store`).
+3. **Registrar acessos: sim.** Cada visualização e cada download grava um registro imutável (migração nova `0004_registros_acesso_arquivos.sql`: id `ACS-uuid`, pessoa do token, documento, arquivo, tipo VISUALIZACAO|DOWNLOAD, data/hora; gatilho bloqueia UPDATE, DELETE e TRUNCATE). Fora da linha do tempo; sem tela de consulta nesta fatia. **Marca d'água "CÓPIA NÃO CONTROLADA"** em diagonal, no fundo de cada página, opacidade ≈ 0,4, aplicada no servidor com `pdf-lib` na entrega (download e visualização); o original armazenado nunca muda. PDF que não aceita a marca → `409 arquivo_indisponivel`, nunca entrega sem marca.
+4. Só baixar (sem abrir o arquivo solto em aba). Não PDF: sem visualizador, sem marca, download registrado e nome com prefixo `COPIA-NAO-CONTROLADA_` (decisão 0013, item 5, a confirmar).
+5. **Reprogramar dentro do modal: sim, já na F4** (mesmo `DialogoReprogramar`, mesma regra de permissão; depois de reprogramar, o modal e o cartão do Painel se atualizam).
+6. Link direto como proposto (`/painel?documento=<id>` e `/documentos/<id>` redirecionando).
+7. Campos do bloco Dados: mantidos como propostos.
+8. Cartões da janela de cancelados abrem detalhes (modal sobre modal).
