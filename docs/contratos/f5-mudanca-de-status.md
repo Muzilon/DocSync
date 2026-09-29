@@ -518,3 +518,7 @@ Sem dados a preencher: documentos existentes ficam com `responsavel_id NULL` (o 
 4. Motivo do cancelamento obrigatório (10–500).
 5. **Cartão sem nenhum botão, no estilo do Planner** (decisão [0015](../decisoes/0015-cartao-estilo-planner.md)): etiquetas no topo, título, área, rodapé com prazo (neutro, laranja vencendo, vermelho vencido) e responsável (iniciais). Todas as ações só no modal de detalhes. Colunas com rolagem vertical própria. **Reprogramar só aparece (e a API só aceita) com prazo vencido** (409 `acao_nao_permitida` caso contrário). A seção 6 fica ajustada a isso: nada de ação principal no cartão.
 6. Metas: quarto KPI "Aprovados no mês" com "N dentro da meta de 40 dias" e seção "Metas do ciclo" no modal; nada no cartão.
+
+## 12. Confirmações do Eric (2026-09-29)
+
+Mantidos os três pontos decididos na implementação do servidor: (1) documento em tramitação sem prazo pode ser reprogramado; (2) reativação com status anterior inválido volta para "Recebido"; (3) a busca do Painel inclui o responsável.
