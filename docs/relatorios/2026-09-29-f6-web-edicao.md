@@ -63,3 +63,19 @@
 - **B4:** e2e novo em `edicao.spec.ts` ("rodapé com 6 botões", claro e escuro): Administrador no DOC-P4 (prazo vencido) em 768px; confere 6 botões no rodapé (ação rápida, Atualizar etapa…, Editar dados, Cancelar documento, Reprogramar, Fechar), nenhum saindo do rodapé ou da janela, rodapé sem rolagem interna, página sem rolagem horizontal, axe sem violações. Texto "até 5" corrigido para "até 6" acima.
 - Arquivos: `apps/web/src/componentes/DialogoEditarDados.tsx`, `DialogoEditarDados.module.css`, `DialogoEditarDados.test.tsx`, `apps/web/src/telas/TelaNovoDocumento.tsx`, `apps/web/e2e/edicao.spec.ts`.
 - Validação: `npm run typecheck` e `npm test` (567) verdes; `edicao.spec.ts` inteiro verde (16/16, inclusive os 2 casos novos). **Não rodados** (a ferramenta de terminal ficou indisponível no fim da sessão): `npm run build`, `npm run segredos` e a suíte e2e completa; rodar antes de levar ao Eric.
+
+## Ajustes da validação (2026-09-29, agente-visao-minimalista / Opus)
+
+Pedidos do Eric na validação da F6 (decisão 0015, atualização de 2026-09-29; contrato F6, seção 10). Só `apps/web`.
+
+- **Rodapé do modal de detalhes** com no máximo 3 botões: "Atualizar etapa…", "Cancelar documento" (ou "Reativar", quando cancelado) e "Reprogramar" (quando `podeReprogramar` permite). Saíram o botão de ação principal (`acoesRapidas`/`MAXIMO_ACOES_RAPIDAS` removidos), "Editar dados" e "Fechar" (o ✕ do cabeçalho fecha). Sem nenhuma ação (Leitor, Aprovado), o modal fica sem rodapé: `Dialogo` passou a omitir a faixa de ações quando `acoes` é `null`.
+- **Aprovar** agora só por "Atualizar etapa…": nada vem pré-selecionado; ao escolher "Aprovado", a dica do campo Etapa diz "A aprovação é final e encerra a tramitação." e o botão vira "Aprovar" (ícone de confirmação). O diálogo de confirmação separado ("Aprovar documento") saiu, com a prop `paraInicial`.
+- **"Editar"** discreto no título da seção Dados (lápis + "Editar", nome acessível "Editar dados", mesmo padrão visual do "Detalhes" da linha do tempo; 44px em `pointer: coarse`), só para quem `podeEditar`; abre o `DialogoEditarDados` como antes.
+- **Dica do N° de revisão**: "Corrigir o número de revisão não cria uma nova revisão."
+- **Foco**: botão usado que continua na tela recebe o foco de volta ("Atualizar etapa…", "Editar"); botão que some (Reativar depois de reativar, Reprogramar depois de adiar, rodapé inteiro depois de aprovar) → foco no ✕ ("Fechar detalhes"). Coberto em Vitest e e2e.
+- **Reprogramar com prazo vencendo**: a regra nova de `podeReprogramarAgora` (commit `72f6db8`) já estava no compartilhado; testes da web ajustados (vence hoje e em 5 dias mostram; 6 dias não). A vitrine já tinha fixtures vencendo (DOC-P7, vence amanhã); e2e novo usa o DOC-P7.
+- **Testes**: Vitest (`DetalhesDocumento`, `DialogoEditarDados`, `TelaPainel`) e e2e (`status`, `detalhes`, `edicao`, `capturas`) ajustados; o e2e "6 botões" virou "no máximo 3 botões" (768px, claro e escuro, sem "Fechar", "Editar" no título de Dados, axe).
+- **Capturas regeneradas**: `docs/relatorios/capturas/detalhes-acoes-*` e `editar-dados-*` (as anteriores ficam no histórico do Git como "antes").
+- Arquivos: `apps/web/src/componentes/DetalhesDocumento.tsx`, `DetalhesDocumento.module.css`, `DetalhesDocumento.test.tsx`, `Dialogo.tsx`, `DialogoAtualizarEtapa.tsx`, `DialogoEditarDados.tsx`, `DialogoEditarDados.test.tsx`, `apps/web/src/telas/TelaPainel.test.tsx`, `apps/web/e2e/{capturas,detalhes,edicao,status}.spec.ts`, `apps/web/e2e/vitrine/vitrine.tsx`.
+- Validação: `npm run typecheck`, `npm test` (572), `npm run build`, `npm run segredos` e e2e completo (118 passam, 53 capturas puladas sem `CAPTURAS`) verdes.
+- Pendente fora de `apps/web`: o CLAUDE.md (seções "Prazo e datas" e "Cartão do Kanban") ainda diz "só com prazo vencido" e cita "Editar dados" no rodapé/ação principal; atualizar na mesma entrega.

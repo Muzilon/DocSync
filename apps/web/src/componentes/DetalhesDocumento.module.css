@@ -93,7 +93,6 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: var(--space-7);
 }
 
 /* "Editar" discreto (atualização da decisão 0015): mesmo padrão do "Detalhes" da linha do tempo. */
@@ -103,7 +102,8 @@
   gap: var(--space-1);
   min-height: var(--space-7);
   padding: 0 var(--space-2);
-  margin-right: calc(-1 * var(--space-2));
+  /* Margem negativa: o alvo de clique é maior que a linha do título, sem empurrar o conteúdo. */
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2)) calc(-1 * var(--space-1)) 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;

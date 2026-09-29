@@ -12,19 +12,19 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
 | F5 Mudança de status | Validada pelo Eric em 2026-09-29 | `ed3d59d`…`c89c7e2` |
-| **F6 Edição de dados** | **Servidor e interface entregues; QA aprovado com ressalvas; correções pequenas em andamento; depois validação do Eric** | `3c45b60`…`83d2d8c` |
+| **F6 Edição de dados** | **Servidor e interface entregues; QA aprovado com ressalvas; ajustes da validação feitos; aguardando validação do Eric** | `3c45b60`…`83d2d8c` |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
 ## F6: o que falta
 
-1. Correções pequenas do QA terminando; o Eric responde os 3 pontos da seção 10 do contrato e roda o roteiro abaixo.
+1. Ajustes feitos (rodapé enxuto, "Editar" no título de Dados, reprogramar com prazo vencendo). O Eric roda o roteiro abaixo.
 2. Se ele disser "F6 validada": plano, CHANGELOG e seguir para a F7 (anexos posteriores + versões de arquivo, decisão 0014).
 
 Relatórios: `relatorios/2026-09-29-f6-*.md`. A parte servidor foi feita com Opus (Fable sem créditos).
 
 Roteiro da F6:
-- Detalhes → "Editar dados": mudar Título e Área e salvar → aviso, cartão atualizado e "Edição de dados" na linha do tempo com "antes → depois".
+- Detalhes → "Editar" (título da seção Dados): mudar Título e Área e salvar → aviso, cartão atualizado e "Edição de dados" na linha do tempo com "antes → depois".
 - Apagar o Remetente e salvar → recusado com a mesma mensagem do cadastro.
 - Salvar sem mudar nada → "Nenhum campo foi alterado." e nada é gravado.
 - Código + revisão iguais aos de outro documento → recusado no campo Código, nada é mesclado.
