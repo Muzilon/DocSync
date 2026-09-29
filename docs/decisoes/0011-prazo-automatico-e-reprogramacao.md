@@ -21,6 +21,7 @@ O documento 03 previa a "Data de Revisão (Prazo)" preenchida à mão. A decisã
 - Prazo em **dias corridos**.
 - Reprogramam: **Qualidade e Administrador**.
 - Documentos já cadastrados sem prazo recebem **data do cadastro + 30 dias** (migração nova).
+- Reprogramação **só adia** o prazo; "data do cadastro" = dia em que o sistema recebeu (decisão [0012](0012-recebimento-automatico-e-metas-de-ciclo.md)).
 
 ## Consequências
 - O cadastro (F2, já validado) passa a gravar o prazo calculado: mudança pequena no servidor, feita no início da F3, com migração nova (nunca editar a 0002).

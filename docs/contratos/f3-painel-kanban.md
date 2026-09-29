@@ -1,8 +1,8 @@
 # Contrato da fatia F3 — Painel Kanban
 
 - **Data:** 2026-09-29
-- **Status:** Proposta para aprovação do Eric (seção 8 lista o que depende dele)
-- **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F3), documento 03 (seção 9, P-12, P-13), decisões [0004](../decisoes/0004-revisoes-e-reativacao.md), [0009](../decisoes/0009-identidade-visual-vigen.md), [0010](../decisoes/0010-prazo-e-area-do-administrador.md) e [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md).
+- **Status:** Aprovado pelo Eric em 2026-09-29 (respostas na seção 8)
+- **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F3), documento 03 (seção 9, P-12, P-13), decisões [0004](../decisoes/0004-revisoes-e-reativacao.md), [0009](../decisoes/0009-identidade-visual-vigen.md), [0010](../decisoes/0010-prazo-e-area-do-administrador.md) e [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md) e [0012](../decisoes/0012-recebimento-automatico-e-metas-de-ciclo.md).
 
 Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compartilhado`) e a parte interface (`apps/web`). Tudo o que a interface consome está tipado em `packages/compartilhado`; nenhuma das duas partes inventa campo fora daqui. Mudança neste contrato durante a F3 é feita aqui primeiro, depois no código.
 
@@ -13,7 +13,7 @@ Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compar
 - Prazo automático no cadastro (decisão 0011) e migração para os documentos já cadastrados.
 - Reprogramação do prazo com justificativa, evento no histórico e etiqueta "Reprogramado".
 - Leitura do Painel: rota de cartões, KPIs (P-12, P-13 corrigidos), etiquetas de prazo, contagem de devoluções.
-- Tela Painel: 5 colunas por fase, cartões, busca, filtro de área, alternar cancelados, botão Reprogramar, teclado, 768px+.
+- Tela Painel: 5 colunas por fase, cartões, busca, filtro de área, janela de cancelados, botão Reprogramar, teclado, 768px+.
 - Item "Painel" na barra lateral (só agora, porque só agora o destino existe).
 
 **Fica fora (não aparece nem como botão desativado)**
@@ -28,7 +28,7 @@ Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compar
 
 ### 2.1 Regra
 
-- `dataRevisao` (prazo) = **data do cadastro + 30 dias corridos**. "Data do cadastro" é o dia, no fuso de São Paulo, em que o servidor recebe o `POST /documentos` (o `criado_em`), **não** a `dataRecebimento` digitada.
+- `dataRevisao` (prazo) = **data do cadastro + 30 dias corridos**. "Data do cadastro" é o dia, no fuso de São Paulo, em que o servidor recebe o `POST /documentos` (o `criado_em`). É também a `dataRecebimento`, que passa a ser gravada pelo servidor (decisão 0012).
 - Calculado **só no servidor**. A interface não envia prazo e não o calcula.
 - Função pura em `packages/compartilhado/src/documentos.ts`:
 
@@ -45,6 +45,7 @@ export function calcularPrazoAutomatico(dataCadastro: string): string; // = soma
 ### 2.2 Mudanças no cadastro (F2, já validada; mudança mínima)
 
 - `NovoDocumento` **perde** o campo `dataRevisao`. Por esquema fechado, enviá-lo passa a ser `400 dados_invalidos` (`campos.dataRevisao: 'Campo não permitido.'`). A interface deixa de mandar `dataRevisao: null` (hoje manda). Documentos importados com prazo próprio entram por outro caminho (F12), nunca por `POST /documentos`.
+- `NovoDocumento` **perde** também `dataRecebimento` (decisão 0012): enviá-lo → `400 dados_invalidos`. O servidor grava `data_recebimento = hojeNoFuso()`. A tela Novo documento remove o campo "Data de recebimento" (a lista de recentes continua mostrando a data gravada).
 - `inserirDocumento` grava `data_revisao = calcularPrazoAutomatico(hojeNoFuso())`.
 - O evento `CRIACAO` passa a levar em `detalhes` a linha `{ campo: 'dataRevisao', antes: null, depois: '<prazo>' }`, para o histórico mostrar de onde veio o prazo.
 - O resumo de idempotência (`hash_cadastro`) **não** inclui o prazo (o prazo é derivado, não parte do pedido); reenvio idêntico em outro dia continua devolvendo o documento existente com o prazo original.
@@ -123,7 +124,7 @@ export interface ResultadoReprogramacao {
 
 | Campo | Regra |
 |---|---|
-| `novoPrazo` | Obrigatório, data só-dia válida. Não pode ser anterior a **hoje** (`hojeNoFuso()`; "hoje" é aceito). Não pode ser igual ao prazo atual. Pode ser anterior ao prazo atual (antecipar também é reprogramar). |
+| `novoPrazo` | Obrigatório, data só-dia válida. Precisa ser **posterior ao prazo atual** (só adiar; decisão 0012) e não anterior a **hoje** (`hojeNoFuso()`). Documento sem prazo: só a regra de hoje. |
 | `justificativa` | Obrigatória; depois de `trim`, entre 10 e 500 caracteres. Gravada aparada. |
 | `versao` | Obrigatório, inteiro ≥ 1. |
 
@@ -239,14 +240,12 @@ export interface Kpis {
   vencendo: number;
   /** Em tramitação com prazo anterior a hoje. */
   atrasados: number;
-  /** Status Aprovado com dataAprovacao no mês de `hoje` (P-12: rótulo "Aprovados no mês"). */
-  aprovadosNoMes: number;
 }
 
 export function calcularKpis(cartoes: readonly CartaoPainel[], hoje: string): Kpis;
 ```
 
-Regras: cancelados nunca contam; sem `dataRevisao` conta em `emTramitacao` mas nunca em `vencendo`/`atrasados`; os KPIs são calculados sobre os cartões **já filtrados** por busca e área (documento 03, 9.1). "Hoje" vem de `RespostaPainel.hoje`, nunca do relógio do navegador, para a tela e a API concordarem.
+Regras: "Aprovados no mês" (P-12) fica para a **F5**, com as metas de 14/40 dias (decisão 0012); não entra no tipo nem na tela. Cancelados nunca contam; sem `dataRevisao` conta em `emTramitacao` mas nunca em `vencendo`/`atrasados`; os KPIs são calculados sobre os cartões **já filtrados** por busca e área (documento 03, 9.1). "Hoje" vem de `RespostaPainel.hoje`, nunca do relógio do navegador, para a tela e a API concordarem.
 
 ### 4.4 Filtro e busca (função pura)
 
@@ -278,12 +277,13 @@ A cor nunca vai sozinha: o texto já diz o estado, e a etiqueta tem `aria-label`
 ## 5. Interface (`apps/web`)
 
 - Rota `/painel`, tela `apps/web/src/telas/TelaPainel.tsx`; item "Painel" na barra lateral logo abaixo de Início (ícone `LayoutDashboard`), visível para quem tem `pode(eu, 'verDocumentos')`. A tela Início ganha o link "Abrir o painel" só porque o destino passa a existir.
-- Chamadas só pelo cliente de `api/cliente.ts`: `painel(filtro)` → `RespostaPainel` e `reprogramarPrazo(id, dados)` → `ResultadoReprogramacao`. A tela carrega uma vez com `cancelados` conforme o alternador e **filtra no cliente** com `filtrarCartoes` (busca em tempo real sem ir ao servidor a cada tecla); o alternador de cancelados recarrega. Depois de reprogramar, substitui o cartão pelo `documento` devolvido (sem recarregar tudo).
-- **Cabeçalho:** título "Painel", botão "Novo documento" (só se `podeCadastrarDocumento`), quatro KPIs com rótulo e subtítulo coerentes (P-13): "Em tramitação — documentos não concluídos", "Vencendo em até 5 dias — prazo entre hoje e daqui a 5 dias", "Atrasados — passaram do prazo", "Aprovados no mês — aprovados em <mês/ano>". KPIs recalculados a cada mudança de busca/área.
-- **Filtros:** campo de busca (`type="search"`, rótulo "Buscar por título, código ou remetente", `aria-live="polite"` num texto "N documentos encontrados"); seleção "Área" com "Todas as áreas" + áreas **em ordem pt-BR** (`ordenarAlfabetico`) vindas de `GET /areas` (só as que têm documento visível, igual ao antigo, ou todas — ver seção 8); alternador "Mostrar cancelados (N)" (`<button aria-pressed>`), N = `qtdCancelados`.
-- **Quadro:** `<section aria-label="Quadro de tramitação">` com 5 colunas (`recebido`, `revisao`, `devolvido`, `aprovacao`, `aprovado`) e, com o alternador ligado, uma 6.ª coluna "Cancelado". Cada coluna é um `<section>` com `<h2>` (rótulo de `ROTULO_FASE` + contagem) e uma lista `<ul>`; coluna vazia mostra "Nenhum documento nesta fase". Em 768–1023px as colunas rolam horizontalmente **dentro do quadro** (a página não rola na horizontal, decisão 0005); a partir de 1024px cabem lado a lado com largura mínima de 220px.
+- Chamadas só pelo cliente de `api/cliente.ts`: `painel(filtro)` → `RespostaPainel` e `reprogramarPrazo(id, dados)` → `ResultadoReprogramacao`. A tela carrega uma vez sem cancelados e **filtra no cliente** com `filtrarCartoes` (busca em tempo real sem ir ao servidor a cada tecla); a janela de cancelados faz a sua própria chamada. Depois de reprogramar, substitui o cartão pelo `documento` devolvido (sem recarregar tudo).
+- **Cabeçalho:** título "Painel", botão "Novo documento" (só se `podeCadastrarDocumento`), três KPIs com rótulo e subtítulo coerentes (P-13): "Em tramitação — documentos não concluídos", "Vencendo em até 5 dias — prazo entre hoje e daqui a 5 dias", "Atrasados — passaram do prazo". KPIs recalculados a cada mudança de busca/área.
+- **Filtros:** campo de busca (`type="search"`, rótulo "Buscar por título, código ou remetente", `aria-live="polite"` num texto "N documentos encontrados"); seleção "Área" com "Todas as áreas" + áreas **em ordem pt-BR** (`ordenarAlfabetico`) vindas de `GET /areas` (todas as áreas ativas); botão "Cancelados (N)", N = `qtdCancelados`, que abre a **janela de cancelados** (como no sistema antigo, documento 03, 9.2).
+- **Quadro:** `<section aria-label="Quadro de tramitação">` com 5 colunas (`recebido`, `revisao`, `devolvido`, `aprovacao`, `aprovado`); cancelados nunca aparecem no quadro. Cada coluna é um `<section>` com `<h2>` (rótulo de `ROTULO_FASE` + contagem) e uma lista `<ul>`; coluna vazia mostra "Nenhum documento nesta fase". Em 768–1023px as colunas rolam horizontalmente **dentro do quadro** (a página não rola na horizontal, decisão 0005); a partir de 1024px cabem lado a lado com largura mínima de 220px.
 - **Cartão** (`<li>` com `<article tabIndex={0} aria-labelledby>`): código ou "S/ código" + "Rev. N"; título; `BadgeStatus`; tipo; etiqueta de prazo; etiqueta "Reprogramado"; "↺ N×" com `aria-label="Devolvido N vezes"` (só se N > 0); remetente; "Revisão até dd/mm/aaaa" ou, sem prazo, "Recebido em dd/mm/aaaa"; botão **Reprogramar** só se `pode(eu, 'reprogramarPrazo', …)` e status não é Aprovado nem Cancelado. Nenhum outro botão.
-- **Diálogo Reprogramar** (componente `Dialogo`, foco preso, Esc fecha): mostra prazo atual; campo data "Novo prazo" (`min` = hoje do servidor) e `CampoTexto` multilinha "Justificativa" com contador "N/500" e dica "mínimo 10 caracteres"; validação por script (`noValidate`) com resumo de erros focável; botão "Confirmar" desabilitado só enquanto envia. Sucesso: toast "Prazo reprogramado para dd/mm/aaaa". `409 conflito_versao`: o diálogo mostra o prazo atual vindo do erro e pede para conferir; `409 acao_nao_permitida`, `403`, `404`: mensagens de `api/erros.ts`.
+- **Janela de cancelados** (componente `Dialogo`, foco preso, Esc fecha, título "Documentos cancelados (N)"): carrega `GET /painel?cancelados=true` e lista só os cartões da fase Cancelado, com a busca e a área em vigor; cartões iguais aos do quadro, sem botão Reprogramar; vazio: "Nenhum documento cancelado". Nada de reativar aqui (F5).
+- **Diálogo Reprogramar** (componente `Dialogo`, foco preso, Esc fecha): mostra prazo atual; campo data "Novo prazo" (`min` = o maior entre hoje do servidor e o dia seguinte ao prazo atual) e `CampoTexto` multilinha "Justificativa" com contador "N/500" e dica "mínimo 10 caracteres"; validação por script (`noValidate`) com resumo de erros focável; botão "Confirmar" desabilitado só enquanto envia. Sucesso: toast "Prazo reprogramado para dd/mm/aaaa". `409 conflito_versao`: o diálogo mostra o prazo atual vindo do erro e pede para conferir; `409 acao_nao_permitida`, `403`, `404`: mensagens de `api/erros.ts`.
 - **Estados:** carregando (esqueleto de 5 colunas com `aria-busy`), vazio geral ("Nenhum documento cadastrado ainda" + link para Novo documento se puder), vazio por filtro ("Nenhum documento corresponde à busca" + botão "Limpar filtros"), erro (`Estados` com "Tentar de novo"). KPIs mostram "—" enquanto carrega, nunca 0 falso.
 - **Teclado:** ordem Tab = cabeçalho → filtros → colunas na ordem das fases → cartões → botão Reprogramar. Setas ← → entre colunas e ↑ ↓ entre cartões da coluna (roving tabindex) são desejáveis, não obrigatórias; Tab sozinho precisa alcançar tudo.
 - **Contraste:** todo valor visual sai de token; nada de `#64748B` sobre `#F1F5F9`. Fase Devolvido/Cancelado seguem a decisão 0009 (Devolvido vermelho, Cancelado grafite) e o rótulo de texto sempre visível.
@@ -294,17 +294,17 @@ A cor nunca vai sozinha: o texto já diz o estado, e a etiqueta tem `aria-label`
 | Camada | Teste |
 |---|---|
 | compartilhado | `somarDias` e `calcularPrazoAutomatico`: virada de mês, de ano e 29/02. |
-| compartilhado | `calcularKpis`: cancelado não conta; sem prazo conta só no total; limites da janela (hoje, hoje+5 dentro; hoje+6 fora; ontem atrasado); aprovado no mês vs. mês anterior; aprovado nunca em vencendo/atrasados. |
+| compartilhado | `calcularKpis`: cancelado não conta; sem prazo conta só no total; limites da janela (hoje, hoje+5 dentro; hoje+6 fora; ontem atrasado); aprovado nunca em vencendo/atrasados. |
 | compartilhado | `etiquetaPrazo`: null sem prazo, Aprovado e Cancelado; textos singular/plural; `dias = 5` âmbar, `6` verde, `-1` vermelho. |
 | compartilhado | `filtrarCartoes`: sem acento e maiúsculas, nos três campos; área por ID; busca vazia não filtra. |
 | compartilhado | `validarJustificativa`/`validarNovoPrazo`: aparar, mínimo, máximo, data inválida, anterior a hoje, igual ao prazo atual. |
 | compartilhado | `pode`: linha `reprogramarPrazo` na tabela (4 perfis, com e sem contexto). `lerReprogramacao`. |
 | API | Migração 0003 aplica sobre a 0002; documento com prazo importado não muda; sem prazo recebe criado_em + 30 no fuso de São Paulo; tabela auxiliar lista só os alterados. |
-| API | `POST /documentos`: resposta com `dataRevisao` = hoje + 30; enviar `dataRevisao` → 400; evento CRIACAO com detalhe do prazo; reenvio idêntico → 200 com o prazo original. |
-| API | `POST /documentos/:id/reprogramacoes`: 201 com documento (`versao` +1, `reprogramado`, contagem) e evento com autor do token (ignora `autorId` no corpo → 400 por campo desconhecido); reenvio idêntico → 200 sem novo evento; `versao` velha → 409 `conflito_versao` com documento atual; Aprovado/Cancelado → 409 `acao_nao_permitida`; Solicitante → 403 na própria área e 404 em área alheia; Leitor → 403; documento inexistente → 404; justificativa curta e prazo passado → 400 por campo; campo extra → 400. |
+| API | `POST /documentos`: resposta com `dataRecebimento` = hoje e `dataRevisao` = hoje + 30; enviar `dataRevisao` ou `dataRecebimento` → 400; evento CRIACAO com detalhe do prazo; reenvio idêntico → 200 com o prazo original. |
+| API | `POST /documentos/:id/reprogramacoes`: 201 com documento (`versao` +1, `reprogramado`, contagem) e evento com autor do token (ignora `autorId` no corpo → 400 por campo desconhecido); reenvio idêntico → 200 sem novo evento; `versao` velha → 409 `conflito_versao` com documento atual; Aprovado/Cancelado → 409 `acao_nao_permitida`; Solicitante → 403 na própria área e 404 em área alheia; Leitor → 403; documento inexistente → 404; justificativa curta e prazo passado ou anterior/igual ao atual → 400 por campo; campo extra → 400. |
 | API | Evento REPROGRAMACAO não pode ser alterado nem apagado (gatilho). |
 | API | `GET /painel`: filtros aplicados; parâmetro desconhecido → 400; Solicitante só vê a própria área mesmo pedindo outra; `qtdCancelados` respeita filtros; cartão não expõe `observacao`, `criadoPor` nem arquivos; `qtdDevolucoes` e `dataAprovacao` calculados de eventos (inserindo eventos direto no banco de teste, já que a F5 não existe); `hoje` presente. |
-| tela (Vitest) | KPIs e colunas a partir de uma API simulada; busca filtra e atualiza contagem; alternar cancelados mostra a 6.ª coluna; botão Reprogramar aparece só para Qualidade/Administrador e some em Aprovado/Cancelado; diálogo valida, envia `{ novoPrazo, justificativa, versao }` e trata 409 mostrando o prazo atual; estados carregando/vazio/erro. |
+| tela (Vitest) | KPIs e colunas a partir de uma API simulada; busca filtra e atualiza contagem; botão Cancelados abre a janela com os cancelados; botão Reprogramar aparece só para Qualidade/Administrador e some em Aprovado/Cancelado; diálogo valida, envia `{ novoPrazo, justificativa, versao }` e trata 409 mostrando o prazo atual; estados carregando/vazio/erro. |
 | e2e + axe | Vitrine (sem sessão real): Painel com cartões nas 5 fases e as três etiquetas de prazo, mais "Reprogramado", em 768, 1024 e 1440 px, temas claro e escuro, sem rolagem horizontal da página; axe sem violações; diálogo Reprogramar com foco preso e Esc. |
 
 ## 7. Divisão do trabalho
@@ -323,12 +323,12 @@ A cor nunca vai sozinha: o texto já diz o estado, e a etiqueta tem `aria-label`
 
 **Fronteira exata:** a interface só importa de `@docsync/compartilhado` (`CartaoPainel`, `RespostaPainel`, `NovaReprogramacao`, `ResultadoReprogramacao`, `Kpis`, `calcularKpis`, `filtrarCartoes`, `etiquetaPrazo`, `validarJustificativa`, `validarNovoPrazo`, `LIMITES_JUSTIFICATIVA`, `pode`, `ROTULO_FASE`, `FASES`) e chama só `GET /painel` e `POST /documentos/:id/reprogramacoes`. A interface não calcula prazo automático nem decide permissão de verdade; a API não formata texto de etiqueta. Depois das duas partes: verificação integrada, `agente-qa-revisao`, capturas e roteiro para o Eric.
 
-## 8. Pontos em aberto para o Eric
+## 8. Respostas do Eric (2026-09-29)
 
-1. **Cor nova para Devolvido ou Cancelado** (decisão 0009): proposta a registrar antes do código da tela. Sugestão: manter Devolvido em vermelho (pede ação) e mover Cancelado para neutro escuro (texto #475569, fundo #E2E8F0, borda #94A3B8, contraste 6,9:1), com o rótulo sempre visível. Alternativa: Cancelado em roxo (#6D28D9 / #F5F3FF / #8B5CF6, contraste 7,4:1).
-2. **"Data do cadastro"** = dia em que o servidor recebeu o cadastro (proposto) ou a "Data de recebimento" digitada no formulário? A diferença aparece quando alguém cadastra um documento recebido dias antes.
-3. **Antecipar o prazo** pela reprogramação (novo prazo anterior ao atual, mas não anterior a hoje): permitido (proposto) ou só adiar?
-4. **KPI "Aprovados no mês"** (P-12): entra já na F3 (proposto, mostrando 0 honesto até a F5/F12) ou fica para a F5?
-5. **Filtro de área**: listar todas as áreas ativas (proposto; previsível e alinhado ao P-11) ou só as áreas que têm documento visível (comportamento do sistema antigo)?
-6. **Cancelados**: coluna extra ligada por alternador (proposto, mais simples e acessível) ou janela separada como no antigo (documento 03, 9.2)?
-7. Limites da justificativa (10 a 500 caracteres) e janela de 5 dias: confirmar.
+1. Cor: Cancelado em grafite (#334155 / #E2E8F0 / #64748B); Devolvido vermelho (decisão 0009).
+2. "Data do cadastro" = dia em que o sistema recebeu; o campo "Data de recebimento" sai do formulário (decisão 0012).
+3. Reprogramação **só adia** (decisão 0012).
+4. "Aprovados no mês" fica para a F5, com as metas de 14 dias (início da revisão) e 40 dias (conclusão) (decisão 0012).
+5. Filtro de área: todas as áreas ativas.
+6. Cancelados numa **janela**, como no antigo.
+7. Justificativa de 10 a 500 caracteres e janela de 5 dias: confirmados.
