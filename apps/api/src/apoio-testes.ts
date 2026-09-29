@@ -59,7 +59,7 @@ export interface Ambiente {
   /** Faz uma requisição com um token para a identidade dada. */
   chamar(
     identidade: JWTPayload,
-    metodo: 'GET' | 'POST' | 'PATCH',
+    metodo: 'GET' | 'HEAD' | 'POST' | 'PATCH',
     url: string,
     corpo?: unknown,
   ): Promise<LightMyRequestResponse>;

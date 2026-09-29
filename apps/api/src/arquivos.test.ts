@@ -357,6 +357,20 @@ describe('registros_acesso_arquivos — registro imutável (decisão 0014, item 
     expect(depois.documento.versao).toBe(detalhe.documento.versao);
   });
 
+  it('HEAD no download e nos detalhes → não 200 e nenhum registro de acesso (sem HEAD automático do Fastify)', async () => {
+    const detalhe = await cadastrarComArquivos();
+    const principal = principalDe(detalhe);
+    const download = await amb.chamar(ADMIN, 'HEAD', `/documentos/${detalhe.documento.id}/arquivos/${principal.id}`);
+    expect(download.statusCode).not.toBe(200);
+    expect(download.headers['content-disposition']).toBeUndefined();
+    const detalhes = await amb.chamar(ADMIN, 'HEAD', `/documentos/${detalhe.documento.id}`);
+    expect(detalhes.statusCode).not.toBe(200);
+    expect(await listarAcessosArquivos(amb.banco, detalhe.documento.id)).toEqual([]);
+    // O GET continua funcionando e registrando.
+    expect((await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${principal.id}`)).statusCode).toBe(200);
+    expect(await listarAcessosArquivos(amb.banco, detalhe.documento.id)).toHaveLength(1);
+  });
+
   it('UPDATE, DELETE e TRUNCATE são recusados; tipo fora da lista também (VISUALIZACAO fica previsto, sem uso)', async () => {
     const detalhe = await cadastrarComArquivos();
     const principal = principalDe(detalhe);

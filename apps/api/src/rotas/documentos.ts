@@ -458,7 +458,11 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
     return documentos.filter((d) => podeVer(requisicao.usuario, d));
   });
 
-  escopo.get<{ Params: { id: string } }>('/documentos/:id', async (requisicao, resposta) => {
+  // Sem HEAD automático (o Fastify criaria um para cada GET): HEAD não é usado pela
+  // interface e, no download, executaria a rota inteira e gravaria um acesso falso.
+  const semHead = { exposeHeadRoute: false } as const;
+
+  escopo.get<{ Params: { id: string } }>('/documentos/:id', semHead, async (requisicao, resposta) => {
     const eu = requisicao.usuario;
     // Ordem de decisão do contrato F4 (2.2): permissão geral → existência/visibilidade →
     // resposta. Esquema fechado também na query.
@@ -487,7 +491,7 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
    * arquivo pertence a ESTE documento → conteúdo no armazenamento → registro de
    * acesso → resposta. O conteúdo sai como foi gravado (sem marca d'água, decisão 0014).
    */
-  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', async (requisicao, resposta) => {
+  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', semHead, async (requisicao, resposta) => {
     const eu = requisicao.usuario;
     const { id, arquivoId } = requisicao.params;
     if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
