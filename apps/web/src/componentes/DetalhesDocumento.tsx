@@ -258,11 +258,8 @@ function Dados({ documento }: { documento: Documento }) {
       <Par rotulo="Prazo (data de revisão)">{formatarData(documento.dataRevisao)}</Par>
       <Par rotulo="Cadastrado em">{formatarDataHora(documento.criadoEm)}</Par>
       <Par rotulo="Última modificação">{formatarDataHora(documento.dataModificacao)}</Par>
-      {documento.idDocumentoOrigem && (
-        <Par rotulo="Revisão de" largo>
-          Revisa o documento {documento.idDocumentoOrigem}
-        </Par>
-      )}
+      {/* "Revisa o documento" (idDocumentoOrigem) fica escondido até a F8 (revisões), por pedido do Eric
+          (contrato F4, 11.2): não renderiza nem com valor. */}
       <Par rotulo="Observações complementares" largo>
         <span className={estilos.textoLivre}>{documento.observacao?.trim() || '—'}</span>
       </Par>

@@ -175,6 +175,8 @@ for (const [perfil, baixar, reprogramar] of [
     const dialogo = detalhes(page);
     await expect(dialogo.getByRole('button', { name: /^Baixar/ })).toHaveCount(baixar);
     await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(reprogramar ? 1 : 0);
+    // Contrato F4, 11.6: quem não baixa vê o motivo.
+    await expect(dialogo.getByText('Seu perfil pode ver, mas não baixar arquivos.')).toHaveCount(baixar ? 0 : 1);
     await axe(page);
   });
 }

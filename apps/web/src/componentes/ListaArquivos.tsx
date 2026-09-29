@@ -87,6 +87,7 @@ export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoBaixar, aoE
 
   return (
     <>
+      {!podeBaixar && <p className={estilos.semDownload}>Seu perfil pode ver, mas não baixar arquivos.</p>}
       <ul ref={lista} className={estilos.lista}>
         {arquivos.map((arquivo) => {
           const esteBaixando = baixando === arquivo.id;

@@ -87,3 +87,16 @@ Não mexi em `packages/compartilhado` nem em `apps/api`. O `pdfjs-dist` entrou e
 - **Tomada, dentro do contrato:** abrir e fechar os detalhes usam `replace` na URL, então o histórico do navegador não ganha uma entrada por modal.
 
 > Nota (2026-09-29): a rota `/visualizacao` e a marca d'água citadas acima já foram removidas da API pela decisão 0014.
+
+## Ajustes finais (validação)
+
+Pedidos do Eric na validação (contrato F4, seção 11, itens 2 e 6), só em `apps/web`:
+
+1. **"Revisa o documento" escondido até a F8:** o bloco Dados não renderiza o par "Revisão de" nem com `idDocumentoOrigem` preenchido (comentário no código citando a F8). Isso substitui a divergência 4 acima.
+2. **Frase para quem não baixa:** na seção Arquivos, quando `podeBaixarArquivo` é falso (Leitor, Solicitante de outra área) e há arquivos, aparece "Seu perfil pode ver, mas não baixar arquivos." em texto secundário (`--text-secondary`, `--fs-body-sm`, `--space-2`). Sem arquivos, fica só "Nenhum arquivo anexado".
+
+Arquivos: `apps/web/src/componentes/DetalhesDocumento.tsx`, `ListaArquivos.tsx`, `ListaArquivos.module.css`, `DetalhesDocumento.test.tsx` (3 testes novos e 1 conferência a mais no caso Leitor/Solicitante), `apps/web/e2e/detalhes.spec.ts` (a frase conferida para Leitor e ausente para Solicitante, com axe).
+
+Capturas não regeneradas: elas usam o perfil Administrador (baixa) e o DOC-P6 sem documento de origem, então nada muda nelas.
+
+Validação: `npm run typecheck`, `npm test` (365 testes), `npm run build` e `npm run segredos` passaram; `npm run test:e2e` com 78 aprovados e 25 pulados (capturas), por uma config local ignorada pelo Git apontando para o Chromium de `/opt/pw-browsers`, apagada no fim.

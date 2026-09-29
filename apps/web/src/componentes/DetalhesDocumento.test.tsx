@@ -189,6 +189,29 @@ describe('DetalhesDocumento', () => {
     await modal();
     expect(screen.queryAllByRole('button', { name: /^Baixar/ })).toHaveLength(visiveis ? 3 : 0);
     expect(within(secao('Arquivos')).getByText('Procedimento.pdf', { selector: 'p' })).toBeInTheDocument();
+    // Contrato F4, 11.6: quem não baixa vê o motivo.
+    expect(within(secao('Arquivos')).getByText('Seu perfil pode ver, mas não baixar arquivos.')).toBeInTheDocument();
+  });
+
+  it('quem baixa não vê a frase "Seu perfil pode ver, mas não baixar arquivos."', async () => {
+    renderizar(apiSimulada());
+    await modal();
+    expect(screen.queryByText('Seu perfil pode ver, mas não baixar arquivos.')).not.toBeInTheDocument();
+  });
+
+  it('Leitor sem arquivos: só "Nenhum arquivo anexado", sem a frase de perfil', async () => {
+    renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(detalhe({ arquivos: [] })) }), { eu: LEITOR });
+    await modal();
+    expect(within(secao('Arquivos')).getByText('Nenhum arquivo anexado')).toBeInTheDocument();
+    expect(screen.queryByText('Seu perfil pode ver, mas não baixar arquivos.')).not.toBeInTheDocument();
+  });
+
+  it('"Revisa o documento" fica escondido até a F8, mesmo com idDocumentoOrigem preenchido', async () => {
+    const comOrigem = detalhe({ documento: { ...DOCUMENTO, idDocumentoOrigem: 'DOC-ORIGEM-1' } });
+    renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(comOrigem) }));
+    await modal();
+    expect(within(secao('Dados')).queryByText('Revisão de')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Revisa o documento|DOC-ORIGEM-1/)).not.toBeInTheDocument();
   });
 
   it('lista vazia: "Nenhum arquivo anexado"', async () => {

@@ -75,3 +75,10 @@
   color: var(--text-secondary);
   text-align: center;
 }
+
+/* Perfil sem download (ex.: Leitor): frase secundária acima da lista (contrato F4, 11.6). */
+.semDownload {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+}
