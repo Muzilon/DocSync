@@ -185,6 +185,9 @@
   /* Painel Kanban (F3): colunas com largura mínima; o quadro rola por dentro quando não cabem. */
   --kanban-coluna-min: 216px;
   --kanban-coluna-altura-min: 240px;
+  /* F5 (decisão 0015): cada coluna rola por dentro; a altura acompanha a janela, nunca o número de cartões. */
+  --kanban-coluna-altura-max: calc(100vh - var(--space-8));
+  --avatar-cartao: 24px;
   --kpi-valor: 28px;
   --esqueleto-cartao: 96px;
 

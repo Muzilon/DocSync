@@ -28,6 +28,12 @@
   flex-shrink: 0;
 }
 
+/* Ícone não textual sobre o fundo escuro do toast. */
+.iconeErro {
+  color: var(--cor-erro-ponto);
+  flex-shrink: 0;
+}
+
 .fechar {
   display: inline-flex;
   align-items: center;

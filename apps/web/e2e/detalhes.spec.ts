@@ -91,18 +91,18 @@ test('abrir pelo teclado: foco preso (Tab e Shift+Tab), Esc fecha e devolve o fo
   await expect(titulo).toBeFocused();
 });
 
-test('Espaço no título abre; clique no corpo do cartão abre; Reprogramar não abre', async ({ page }) => {
+test('Espaço no título abre; clique no corpo do cartão abre; o cartão não tem outros botões (decisão 0015)', async ({ page }) => {
   await abrir(page);
   await tituloCartao(page, 'Inspeção de andaimes').focus();
   await page.keyboard.press(' ');
   await expect(detalhes(page, 'Inspeção de andaimes')).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('article', { name: 'Compras emergenciais' }).getByText(/Recebido em/).click();
+  await page.getByRole('article', { name: 'Compras emergenciais' }).getByText('Suprimentos').click();
   await expect(detalhes(page, 'Compras emergenciais')).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Reprogramar prazo de Procedimento de auditoria interna' }).click();
-  await expect(page.getByRole('dialog', { name: 'Reprogramar prazo' })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'Procedimento de auditoria interna' })).toHaveCount(0);
+  for (const cartao of await page.getByRole('region', { name: 'Quadro de tramitação' }).getByRole('article').all()) {
+    await expect(cartao.getByRole('button')).toHaveCount(1);
+  }
 });
 
 test('janela de cancelados: o cartão abre os detalhes por cima e o Esc volta para a janela', async ({ page }) => {
@@ -149,9 +149,15 @@ test('Baixar: nome devolvido pelo servidor, blob sem token na URL; sem Visualiza
   await expect(detalhes(page).getByRole('button', { name: /Visualizar/ })).toHaveCount(0);
 });
 
-test('reprogramar dentro dos detalhes: modal e cartão se atualizam, evento novo no topo da linha do tempo', async ({ page }) => {
+test('Reprogramar só com prazo vencido: some no documento em dia', async ({ page }) => {
   await abrir(page, { url: DIRETO });
-  const dialogo = detalhes(page);
+  await expect(linhaDoTempo(page).locator('ol > li')).toHaveCount(9);
+  await expect(detalhes(page).getByRole('button', { name: 'Reprogramar' })).toHaveCount(0);
+});
+
+test('reprogramar (prazo vencido) dentro dos detalhes: modal e cartão se atualizam, evento novo no topo da linha do tempo', async ({ page }) => {
+  await abrir(page, { url: `/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P4')}` });
+  const dialogo = detalhes(page, 'Inspeção de andaimes');
   await dialogo.getByRole('button', { name: 'Reprogramar' }).click();
   const reprog = page.getByRole('dialog', { name: 'Reprogramar prazo' });
   await reprog.getByLabel(/Novo prazo/).fill('2026-10-30');
@@ -159,10 +165,12 @@ test('reprogramar dentro dos detalhes: modal e cartão se atualizam, evento novo
   await reprog.getByRole('button', { name: 'Confirmar' }).click();
   await expect(reprog).toBeHidden();
   await expect(dialogo.getByText('Prazo: 30/10/2026')).toBeVisible();
-  await expect(linhaDoTempo(page).locator('ol > li').first()).toContainText('Prazo de 09/10/2026 para 30/10/2026');
-  await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toBeFocused();
+  await expect(linhaDoTempo(page).locator('ol > li').first()).toContainText('Prazo de 27/09/2026 para 30/10/2026');
+  // O prazo deixou de estar vencido: o botão some e o foco vai para o ✕ (nunca se perde).
+  await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(0);
+  await expect(dialogo.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('article', { name: TITULO }).getByText('Prazo: 30/10/2026')).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Inspeção de andaimes' }).getByText('30/10')).toBeVisible();
 });
 
 // Decisão 0014: o Leitor vê os arquivos, mas não baixa; o Solicitante baixa os da sua área.

@@ -11,6 +11,7 @@ import {
   type NovaReprogramacao,
   type Pessoa,
   type RespostaPainel,
+  type ResultadoTransicao,
 } from '@docsync/compartilhado';
 import { ContextoApi, queryPainel, type Api } from '../api/cliente.ts';
 import { ErroApi } from '../api/erros.ts';
@@ -41,7 +42,8 @@ function cartao(id: string, titulo: string, status: CartaoPainel['status'], praz
     id, codigo: `COD-${id}`, titulo, revisao: 0, status, fase: FASE_DO_STATUS[status], tipoDocumento: 'PR - Procedimento',
     areaId: 'a2', area: 'Qualidade', remetente: 'Ana Exemplo', dataRecebimento: '2026-09-01',
     dataRevisao: prazo === null ? null : somarDias(HOJE, prazo), reprogramado: false, qtdReprogramacoes: 0,
-    qtdDevolucoes: 0, dataAprovacao: null, versao: 3, criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-01T12:00:00Z',
+    qtdDevolucoes: 0, dataAprovacao: null, dataInicioRevisao: null, responsavelId: null, responsavel: null,
+    statusAntesDoCancelamento: null, versao: 3, criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-01T12:00:00Z',
     ...extra,
   };
 }
@@ -49,13 +51,16 @@ function cartao(id: string, titulo: string, status: CartaoPainel['status'], praz
 const CARTOES: CartaoPainel[] = [
   cartao('DOC-1', 'Procedimento de auditoria', 'Recebido', 20),
   cartao('DOC-2', 'Instrução de solda', 'Recebido', 3, { areaId: 'a1', area: 'Engenharia', codigo: null }),
-  cartao('DOC-3', 'Inspeção de andaimes', 'Em revisão da qualidade', -2, { reprogramado: true, qtdReprogramacoes: 1 }),
+  cartao('DOC-3', 'Inspeção de andaimes', 'Em revisão da qualidade', -2, {
+    reprogramado: true, qtdReprogramacoes: 1, responsavelId: 'USR-5', responsavel: 'Célia Maria Teste',
+  }),
   cartao('DOC-4', 'Controle de informação', 'Devolvido para correção', 0, { qtdDevolucoes: 2, remetente: 'José Ação' }),
   cartao('DOC-5', 'Relatório de clientes', 'Para aprovação qualidade', null),
-  cartao('DOC-6', 'Manual do SGI', 'Aprovado', -5),
+  // Aprovado neste mês (01/09 → 25/09: 24 dias, dentro da meta de 40).
+  cartao('DOC-6', 'Manual do SGI', 'Aprovado', -5, { dataAprovacao: '2026-09-25' }),
 ];
 const CANCELADOS: CartaoPainel[] = [
-  cartao('DOC-7', 'Ata de reunião', 'Cancelado', 4),
+  cartao('DOC-7', 'Ata de reunião', 'Cancelado', 4, { statusAntesDoCancelamento: 'Em revisão da qualidade' }),
   cartao('DOC-8', 'Formulário de EPI', 'Cancelado', null, { areaId: 'a1', area: 'Engenharia' }),
 ];
 
@@ -69,6 +74,7 @@ function documentoDe(c: CartaoPainel, mudancas: Partial<Documento> = {}): Docume
     revisao: c.revisao, dataRecebimento: c.dataRecebimento, dataRevisao: c.dataRevisao, reprogramado: c.reprogramado,
     qtdReprogramacoes: c.qtdReprogramacoes, remetente: c.remetente, areaId: c.areaId, area: c.area, disciplina: null,
     observacao: null, nomePasta: c.titulo, nomeArquivoPrincipal: 'a.pdf', qtdAnexos: 0, idDocumentoOrigem: null,
+    responsavelId: c.responsavelId, responsavel: c.responsavel,
     versao: c.versao, criadoPor: 'USR-9', criadoEm: c.criadoEm, dataModificacao: c.dataModificacao, ...mudancas,
   };
 }
@@ -94,6 +100,20 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
         dataRevisao: dados.novoPrazo, versao: atual.versao + 1, reprogramado: true, qtdReprogramacoes: atual.qtdReprogramacoes + 1,
       });
       return { documento, evento: {} as never };
+    }),
+    responsaveis: vi.fn().mockResolvedValue([]),
+    mudarStatus: vi.fn(async (id: string, dados) => {
+      const atual = [...CARTOES, ...CANCELADOS].find((c) => c.id === id)!;
+      return { documento: documentoDe(atual, { status: dados.para, responsavelId: dados.responsavelId, versao: atual.versao + 1 }), evento: {} as never };
+    }),
+    cancelarDocumento: vi.fn(async (id: string) => {
+      const atual = CARTOES.find((c) => c.id === id)!;
+      return { documento: documentoDe(atual, { status: 'Cancelado', versao: atual.versao + 1 }), evento: {} as never };
+    }),
+    reativarDocumento: vi.fn(async (id: string, dados) => {
+      const atual = [...CARTOES, ...CANCELADOS].find((c) => c.id === id)!;
+      const status = atual.statusAntesDoCancelamento ?? atual.status;
+      return { documento: documentoDe(atual, { status, versao: dados.versao + 1 }), evento: {} as never } as ResultadoTransicao;
     }),
     ...sobrescrever,
   };
@@ -167,7 +187,11 @@ describe('TelaPainel', () => {
     expect(within(kpi('Em tramitação')).getByText('5')).toBeInTheDocument();
     expect(within(kpi('Vencendo em até 5 dias')).getByText('2')).toBeInTheDocument();
     expect(within(kpi('Atrasados')).getByText('1')).toBeInTheDocument();
-    expect(screen.queryByText('Aprovados no mês')).not.toBeInTheDocument();
+    // P-12: quarto KPI, com o mês por extenso e a meta de 40 dias.
+    const aprovados = kpi('Aprovados no mês');
+    expect(within(aprovados).getByText('1')).toBeInTheDocument();
+    expect(aprovados).toHaveTextContent('Concluídos em setembro de 2026');
+    expect(aprovados).toHaveTextContent('1 dentro da meta de 40 dias');
 
     const colunas = within(await quadro()).getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(colunas).toEqual([
@@ -181,31 +205,40 @@ describe('TelaPainel', () => {
     expect(within(coluna(/^Recebido/)).getAllByRole('article')).toHaveLength(2);
   });
 
-  it('cartão enxuto: área, etiquetas de prazo, Reprogramado, devoluções e data de recebimento', async () => {
+  it('cartão no estilo do Planner (decisão 0015): etiquetas, título, área, prazo curto e responsável; sem botões', async () => {
     renderizar(apiSimulada());
     await quadro();
-    expect(within(cartaoDe('Procedimento de auditoria')).getByText('Prazo: 19/10/2026')).toBeInTheDocument();
-    expect(within(cartaoDe('Instrução de solda')).getByText('Vence em 3 dias')).toBeInTheDocument();
-    expect(within(cartaoDe('Instrução de solda')).getByText('S/ código')).toBeInTheDocument();
-    const andaimes = cartaoDe('Inspeção de andaimes');
-    expect(within(andaimes).getByText('Atrasado há 2 dias')).toBeInTheDocument();
-    expect(within(andaimes).getByText(/Reprogramado/)).toHaveAttribute('title', 'Reprogramado 1 vez');
-    const devolvido = cartaoDe('Controle de informação');
-    expect(within(devolvido).getByText('Vence hoje')).toBeInTheDocument();
-    expect(within(devolvido).getByText('Devolvido 2 vezes')).toBeInTheDocument();
-    expect(within(cartaoDe('Relatório de clientes')).getByText('Recebido em 01/09/2026')).toBeInTheDocument();
-    // Enxuto (pedido do Eric): área como etiqueta; recebimento sempre; sem tipo, remetente nem "Revisão até".
+    // Prazo curto: neutro em dia, laranja vencendo, vermelho vencido; o estado vai no texto acessível.
     const auditoria = cartaoDe('Procedimento de auditoria');
-    expect(within(auditoria).getByText('Qualidade')).toBeInTheDocument();
+    const prazoNeutro = within(auditoria).getByText('19/10').parentElement!;
+    expect(prazoNeutro).toHaveAttribute('data-tom', 'neutro');
+    expect(prazoNeutro).toHaveTextContent('Vence em 20 dias, prazo 19/10/2026');
+    expect(within(cartaoDe('Instrução de solda')).getByText('02/10').parentElement).toHaveAttribute('data-tom', 'alerta');
+    expect(cartaoDe('Instrução de solda')).toHaveTextContent('Vence em 3 dias, prazo 02/10/2026');
+    const andaimes = cartaoDe('Inspeção de andaimes');
+    expect(within(andaimes).getByText('27/09').parentElement).toHaveAttribute('data-tom', 'erro');
+    expect(andaimes).toHaveTextContent('Atrasado há 2 dias, prazo 27/09/2026');
+    expect(within(cartaoDe('Controle de informação')).getByText('29/09').parentElement).toHaveTextContent('Vence hoje');
+    // Etiquetas no topo: status e "Reprogramado".
+    expect(within(andaimes).getByText('Em revisão da qualidade')).toBeInTheDocument();
+    expect(within(andaimes).getByText(/Reprogramado/)).toHaveAttribute('title', 'Reprogramado 1 vez');
+    // Responsável: iniciais (desenho) e nome como texto acessível.
+    expect(within(andaimes).getByText('CT')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(andaimes).getByText('Responsável: Célia Maria Teste')).toHaveClass('visualmente-oculto');
+    expect(within(auditoria).queryByText(/Responsável/)).not.toBeInTheDocument();
+    // Área no lugar da lista de verificação do Planner.
     expect(within(auditoria).getByText('Área:')).toHaveClass('visualmente-oculto');
-    expect(within(auditoria).getByText('Recebido em 01/09/2026')).toBeInTheDocument();
-    expect(auditoria).not.toHaveTextContent(/Revisão até|PR - Procedimento|Ana Exemplo|Remetente/);
-    expect(devolvido).not.toHaveTextContent('José Ação');
-    // Aprovado não tem etiqueta de prazo.
-    expect(within(cartaoDe('Manual do SGI')).queryByText(/Atrasado|Vence|Prazo:/)).not.toBeInTheDocument();
-    // Nada decorativo: só o título (abre os detalhes, F4) e Reprogramar.
+    expect(auditoria).toHaveTextContent('Qualidade');
+    // Fora do cartão (ficam nos detalhes): código, revisão, remetente, tipo, devoluções, recebimento.
+    expect(auditoria).not.toHaveTextContent(/COD-DOC-1|Rev\.|Recebido em|PR - Procedimento|Ana Exemplo/);
+    expect(cartaoDe('Controle de informação')).not.toHaveTextContent(/Devolvido 2 vezes|José Ação|↺/);
+    // Aprovado sem prazo.
+    expect(within(cartaoDe('Manual do SGI')).queryByText(/\d{2}\/\d{2}/)).not.toBeInTheDocument();
+    // Nenhum botão de ação: o único controle é o título, que abre os detalhes.
     for (const artigo of screen.getAllByRole('article')) {
-      for (const botao of within(artigo).queryAllByRole('button')) expect(botao).toHaveTextContent(/Reprogramar|, abrir detalhes$/);
+      const botoes = within(artigo).getAllByRole('button');
+      expect(botoes).toHaveLength(1);
+      expect(botoes[0]).toHaveAccessibleName(/, abrir detalhes$/);
     }
   });
 
@@ -214,7 +247,7 @@ describe('TelaPainel', () => {
     const usuario = renderizar(api);
     await quadro();
     expect(screen.getByText('6 documentos encontrados')).toBeInTheDocument();
-    await usuario.type(screen.getByRole('searchbox', { name: 'Buscar por título, código ou remetente' }), 'jose acao');
+    await usuario.type(screen.getByRole('searchbox', { name: 'Buscar por título, código, remetente ou responsável' }), 'jose acao');
     expect(screen.getByText('1 documento encontrado')).toBeInTheDocument();
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(within(kpi('Em tramitação')).getByText('1')).toBeInTheDocument();
@@ -246,8 +279,8 @@ describe('TelaPainel', () => {
     expect(screen.queryByRole('combobox', { name: 'Área' })).not.toBeInTheDocument();
     const filtros = screen.getByRole('search', { name: 'Filtrar documentos' });
     expect(filtros).toHaveTextContent('Área: Engenharia');
-    // A busca continua procurando no remetente, mesmo sem ele aparecer no cartão.
-    expect(screen.getByRole('searchbox', { name: 'Buscar por título, código ou remetente' })).toBeInTheDocument();
+    // A busca continua procurando no remetente e no responsável, mesmo sem o nome aparecer no cartão.
+    expect(screen.getByRole('searchbox', { name: 'Buscar por título, código, remetente ou responsável' })).toBeInTheDocument();
   });
 
   it('Cancelados (N) abre a janela com os cancelados, respeitando a área', async () => {
@@ -273,121 +306,6 @@ describe('TelaPainel', () => {
     await quadro();
     await usuario.click(screen.getByRole('button', { name: 'Cancelados (0)' }));
     expect(await screen.findByText('Nenhum documento cancelado')).toBeInTheDocument();
-  });
-
-  it.each([
-    ['Qualidade', QUALIDADE, 5],
-    ['Administrador', ADMIN, 5],
-    ['Solicitante', SOLICITANTE, 0],
-    ['Leitor', LEITOR, 0],
-  ])('botão Reprogramar para %s: %i cartões (nunca em Aprovado)', async (_nome, eu, quantidade) => {
-    renderizar(apiSimulada(), eu);
-    await quadro();
-    expect(screen.queryAllByRole('button', { name: /^Reprogramar/ })).toHaveLength(quantidade);
-    expect(within(cartaoDe('Manual do SGI')).queryByRole('button', { name: /Reprogramar/ })).not.toBeInTheDocument();
-  });
-
-  it('diálogo valida, envia { novoPrazo, justificativa, versao } e atualiza o cartão sem recarregar', async () => {
-    const api = apiSimulada();
-    const usuario = renderizar(api);
-    await quadro();
-    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByRole('button', { name: /Reprogramar/ }));
-    const dialogo = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
-    expect(dialogo).toHaveTextContent('Prazo atual: 19/10/2026');
-    const campoPrazo = within(dialogo).getByLabelText(/Novo prazo/);
-    expect(campoPrazo).toHaveAttribute('min', '2026-10-20');
-
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-    const resumo = await within(dialogo).findByText('Corrija 2 campos:');
-    await waitFor(() => expect(resumo.parentElement).toHaveFocus());
-    expect(api.reprogramarPrazo).not.toHaveBeenCalled();
-
-    await usuario.type(campoPrazo, '2026-10-19'); // igual ao atual: só adia
-    const justificativa = within(dialogo).getByLabelText(/Justificativa/);
-    await usuario.type(justificativa, 'curta');
-    expect(campoPrazo).toHaveAccessibleDescription(/posterior ao prazo atual/);
-    expect(justificativa).toHaveAccessibleDescription(/5\/500/);
-    await usuario.clear(campoPrazo);
-    await usuario.type(campoPrazo, '2026-11-05');
-    await usuario.type(justificativa, ' demais: aguardando a área');
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-
-    expect(await screen.findByText('Prazo reprogramado para 05/11/2026')).toBeInTheDocument();
-    expect(api.reprogramarPrazo).toHaveBeenCalledWith('DOC-1', {
-      novoPrazo: '2026-11-05',
-      justificativa: 'curta demais: aguardando a área',
-      versao: 3,
-    });
-    const atualizado = cartaoDe('Procedimento de auditoria');
-    expect(within(atualizado).getByText('Prazo: 05/11/2026')).toBeInTheDocument();
-    expect(within(atualizado).getByText(/Reprogramado/)).toBeInTheDocument();
-    expect(api.painel).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reprogramar prazo' })).not.toBeInTheDocument());
-  });
-
-  it('409 conflito_versao: mostra o prazo atual vindo do erro e reenvia com a versão nova', async () => {
-    const original = CARTOES[0]!;
-    const atual = documentoDe(original, { dataRevisao: '2026-10-26', versao: 4, reprogramado: true, qtdReprogramacoes: 1 });
-    const reprogramarPrazo = vi
-      .fn()
-      .mockRejectedValueOnce(new ErroApi(409, 'conflito_versao', {}, atual))
-      .mockResolvedValueOnce({ documento: { ...atual, dataRevisao: '2026-11-10', versao: 5, qtdReprogramacoes: 2 }, evento: {} });
-    const usuario = renderizar(apiSimulada({ reprogramarPrazo }));
-    await quadro();
-    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByRole('button', { name: /Reprogramar/ }));
-    const dialogo = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
-    await usuario.type(within(dialogo).getByLabelText(/Novo prazo/), '2026-11-10');
-    await usuario.type(within(dialogo).getByLabelText(/Justificativa/), 'Aguardando retorno da área');
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-
-    const aviso = await within(dialogo).findByText('Alguém alterou este documento');
-    expect(aviso.parentElement).toHaveTextContent('O prazo atual agora é 26/10/2026');
-    expect(dialogo).toHaveTextContent('Prazo atual: 26/10/2026');
-    // O cartão do quadro já mostra o estado atual.
-    expect(within(cartaoDe('Procedimento de auditoria')).getByText('Prazo: 26/10/2026')).toBeInTheDocument();
-
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-    await screen.findByText('Prazo reprogramado para 10/11/2026');
-    expect(reprogramarPrazo.mock.calls[1]![1]).toMatchObject({ versao: 4 });
-  });
-
-  it('409 acao_nao_permitida e 403 mostram as mensagens de api/erros.ts', async () => {
-    const reprogramarPrazo = vi
-      .fn()
-      .mockRejectedValueOnce(new ErroApi(409, 'acao_nao_permitida'))
-      .mockRejectedValueOnce(new ErroApi(403, 'sem_permissao'));
-    const usuario = renderizar(apiSimulada({ reprogramarPrazo }));
-    await quadro();
-    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByRole('button', { name: /Reprogramar/ }));
-    const dialogo = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
-    await usuario.type(within(dialogo).getByLabelText(/Novo prazo/), '2026-11-10');
-    await usuario.type(within(dialogo).getByLabelText(/Justificativa/), 'Aguardando retorno da área');
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-    expect(await within(dialogo).findByText(/não aceita esta ação no status atual/)).toBeInTheDocument();
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-    expect(await within(dialogo).findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
-  });
-
-  it('B6: depois de reprogramar, o cartão muda de posição na coluna sem recarregar', async () => {
-    // Ordem do servidor: Instrução de solda (prazo em 3 dias) antes de Procedimento de auditoria (20 dias).
-    const [doc1, doc2, ...resto] = CARTOES;
-    const api = apiSimulada({ painel: vi.fn().mockResolvedValue(resposta([doc2!, doc1!, ...resto])) });
-    const usuario = renderizar(api);
-    await quadro();
-    const antes = within(coluna(/Recebido/)).getAllByRole('article');
-    expect(antes[0]).toBe(cartaoDe('Instrução de solda'));
-    expect(antes[1]).toBe(cartaoDe('Procedimento de auditoria'));
-    await usuario.click(within(cartaoDe('Instrução de solda')).getByRole('button', { name: /Reprogramar/ }));
-    const dialogo = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
-    await usuario.type(within(dialogo).getByLabelText(/Novo prazo/), '2026-11-05');
-    await usuario.type(within(dialogo).getByLabelText(/Justificativa/), 'aguardando a área de engenharia');
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
-    await screen.findByText('Prazo reprogramado para 05/11/2026');
-    const depois = within(coluna(/Recebido/)).getAllByRole('article');
-    expect(depois[0]).toBe(cartaoDe('Procedimento de auditoria'));
-    expect(depois[1]).toBe(cartaoDe('Instrução de solda'));
-    expect(depois).toHaveLength(2);
-    expect(api.painel).toHaveBeenCalledTimes(1);
   });
 
   it('B4: sem contagem, o título da janela não traz número; ao reabrir não mostra a lista antiga', async () => {
@@ -520,7 +438,7 @@ describe('TelaPainel: detalhes (F4)', () => {
     const api = apiComDetalhes();
     const usuario = renderizarComRotas(api);
     await quadro();
-    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByText('Recebido em 01/09/2026'));
+    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByText('19/10'));
     const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
     expect(api.documento).toHaveBeenCalledWith('DOC-1');
     expect(endereco()).toBe('/painel?documento=DOC-1');
@@ -539,21 +457,15 @@ describe('TelaPainel: detalhes (F4)', () => {
     expect(endereco()).toBe('/painel?documento=DOC-2');
   });
 
-  it('clique em Reprogramar não abre os detalhes', async () => {
-    const api = apiComDetalhes();
-    const usuario = renderizarComRotas(api);
-    await quadro();
-    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByRole('button', { name: /Reprogramar/ }));
-    expect(await screen.findByRole('dialog', { name: 'Reprogramar prazo' })).toBeInTheDocument();
-    expect(api.documento).not.toHaveBeenCalled();
-    expect(endereco()).toBe('/painel');
-  });
-
-  it('botão do título: nome = título + ", abrir detalhes"; descrição com código, status e prazo', async () => {
+  it('botão do título: nome = título + ", abrir detalhes"; descrição com status, área, prazo e responsável', async () => {
     renderizarComRotas(apiComDetalhes());
     await quadro();
-    const botao = botaoDe('Procedimento de auditoria');
-    expect(botao).toHaveAccessibleDescription(/COD-DOC-1\s*Rev\. 0\s*Recebido\s*Prazo: 19\/10\/2026/);
+    expect(botaoDe('Procedimento de auditoria')).toHaveAccessibleDescription(
+      'Recebido. Área: Qualidade. Vence em 20 dias, prazo 19/10/2026.',
+    );
+    expect(botaoDe('Inspeção de andaimes')).toHaveAccessibleDescription(
+      'Em revisão da qualidade. Área: Qualidade. Atrasado há 2 dias, prazo 27/09/2026. Responsável: Célia Maria Teste',
+    );
   });
 
   it('?documento= na URL abre os detalhes ao carregar; fechar remove o parâmetro e leva o foco ao título da tela', async () => {
@@ -589,16 +501,175 @@ describe('TelaPainel: detalhes (F4)', () => {
     expect(screen.getByRole('dialog', { name: /Documentos cancelados/ })).toBeInTheDocument();
   });
 
-  it('reprogramar dentro dos detalhes atualiza o cartão do quadro', async () => {
+  it('reprogramar (só com prazo vencido) dentro dos detalhes atualiza o cartão do quadro sem recarregar o painel', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-3');
+    await quadro();
+    const dialogo = await screen.findByRole('dialog', { name: 'Inspeção de andaimes' });
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    expect(reprog).toHaveTextContent('Prazo atual: 27/09/2026');
+    expect(within(reprog).getByLabelText(/Novo prazo/)).toHaveAttribute('min', HOJE);
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    const resumo = await within(reprog).findByText('Corrija 2 campos:');
+    await waitFor(() => expect(resumo.parentElement).toHaveFocus());
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-11-30');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Pedido formal da área.');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(within(cartaoDe('Inspeção de andaimes')).getByText('30/11')).toBeInTheDocument());
+    expect(api.reprogramarPrazo).toHaveBeenCalledWith('DOC-3', { novoPrazo: '2026-11-30', justificativa: 'Pedido formal da área.', versao: 3 });
+    expect(api.painel).toHaveBeenCalledTimes(1);
+  });
+
+  it('reprogramar: 409 conflito_versao mostra o prazo atual e reenvia com a versão nova', async () => {
+    const original = CARTOES[2]!;
+    const atual = documentoDe(original, { dataRevisao: '2026-09-28', versao: 4, qtdReprogramacoes: 2 });
+    const reprogramarPrazo = vi
+      .fn()
+      .mockRejectedValueOnce(new ErroApi(409, 'conflito_versao', {}, atual))
+      .mockResolvedValueOnce({ documento: { ...atual, dataRevisao: '2026-11-10', versao: 5 }, evento: {} });
+    const usuario = renderizarComRotas(apiComDetalhes({ reprogramarPrazo }), '/painel?documento=DOC-3');
+    await quadro();
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Inspeção de andaimes' })).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-11-10');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Aguardando retorno da área');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    const aviso = await within(reprog).findByText('Alguém alterou este documento');
+    expect(aviso.parentElement).toHaveTextContent('O prazo atual agora é 28/09/2026');
+    await waitFor(() => expect(within(cartaoDe('Inspeção de andaimes')).getByText('28/09')).toBeInTheDocument());
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(reprogramarPrazo.mock.calls[1]![1]).toMatchObject({ versao: 4 }));
+  });
+
+  it('reprogramar: 409 acao_nao_permitida (prazo não vencido) mostra a mensagem do servidor', async () => {
+    const reprogramarPrazo = vi
+      .fn()
+      .mockRejectedValueOnce(new ErroApi(409, 'acao_nao_permitida', {}, null, 'O prazo ainda não venceu.'))
+      .mockRejectedValueOnce(new ErroApi(403, 'sem_permissao'));
+    const usuario = renderizarComRotas(apiComDetalhes({ reprogramarPrazo }), '/painel?documento=DOC-3');
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Inspeção de andaimes' })).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-11-10');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Aguardando retorno da área');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    expect(await within(reprog).findByText('O prazo ainda não venceu.')).toBeInTheDocument();
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    expect(await within(reprog).findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
+  });
+
+  it('B6: depois de reprogramar, o cartão muda de posição na coluna sem recarregar', async () => {
+    const vencido = cartao('DOC-9', 'Checklist vencido', 'Em revisão da qualidade', -5);
+    const [doc1, doc2, doc3, ...resto] = CARTOES;
+    const api = apiComDetalhes({
+      painel: vi.fn().mockResolvedValue(resposta([doc1!, doc2!, vencido, doc3!, ...resto])),
+      documento: vi.fn(async (id: string) => detalheDe(id === 'DOC-9' ? vencido : CARTOES.find((c) => c.id === id)!)),
+      reprogramarPrazo: vi.fn(async (_id: string, dados: NovaReprogramacao) => ({
+        documento: documentoDe(vencido, { dataRevisao: dados.novoPrazo, versao: 4, reprogramado: true, qtdReprogramacoes: 1 }),
+        evento: {} as never,
+      })),
+    });
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-9');
+    await quadro();
+    expect(within(coluna(/^Em Revisão/)).getAllByRole('article')[0]).toBe(cartaoDe('Checklist vencido'));
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Checklist vencido' })).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-12-05');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'aguardando a área de engenharia');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(within(coluna(/^Em Revisão/)).getAllByRole('article')[1]).toBe(cartaoDe('Checklist vencido')));
+    expect(api.painel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TelaPainel: mudança de status (F5)', () => {
+  it('etapa registrada nos detalhes move o cartão de coluna e recarrega o painel em silêncio', async () => {
     const api = apiComDetalhes();
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-1');
     await quadro();
     const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Reprogramar' }));
-    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
-    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-11-30');
-    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Pedido formal da área.');
-    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
-    await waitFor(() => expect(within(cartaoDe('Procedimento de auditoria')).getByText('Prazo: 30/11/2026')).toBeInTheDocument());
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    // Sem responsáveis carregados (lista vazia): o campo aparece vazio e a validação pede a pessoa.
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    expect(await within(etapa).findByText('Responsável: Informe o responsável por esta etapa.')).toBeInTheDocument();
+    expect(api.mudarStatus).not.toHaveBeenCalled();
+  });
+
+  it('com responsável escolhido: o cartão troca de coluna e o quadro não pisca (recarga silenciosa)', async () => {
+    // A recarga silenciosa traz o estado do servidor (já com a etapa nova).
+    const depois = CARTOES.map((c) =>
+      c.id === 'DOC-1' ? { ...c, status: 'Em revisão da qualidade' as const, fase: 'revisao' as const, responsavel: 'Bruna Teste', versao: 4 } : c,
+    );
+    const api = apiComDetalhes({
+      responsaveis: vi.fn().mockResolvedValue([{ id: 'USR-1', nome: 'Bruna Teste', perfil: 'Qualidade', areaId: 'a2', area: 'Qualidade' }]),
+      painel: vi.fn().mockResolvedValueOnce(resposta()).mockResolvedValue(resposta(depois)),
+    });
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-1');
+    await quadro();
+    const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    expect(await within(etapa).findByRole('combobox', { name: /Responsável/ })).toHaveValue('USR-1');
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    await waitFor(() => expect(within(coluna(/^Em Revisão/)).getByRole('article', { name: 'Procedimento de auditoria' })).toBeInTheDocument());
+    await waitFor(() => expect(api.painel).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('region', { name: 'Quadro de tramitação' })).not.toHaveAttribute('aria-busy');
+  });
+
+  it('cancelar: fecha os detalhes, tira o cartão, soma em Cancelados e o "Desfazer" reativa pela mesma rota com a versão do cancelamento', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-4');
+    await quadro();
+    const dialogo = await screen.findByRole('dialog', { name: 'Controle de informação' });
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+    const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
+    await usuario.type(within(cancelar).getByLabelText(/Motivo/), 'Substituído por outro procedimento.');
+    await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
+    await waitFor(() => expect(endereco()).toBe('/painel'));
+    expect(screen.queryByRole('article', { name: 'Controle de informação' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelados (3)' })).toBeInTheDocument();
+    expect(screen.getByText('Documento cancelado.')).toBeInTheDocument();
+
+    await usuario.click(screen.getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() =>
+      expect(api.reativarDocumento).toHaveBeenCalledWith('DOC-4', { observacao: 'Cancelamento desfeito.', versao: 4 }),
+    );
+    expect(await screen.findByText('Cancelamento desfeito: o documento voltou para Devolvido para correção.')).toBeInTheDocument();
+    expect(within(coluna(/^Devolvido/)).getByRole('article', { name: 'Controle de informação' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelados (2)' })).toBeInTheDocument();
+  });
+
+  it('"Desfazer" com 409 conflito_versao: avisa que o documento foi alterado', async () => {
+    const api = apiComDetalhes({ reativarDocumento: vi.fn().mockRejectedValue(new ErroApi(409, 'conflito_versao', {}, null)) });
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-4');
+    await quadro();
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Controle de informação' })).getByRole('button', { name: 'Cancelar' }));
+    const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
+    await usuario.type(within(cancelar).getByLabelText(/Motivo/), 'Substituído por outro procedimento.');
+    await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
+    await usuario.click(await screen.findByRole('button', { name: 'Desfazer' }));
+    expect(await screen.findByText('Não foi possível desfazer: o documento foi alterado. Veja em Cancelados.')).toBeInTheDocument();
+  });
+
+  it('janela de cancelados: os cartões não têm botões; Reativar nos detalhes por cima confirma o status de volta e recarrega a janela', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api);
+    await quadro();
+    await usuario.click(screen.getByRole('button', { name: 'Cancelados (2)' }));
+    const janela = await screen.findByRole('dialog', { name: /Documentos cancelados/ });
+    const ata = await within(janela).findByRole('article', { name: 'Ata de reunião' });
+    expect(within(ata).getAllByRole('button')).toHaveLength(1);
+    await usuario.click(within(ata).getByRole('button', { name: 'Ata de reunião, abrir detalhes' }));
+    const detalhes = await screen.findByRole('dialog', { name: 'Ata de reunião' });
+    await usuario.click(within(detalhes).getByRole('button', { name: 'Reativar' }));
+    const confirmar = await screen.findByRole('dialog', { name: 'Reativar documento' });
+    // Sem eventos de cancelamento no histórico simulado: volta para Recebido (decisão 0004, reserva).
+    expect(confirmar).toHaveTextContent('Ele volta para Recebido.');
+    await usuario.click(within(confirmar).getByRole('button', { name: 'Reativar' }));
+    await waitFor(() => expect(api.reativarDocumento).toHaveBeenCalledWith('DOC-7', { observacao: null, versao: 3 }));
+    // A janela recarrega (GET /painel?cancelados=true de novo) e o painel também.
+    await waitFor(() => expect(vi.mocked(api.painel).mock.calls.filter(([c]) => c?.cancelados)).toHaveLength(2));
+    await waitFor(() => expect(vi.mocked(api.painel).mock.calls.filter(([c]) => !c?.cancelados).length).toBeGreaterThanOrEqual(2));
   });
 });

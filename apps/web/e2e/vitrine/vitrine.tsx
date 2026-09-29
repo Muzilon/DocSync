@@ -8,9 +8,16 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
 import {
   FASE_DO_STATUS,
+  diaEmSaoPaulo,
+  exigeResponsavel,
   filtrarCartoes,
   nomeDownloadPrincipal,
+  pode,
+  podeReprogramarAgora,
+  podeSerCancelado,
   somarDias,
+  statusDeReativacao,
+  transicaoPermitida,
   type Area,
   type ArquivoDocumento,
   type CartaoPainel,
@@ -18,6 +25,8 @@ import {
   type EventoHistorico,
   type Perfil,
   type Pessoa,
+  type PessoaResumo,
+  type ResultadoTransicao,
   type TipoDocumento,
 } from '@docsync/compartilhado';
 import '@fontsource/inter/400.css';
@@ -43,6 +52,8 @@ const parametros = new URLSearchParams(location.search);
 // ?perfil=Leitor|Solicitante muda o perfil simulado; ?envio=falha faz o 1º envio falhar (sem conexão).
 // Painel: ?painel=vazio|erro|carregando; ?reprog=conflito faz a 1ª reprogramação dar 409 conflito_versao.
 // Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?download=erro.
+// Status (F5): ?status=conflito faz a 1ª etapa dar 409 conflito_versao; ?responsaveis=erro faz a lista falhar
+// uma vez; ?desfazer=conflito faz o "Desfazer" dar 409.
 const perfil = (parametros.get('perfil') ?? 'Administrador') as Perfil;
 const eu: Pessoa = { id: 'p1', nome: 'Ana Exemplo', email: 'ana@exemplo.test', perfil, area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
 const pessoas: Pessoa[] = [
@@ -58,7 +69,7 @@ function documento(n: number, codigo: string | null, titulo: string, status: Doc
     id: `DOC-${n}`, codigo, titulo, status, tipoDocumentoId: 'TIPO-1', tipoDocumento: 'PR - Procedimento', revisao: n % 3,
     dataRecebimento: `2026-09-${String(10 + n).padStart(2, '0')}`, dataRevisao: null, reprogramado: false, qtdReprogramacoes: 0, remetente: 'Ana Exemplo', areaId: area.id, area: area.nome,
     disciplina: null, observacao: null, nomePasta: titulo, nomeArquivoPrincipal: 'arquivo.pdf', qtdAnexos: 0, idDocumentoOrigem: null,
-    versao: 1, criadoPor: 'p1', criadoEm: '2026-09-20T12:00:00Z', dataModificacao: '2026-09-20T12:00:00Z',
+    responsavelId: null, responsavel: null, versao: 1, criadoPor: 'p1', criadoEm: '2026-09-20T12:00:00Z', dataModificacao: '2026-09-20T12:00:00Z',
   };
 }
 const recentes: Documento[] = [
@@ -83,21 +94,42 @@ function cartao(
     id: `DOC-P${n}`, codigo, titulo, revisao: n % 3, status, fase: FASE_DO_STATUS[status], tipoDocumento: 'PR - Procedimento',
     areaId: area.id, area: area.nome, remetente: ['Ana Exemplo', 'Bruno Teste', 'Célia Simulação'][n % 3]!,
     dataRecebimento: somarDias(HOJE, -20 - n), dataRevisao: prazo === null ? null : somarDias(HOJE, prazo),
-    reprogramado: false, qtdReprogramacoes: 0, qtdDevolucoes: 0, dataAprovacao: null, versao: 1,
+    reprogramado: false, qtdReprogramacoes: 0, qtdDevolucoes: 0, dataAprovacao: null, dataInicioRevisao: null,
+    responsavelId: null, responsavel: null, statusAntesDoCancelamento: null, versao: 1,
     criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-01T12:00:00Z', ...extra,
   };
 }
 const [suprimentos, comercial, qualidade, engenharia] = areas as [Area, Area, Area, Area];
+// Responsáveis elegíveis (GET /responsaveis): ordem pt-BR, sem e-mail. Dados fictícios.
+const responsaveis: PessoaResumo[] = [
+  { id: 'p1', nome: eu.nome, perfil: perfil === 'Leitor' ? 'Qualidade' : perfil, areaId: eu.areaId, area: eu.area },
+  { id: 'p2', nome: 'Bruno Teste', perfil: 'Qualidade', areaId: 'a3', area: 'Engenharia' },
+  { id: 'p5', nome: 'Célia Simulação', perfil: 'Solicitante', areaId: 'a2', area: 'Qualidade' },
+  { id: 'p6', nome: 'Eduardo Ficção', perfil: 'Solicitante', areaId: 'a3', area: 'Engenharia' },
+  { id: 'p7', nome: 'Fernanda Amostra', perfil: 'Solicitante', areaId: 'a1', area: 'Comercial' },
+];
+const resp = (id: string) => {
+  const p = responsaveis.find((r) => r.id === id)!;
+  return { responsavelId: p.id, responsavel: p.nome };
+};
 let cartoes: CartaoPainel[] = modoPainel === 'vazio' ? [] : [
   cartao(1, 'PR-QUA-0010', 'Procedimento de auditoria interna', 'Recebido', qualidade, 20),
   cartao(2, null, 'Instrução de solda em campo', 'Recebido', engenharia, 3),
   cartao(3, null, 'Plano de emergência importado', 'Recebido', suprimentos, null),
-  cartao(4, 'IT-ENG-0042', 'Inspeção de andaimes', 'Em revisão da qualidade', engenharia, -2, { reprogramado: true, qtdReprogramacoes: 1 }),
-  cartao(5, 'PR-SUP-0003', 'Compras emergenciais', 'Em revisão junto à área', suprimentos, 0),
-  cartao(6, 'PR-QUA-0007', 'Controle de informação documentada', 'Devolvido para correção', qualidade, 10, { qtdDevolucoes: 2, reprogramado: true, qtdReprogramacoes: 2 }),
-  cartao(7, 'RL-COM-0001', 'Relatório de satisfação de clientes', 'Para aprovação qualidade', comercial, 1),
-  cartao(8, 'PR-QUA-0001', 'Manual do Sistema de Gestão Integrada', 'Aprovado', qualidade, -5, { dataAprovacao: somarDias(HOJE, -6) }),
-  cartao(9, 'AT-COM-0001', 'Ata da reunião de análise crítica', 'Cancelado', comercial, 4),
+  cartao(4, 'IT-ENG-0042', 'Inspeção de andaimes', 'Em revisão da qualidade', engenharia, -2, { reprogramado: true, qtdReprogramacoes: 1, dataInicioRevisao: somarDias(HOJE, -4), ...resp('p2') }),
+  cartao(5, 'PR-SUP-0003', 'Compras emergenciais', 'Em revisão junto à área', suprimentos, 0, { dataInicioRevisao: somarDias(HOJE, -12), ...resp('p1') }),
+  cartao(6, 'PR-QUA-0007', 'Controle de informação documentada', 'Devolvido para correção', qualidade, 10, {
+    qtdDevolucoes: 2, reprogramado: true, qtdReprogramacoes: 2, dataRecebimento: '2026-09-01', dataInicioRevisao: '2026-09-02', ...resp('p5'),
+  }),
+  cartao(7, 'RL-COM-0001', 'Relatório de satisfação de clientes', 'Para aprovação qualidade', comercial, 1, { dataInicioRevisao: somarDias(HOJE, -20), ...resp('p2') }),
+  cartao(8, 'PR-QUA-0001', 'Manual do Sistema de Gestão Integrada', 'Aprovado', qualidade, -5, { dataAprovacao: somarDias(HOJE, -6), dataInicioRevisao: somarDias(HOJE, -20) }),
+  cartao(11, 'PR-SUP-0009', 'Procedimento de inventário anual', 'Aprovado', suprimentos, -20, {
+    dataRecebimento: somarDias(HOJE, -60), dataInicioRevisao: somarDias(HOJE, -50), dataAprovacao: somarDias(HOJE, -2),
+  }),
+  cartao(12, 'IT-ENG-0050', 'Instrução de içamento de cargas', 'Em revisão da qualidade', engenharia, 25, { dataInicioRevisao: somarDias(HOJE, -3), ...resp('p6') }),
+  cartao(13, 'PR-QUA-0012', 'Procedimento de calibração de instrumentos', 'Em revisão do solicitante', qualidade, 14, { dataInicioRevisao: somarDias(HOJE, -10), ...resp('p5') }),
+  cartao(14, 'IT-ENG-0051', 'Instrução de trabalho em altura', 'Em revisão junto à área', engenharia, 18, { dataInicioRevisao: somarDias(HOJE, -8), ...resp('p6') }),
+  cartao(9, 'AT-COM-0001', 'Ata da reunião de análise crítica', 'Cancelado', comercial, 4, { statusAntesDoCancelamento: 'Em revisão da qualidade', ...resp('p2') }),
   cartao(10, null, 'Formulário antigo de entrega de EPI', 'Cancelado', suprimentos, null),
 ];
 function documentoDoCartao(c: CartaoPainel): Documento {
@@ -105,6 +137,7 @@ function documentoDoCartao(c: CartaoPainel): Documento {
     ...documento(0, c.codigo, c.titulo, c.status, areas.find((a) => a.id === c.areaId)!),
     id: c.id, revisao: c.revisao, dataRecebimento: c.dataRecebimento, dataRevisao: c.dataRevisao, reprogramado: c.reprogramado,
     qtdReprogramacoes: c.qtdReprogramacoes, remetente: c.remetente, versao: c.versao, tipoDocumento: c.tipoDocumento,
+    responsavelId: c.responsavelId, responsavel: c.responsavel,
   };
 }
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -120,7 +153,7 @@ function evento(
   sequenciaEvento += 1;
   return {
     id: `HIST-${sequenciaEvento}`, idDocumento, codigo: null, tipoAcao, status, statusAnterior, dataHora, destino: null, responsavel: null,
-    autorId: 'p1', autorNome, detalhes: [], observacao: null, ...extra,
+    responsavelId: null, autorId: 'p1', autorNome, detalhes: [], observacao: null, ...extra,
   };
 }
 function arquivo(n: number, papel: ArquivoDocumento['papel'], nomeOriginal: string, tamanho: number): ArquivoDocumento {
@@ -182,14 +215,50 @@ const arquivosPorDocumento = new Map<string, ArquivoDocumento[]>([
 const extrasDocumento: Record<string, Partial<Documento>> = {
   'DOC-P6': { disciplina: 'Corporativo', observacao: OBSERVACAO_LONGA, criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-16T12:45:00Z' },
 };
+/** Histórico coerente com o cartão (datas do ciclo iguais às do painel), para documentos sem eventos próprios. */
+function eventosPadrao(c: CartaoPainel): EventoHistorico[] {
+  const lista = [
+    evento(c.id, 'CRIACAO', 'Recebido', null, `${c.dataRecebimento}T12:00:00Z`, c.remetente, { detalhes: [{ campo: 'dataRevisao', antes: null, depois: c.dataRevisao }] }),
+  ];
+  const extra = { responsavel: c.responsavel, responsavelId: c.responsavelId };
+  if (c.dataInicioRevisao) {
+    lista.push(evento(c.id, 'STATUS', 'Em revisão da qualidade', 'Recebido', `${c.dataInicioRevisao}T13:00:00Z`, 'Bruno Teste', extra));
+    const atual = c.status === 'Aprovado' ? 'Para aprovação qualidade' : c.status;
+    if (atual !== 'Em revisão da qualidade' && atual !== 'Cancelado') {
+      lista.push(evento(c.id, 'STATUS', atual, 'Em revisão da qualidade', `${c.dataAprovacao ?? HOJE}T11:00:00Z`, 'Bruno Teste', extra));
+    }
+  }
+  if (c.dataAprovacao) lista.push(evento(c.id, 'STATUS', 'Aprovado', 'Para aprovação qualidade', `${c.dataAprovacao}T14:00:00Z`, 'Bruno Teste'));
+  return lista;
+}
+
 function detalheDe(c: CartaoPainel) {
   const documento = { ...documentoDoCartao(c), ...extrasDocumento[c.id] };
-  const eventos = eventosPorDocumento.get(c.id) ?? [
-    evento(c.id, 'CRIACAO', 'Recebido', null, c.criadoEm, c.remetente, { detalhes: [{ campo: 'dataRevisao', antes: null, depois: c.dataRevisao }] }),
-  ];
+  const eventos = eventosPorDocumento.get(c.id) ?? eventosPadrao(c);
   eventosPorDocumento.set(c.id, eventos);
   const arquivos = arquivosPorDocumento.get(c.id) ?? [arquivo(100 + Number(c.id.replace(/\D/g, '')), 'principal', `${c.codigo ?? 'Documento sem código'}.pdf`, 340_000)];
   return { documento, arquivos, eventos, hoje: HOJE };
+}
+
+// F5: mudança de status, cancelamento, reativação e responsáveis, com as MESMAS regras puras da API
+// (máquina de estados, `pode`, responsável obrigatório), para a vitrine recusar o que a API recusaria.
+let conflitoStatus = parametros.get('status') === 'conflito';
+let falharResponsaveis = parametros.get('responsaveis') === 'erro';
+let conflitoDesfazer = parametros.get('desfazer') === 'conflito';
+const AGORA = '2026-09-29T15:00:00Z';
+function documentoCompleto(c: CartaoPainel): Documento {
+  return { ...documentoDoCartao(c), ...extrasDocumento[c.id], dataModificacao: AGORA };
+}
+function cartaoVisivel(id: string): CartaoPainel {
+  const c = cartoes.find((x) => x.id === id);
+  if (!c || (perfil === 'Solicitante' && c.areaId !== eu.areaId)) throw new ErroApi(404, 'nao_encontrado');
+  return c;
+}
+function gravar(atual: CartaoPainel, novo: CartaoPainel, registrado: EventoHistorico): ResultadoTransicao {
+  const anteriores = detalheDe(atual).eventos;
+  cartoes = cartoes.map((c) => (c.id === novo.id ? novo : c));
+  eventosPorDocumento.set(novo.id, [...anteriores, registrado]);
+  return { documento: documentoCompleto(novo), evento: registrado };
 }
 
 function acharArquivo(id: string, arquivoId: string): { documento: Documento; arquivo: ArquivoDocumento } {
@@ -243,10 +312,86 @@ const api: Api = {
       hoje: HOJE,
     };
   },
+  responsaveis: async () => {
+    await esperar(150);
+    if (falharResponsaveis) {
+      falharResponsaveis = false;
+      throw new ErroApi(0, 'sem_conexao');
+    }
+    if (!pode(eu, 'mudarStatus')) throw new ErroApi(403, 'sem_permissao');
+    return responsaveis;
+  },
+  mudarStatus: async (id, dados) => {
+    await esperar(300);
+    const atual = cartaoVisivel(id);
+    if (!pode(eu, 'mudarStatus', { areaId: atual.areaId })) throw new ErroApi(403, 'sem_permissao');
+    if (conflitoStatus) {
+      // Outra pessoa registrou uma etapa antes: o documento foi para "Em revisão junto à área".
+      conflitoStatus = false;
+      const alterado: CartaoPainel = { ...atual, status: 'Em revisão junto à área', fase: 'revisao', versao: atual.versao + 1, ...resp('p2') };
+      cartoes = cartoes.map((c) => (c.id === id ? alterado : c));
+      throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(alterado));
+    }
+    if (dados.versao !== atual.versao) throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(atual));
+    if (!transicaoPermitida(atual.status, dados.para)) {
+      throw new ErroApi(409, 'acao_nao_permitida', {}, null, `Não é possível ir de ${atual.status} para ${dados.para}.`);
+    }
+    if (!pode(eu, 'mudarStatus', { areaId: atual.areaId, transicao: { de: atual.status, para: dados.para } })) {
+      throw new ErroApi(403, 'sem_permissao', {}, null, 'Seu perfil não pode aplicar esta etapa.');
+    }
+    const pessoa = responsaveis.find((r) => r.id === dados.responsavelId) ?? null;
+    if (exigeResponsavel(dados.para) && !pessoa) {
+      throw new ErroApi(400, 'dados_invalidos', { responsavelId: 'Informe o responsável por esta etapa.' });
+    }
+    const fase = FASE_DO_STATUS[dados.para];
+    const novo: CartaoPainel = {
+      ...atual, status: dados.para, fase, versao: atual.versao + 1,
+      responsavelId: dados.para === 'Aprovado' ? null : (pessoa?.id ?? null),
+      responsavel: dados.para === 'Aprovado' ? null : (pessoa?.nome ?? null),
+      dataAprovacao: dados.para === 'Aprovado' ? diaEmSaoPaulo(AGORA) : atual.dataAprovacao,
+      dataInicioRevisao: atual.dataInicioRevisao ?? (fase === 'revisao' ? diaEmSaoPaulo(AGORA) : null),
+      qtdDevolucoes: atual.qtdDevolucoes + (fase === 'devolvido' && atual.fase !== 'devolvido' ? 1 : 0),
+    };
+    return gravar(atual, novo, evento(id, 'STATUS', dados.para, atual.status, AGORA, eu.nome, {
+      codigo: atual.codigo, responsavel: novo.responsavel, responsavelId: novo.responsavelId, observacao: dados.observacao,
+    }));
+  },
+  cancelarDocumento: async (id, dados) => {
+    await esperar(300);
+    const atual = cartaoVisivel(id);
+    if (!pode(eu, 'cancelarDocumento', { areaId: atual.areaId })) throw new ErroApi(403, 'sem_permissao');
+    if (!podeSerCancelado(atual.status)) throw new ErroApi(409, 'acao_nao_permitida', {}, null, 'Documento aprovado é final e não pode ser cancelado.');
+    if (dados.versao !== atual.versao) throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(atual));
+    const novo: CartaoPainel = { ...atual, status: 'Cancelado', fase: 'cancelado', versao: atual.versao + 1, statusAntesDoCancelamento: atual.status };
+    return gravar(atual, novo, evento(id, 'CANCELAMENTO', 'Cancelado', atual.status, AGORA, eu.nome, {
+      codigo: atual.codigo, responsavel: atual.responsavel, responsavelId: atual.responsavelId, observacao: dados.motivo,
+    }));
+  },
+  reativarDocumento: async (id, dados) => {
+    await esperar(300);
+    const atual = cartaoVisivel(id);
+    if (!pode(eu, 'reativarDocumento', { areaId: atual.areaId })) throw new ErroApi(403, 'sem_permissao');
+    if (atual.status !== 'Cancelado') throw new ErroApi(409, 'acao_nao_permitida', {}, null, 'Só documentos cancelados podem ser reativados.');
+    if (conflitoDesfazer) {
+      conflitoDesfazer = false;
+      throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto({ ...atual, versao: atual.versao + 1 }));
+    }
+    if (dados.versao !== atual.versao) throw new ErroApi(409, 'conflito_versao', {}, documentoCompleto(atual));
+    // Decisão 0004: volta ao status anterior ao último cancelamento, lido do histórico.
+    const volta = statusDeReativacao(detalheDe(atual).eventos);
+    const novo: CartaoPainel = { ...atual, status: volta, fase: FASE_DO_STATUS[volta], versao: atual.versao + 1, statusAntesDoCancelamento: null };
+    return gravar(atual, novo, evento(id, 'STATUS', volta, 'Cancelado', AGORA, eu.nome, {
+      codigo: atual.codigo, responsavel: atual.responsavel, responsavelId: atual.responsavelId, observacao: dados.observacao,
+    }));
+  },
   reprogramarPrazo: async (id, dados) => {
     await esperar(300);
     const atual = cartoes.find((c) => c.id === id);
     if (!atual) throw new ErroApi(404, 'nao_encontrado');
+    // Decisão 0015: só com prazo vencido (a API responde 409 acao_nao_permitida).
+    if (!podeReprogramarAgora(atual, HOJE)) {
+      throw new ErroApi(409, 'acao_nao_permitida', {}, null, 'O prazo ainda não venceu: só é possível reprogramar depois do vencimento.');
+    }
     if (conflitoReprogramacao) {
       // Outra pessoa reprogramou antes: prazo +7 dias e versão nova.
       conflitoReprogramacao = false;

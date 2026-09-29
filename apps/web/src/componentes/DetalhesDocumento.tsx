@@ -1,19 +1,31 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { CalendarPlus } from 'lucide-react';
+import { ArrowRightLeft, Ban, CalendarPlus, CircleCheckBig, RotateCcw } from 'lucide-react';
 import {
+  avaliarMetas,
   contarDevolucoes,
+  dataAprovacao,
+  dataInicioRevisao,
   etiquetaPrazo,
+  statusDeReativacao,
+  type AcaoStatus,
   type DetalheDocumento,
   type Documento,
+  type EstadoMeta,
+  type ResultadoTransicao,
+  type SituacaoMeta,
+  type StatusDocumento,
 } from '@docsync/compartilhado';
 import { useApi } from '../api/cliente.ts';
 import { ErroApi, mensagemDeErro } from '../api/erros.ts';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import { formatarData, formatarDataHora, plural } from '../formatacao.ts';
-import { podeBaixarArquivo, podeReprogramar } from '../permissoes.ts';
+import { acoesDeStatusPara, podeBaixarArquivo, podeCancelar, podeReativar, podeReprogramar } from '../permissoes.ts';
 import { BadgeStatus } from './BadgeStatus.tsx';
 import { Botao } from './Botao.tsx';
 import { Dialogo } from './Dialogo.tsx';
+import { DialogoAtualizarEtapa } from './DialogoAtualizarEtapa.tsx';
+import { DialogoCancelar } from './DialogoCancelar.tsx';
+import { DialogoConfirmar } from './DialogoConfirmar.tsx';
 import { DialogoReprogramar } from './DialogoReprogramar.tsx';
 import { ErroCarregamento } from './Estados.tsx';
 import { EtiquetaPrazo, EtiquetaReprogramado } from './EtiquetaPrazo.tsx';
@@ -31,21 +43,53 @@ type Estado =
   | { tipo: 'erro'; mensagem: string; semRepeticao: boolean }
   | { tipo: 'pronto'; detalhe: DetalheDocumento };
 
+/** Quantas ações de status aparecem como botão no rodapé; as demais ficam em "Atualizar etapa…" (contrato F5, 6.2). */
+export const MAXIMO_ACOES_RAPIDAS = 3;
+
+/** Ações rápidas do rodapé: a principal primeiro (estilo primário), depois as demais na ordem de `acoesDeStatus`. */
+export function acoesRapidas(acoes: readonly AcaoStatus[]): AcaoStatus[] {
+  const principal = acoes.filter((a) => a.principal);
+  return [...principal, ...acoes.filter((a) => !a.principal)].slice(0, MAXIMO_ACOES_RAPIDAS);
+}
+
+/** Texto do estado da meta (a cor nunca vai sozinha). */
+const ROTULO_ESTADO_META: Record<EstadoMeta, string> = {
+  cumprida: 'Cumprida',
+  estourada: 'Estourada',
+  no_prazo: 'No prazo',
+  nao_se_aplica: 'Não se aplica',
+};
+
+/** Diálogo empilhado sobre os detalhes (um por vez); `chave` muda a cada abertura para começar limpo. */
+type Empilhado =
+  | { tipo: 'reprogramar'; chave: number; aberto: boolean }
+  | { tipo: 'etapa'; chave: number; aberto: boolean; para: StatusDocumento | null }
+  | { tipo: 'aprovar'; chave: number; aberto: boolean; para: StatusDocumento }
+  | { tipo: 'cancelar'; chave: number; aberto: boolean }
+  | { tipo: 'reativar'; chave: number; aberto: boolean; volta: StatusDocumento };
+
 interface Props {
   /** Documento aberto; null = fechado. */
   documentoId: string | null;
   aoFechar: () => void;
   /** Documento mudou aqui dentro (reprogramação ou 409 com o estado atual): o Painel atualiza o cartão. */
   aoAtualizarDocumento?: (documento: Documento) => void;
+  /** Etapa registrada (transição): o Painel move o cartão de coluna. */
+  aoMudarStatus?: (resultado: ResultadoTransicao) => void;
+  /** Documento cancelado: o Painel fecha os detalhes, tira o cartão do quadro e oferece "Desfazer". */
+  aoCancelar?: (resultado: ResultadoTransicao) => void;
+  /** Documento reativado: o Painel devolve o cartão ao quadro. */
+  aoReativar?: (resultado: ResultadoTransicao) => void;
 }
 
 /**
- * Modal de detalhes do documento (contrato F4, 5.2; respostas do Eric na seção 9): Dados, Arquivos
- * (Baixar) e Linha do tempo única. Faz o próprio GET /documentos/:id, então
- * abre também cancelados e documentos escondidos pela busca. Única ação além de Fechar e dos
- * arquivos: Reprogramar (mesma regra do cartão). Nada editável aqui (F5/F6).
+ * Modal de detalhes do documento (contrato F4, 5.2; contrato F5, 6.2): Dados, Metas do ciclo,
+ * Arquivos (Baixar) e Linha do tempo única. Faz o próprio GET /documentos/:id, então abre também
+ * cancelados e documentos escondidos pela busca. É o ÚNICO lugar das ações (decisão 0015): etapas
+ * de status (`acoesDeStatus`), Cancelar, Reativar e Reprogramar (só com prazo vencido); cada botão
+ * só aparece quando a regra permite (a API decide de verdade). Nada editável aqui (F6).
  */
-export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento }: Props) {
+export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento, aoMudarStatus, aoCancelar, aoReativar }: Props) {
   const api = useApi();
   const { eu } = useSessao();
   const aberto = documentoId !== null;
@@ -53,9 +97,10 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
   const [tentativa, setTentativa] = useState(0);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
   const [aviso, setAviso] = useState('');
-  const [reprogramacao, setReprogramacao] = useState<{ chave: number; aberto: boolean } | null>(null);
+  const [empilhado, setEmpilhado] = useState<Empilhado | null>(null);
   const chave = useRef(0);
   const idDados = useId();
+  const idMetas = useId();
   const idArquivos = useId();
   const idLinha = useId();
 
@@ -68,7 +113,7 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
       setEstado({ tipo: 'carregando' });
       setErroArquivo(null);
       setAviso('');
-      setReprogramacao(null);
+      setEmpilhado(null);
       return;
     }
     let ativo = true;
@@ -94,23 +139,66 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
     };
   }, [api, documentoId, tentativa, recarga]);
 
+  // Depois de uma ação, o botão que abriu o diálogo pode sumir (ex.: Reprogramar com o prazo novo,
+  // "Iniciar revisão" depois da etapa). Foco perdido volta ao ✕, o primeiro controle do modal.
+  useEffect(() => {
+    if (estado.tipo !== 'pronto') return;
+    const quadro = requestAnimationFrame(() => {
+      const ativo = document.activeElement;
+      if (ativo && ativo !== document.body && ativo.isConnected) return;
+      const abertos = Array.from(document.querySelectorAll<HTMLButtonElement>('dialog[open] button[aria-label="Fechar detalhes"]'));
+      abertos[abertos.length - 1]?.focus();
+    });
+    return () => cancelAnimationFrame(quadro);
+  }, [estado]);
+
   const detalhe = estado.tipo === 'pronto' ? estado.detalhe : null;
   const documento = detalhe?.documento ?? null;
-  const mostraReprogramar = documento !== null && podeReprogramar(eu, documento);
+  const mostraReprogramar = detalhe !== null && podeReprogramar(eu, detalhe.documento, detalhe.hoje);
+  const acoes = documento ? acoesDeStatusPara(eu, documento) : [];
+  const rapidas = acoesRapidas(acoes);
+  const mostraCancelar = documento !== null && podeCancelar(eu, documento);
+  const mostraReativar = documento !== null && podeReativar(eu, documento);
 
   function atualizado(novo: Documento) {
     aoAtualizarDocumento?.(novo);
     setRecarga((n) => n + 1);
   }
 
-  function abrirReprogramacao() {
+  function abrir(novo: Empilhado['tipo'], extra: { para?: StatusDocumento | null; volta?: StatusDocumento } = {}) {
     chave.current += 1;
     setAviso('');
-    setReprogramacao({ chave: chave.current, aberto: true });
+    const base = { chave: chave.current, aberto: true };
+    if (novo === 'etapa') setEmpilhado({ ...base, tipo: 'etapa', para: extra.para ?? null });
+    else if (novo === 'aprovar') setEmpilhado({ ...base, tipo: 'aprovar', para: extra.para ?? 'Aprovado' });
+    else if (novo === 'reativar') setEmpilhado({ ...base, tipo: 'reativar', volta: extra.volta ?? 'Recebido' });
+    else setEmpilhado({ ...base, tipo: novo });
   }
 
-  function fecharReprogramacao() {
-    setReprogramacao((atual) => (atual ? { ...atual, aberto: false } : atual));
+  function fecharEmpilhado() {
+    setEmpilhado((atual) => (atual ? { ...atual, aberto: false } : atual));
+  }
+
+  function acionar(acao: AcaoStatus) {
+    if (acao.exigeConfirmacao) abrir('aprovar', { para: acao.para });
+    else abrir('etapa', { para: acao.para });
+  }
+
+  function etapaRegistrada(resultado: ResultadoTransicao) {
+    fecharEmpilhado();
+    setAviso(`Etapa registrada: ${resultado.documento.status}.`);
+    aoAtualizarDocumento?.(resultado.documento);
+    aoMudarStatus?.(resultado);
+    setRecarga((n) => n + 1);
+  }
+
+  /** 409 conflito_versao nas confirmações: atualiza tudo e diz em que status o documento está agora. */
+  function textoDoErro(erro: unknown): string {
+    if (erro instanceof ErroApi && erro.codigo === 'conflito_versao' && erro.documento) {
+      atualizado(erro.documento);
+      return `Alguém alterou este documento: agora está em ${erro.documento.status}. Volte e confira antes de repetir.`;
+    }
+    return mensagemDeErro(erro);
   }
 
   let titulo = 'Detalhes do documento';
@@ -128,14 +216,45 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
         classeConteudo={detalhe ? estilos.conteudo : undefined}
         aoFechar={aoFechar}
         acoes={
-          <>
+          <div className={estilos.rodape}>
+            {rapidas.map((a) => (
+              <Botao
+                key={a.para}
+                variante={a.principal ? 'primario' : 'secundario'}
+                icone={a.exigeConfirmacao ? <CircleCheckBig size={16} aria-hidden="true" /> : undefined}
+                onClick={() => acionar(a)}
+              >
+                {a.rotulo}
+              </Botao>
+            ))}
+            {acoes.length > 0 && (
+              <Botao icone={<ArrowRightLeft size={16} aria-hidden="true" />} onClick={() => abrir('etapa')}>
+                Atualizar etapa…
+              </Botao>
+            )}
+            {mostraCancelar && (
+              <Botao variante="perigo" icone={<Ban size={16} aria-hidden="true" />} onClick={() => abrir('cancelar')}>
+                Cancelar
+              </Botao>
+            )}
+            {mostraReativar && detalhe && (
+              <Botao
+                variante="primario"
+                icone={<RotateCcw size={16} aria-hidden="true" />}
+                onClick={() => abrir('reativar', { volta: statusDeReativacao(detalhe.eventos) })}
+              >
+                Reativar
+              </Botao>
+            )}
             {mostraReprogramar && (
-              <Botao icone={<CalendarPlus size={16} aria-hidden="true" />} onClick={abrirReprogramacao}>
+              <Botao icone={<CalendarPlus size={16} aria-hidden="true" />} onClick={() => abrir('reprogramar')}>
                 Reprogramar
               </Botao>
             )}
-            <Botao onClick={aoFechar}>Fechar</Botao>
-          </>
+            <Botao onClick={aoFechar}>
+              Fechar
+            </Botao>
+          </div>
         }
       >
         {estado.tipo === 'carregando' ? (
@@ -156,6 +275,12 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
                   Dados
                 </h3>
                 <Dados documento={estado.detalhe.documento} />
+              </section>
+              <section className={estilos.secao} aria-labelledby={idMetas}>
+                <h3 id={idMetas} className={estilos.tituloSecao}>
+                  Metas do ciclo
+                </h3>
+                <MetasDoCiclo detalhe={estado.detalhe} />
               </section>
               <section className={estilos.secao} aria-labelledby={idArquivos}>
                 <h3 id={idArquivos} className={estilos.tituloSecao}>
@@ -190,20 +315,107 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
       </Dialogo>
 
 
-      {reprogramacao && detalhe && (
+      {empilhado?.tipo === 'reprogramar' && detalhe && (
         <DialogoReprogramar
-          key={reprogramacao.chave}
+          key={empilhado.chave}
           cartao={detalhe.documento}
-          aberto={reprogramacao.aberto}
+          aberto={empilhado.aberto}
           hoje={detalhe.hoje}
-          aoFechar={fecharReprogramacao}
+          aoFechar={fecharEmpilhado}
           aoReprogramar={(novo) => {
-            fecharReprogramacao();
+            fecharEmpilhado();
             setAviso(`Prazo reprogramado para ${formatarData(novo.dataRevisao)}.`);
             atualizado(novo);
           }}
           aoConflito={atualizado}
         />
+      )}
+
+      {empilhado?.tipo === 'etapa' && detalhe && (
+        <DialogoAtualizarEtapa
+          key={empilhado.chave}
+          documento={detalhe.documento}
+          eu={eu}
+          aberto={empilhado.aberto}
+          paraInicial={empilhado.para}
+          aoFechar={fecharEmpilhado}
+          aoRegistrar={etapaRegistrada}
+          aoConflito={atualizado}
+        />
+      )}
+
+      {empilhado?.tipo === 'aprovar' && detalhe && (
+        <DialogoConfirmar
+          key={empilhado.chave}
+          aberto={empilhado.aberto}
+          titulo="Aprovar documento"
+          rotuloConfirmar="Aprovar"
+          rotuloEnviando="Aprovando…"
+          icone={<CircleCheckBig size={16} aria-hidden="true" />}
+          aoFechar={fecharEmpilhado}
+          textoDoErro={textoDoErro}
+          aoConfirmar={async () => {
+            const { documento: atual } = detalhe;
+            etapaRegistrada(
+              await api.mudarStatus(atual.id, { para: empilhado.para, responsavelId: null, observacao: null, versao: atual.versao }),
+            );
+          }}
+        >
+          <p>
+            Aprovar <strong>{detalhe.documento.titulo}</strong>?
+          </p>
+          <p>A aprovação é final e encerra a tramitação.</p>
+        </DialogoConfirmar>
+      )}
+
+      {empilhado?.tipo === 'cancelar' && detalhe && (
+        <DialogoCancelar
+          key={empilhado.chave}
+          documento={detalhe.documento}
+          aberto={empilhado.aberto}
+          aoFechar={fecharEmpilhado}
+          aoConflito={atualizado}
+          aoCancelar={(resultado) => {
+            fecharEmpilhado();
+            aoAtualizarDocumento?.(resultado.documento);
+            // O Painel fecha os detalhes (o documento sai do quadro) e mostra o toast com "Desfazer".
+            if (aoCancelar) aoCancelar(resultado);
+            else {
+              setAviso('Documento cancelado.');
+              setRecarga((n) => n + 1);
+            }
+          }}
+        />
+      )}
+
+      {empilhado?.tipo === 'reativar' && detalhe && (
+        <DialogoConfirmar
+          key={empilhado.chave}
+          aberto={empilhado.aberto}
+          titulo="Reativar documento"
+          rotuloConfirmar="Reativar"
+          rotuloEnviando="Reativando…"
+          icone={<RotateCcw size={16} aria-hidden="true" />}
+          aoFechar={fecharEmpilhado}
+          textoDoErro={textoDoErro}
+          aoConfirmar={async () => {
+            const { documento: atual } = detalhe;
+            // Mesma rota do "Desfazer" do toast (P-17): um só caminho, um só resultado.
+            const resultado = await api.reativarDocumento(atual.id, { observacao: null, versao: atual.versao });
+            fecharEmpilhado();
+            setAviso(`Documento reativado: ${resultado.documento.status}.`);
+            aoAtualizarDocumento?.(resultado.documento);
+            aoReativar?.(resultado);
+            setRecarga((n) => n + 1);
+          }}
+        >
+          <p>
+            Reativar <strong>{detalhe.documento.titulo}</strong>?
+          </p>
+          <p>
+            Ele volta para <strong>{empilhado.volta}</strong>.
+          </p>
+        </DialogoConfirmar>
       )}
     </>
   );
@@ -256,6 +468,7 @@ function Dados({ documento }: { documento: Documento }) {
       <Par rotulo="Remetente / Solicitante">{documento.remetente}</Par>
       <Par rotulo="Data de recebimento">{formatarData(documento.dataRecebimento)}</Par>
       <Par rotulo="Prazo (data de revisão)">{formatarData(documento.dataRevisao)}</Par>
+      <Par rotulo="Responsável atual">{documento.responsavel?.trim() || '—'}</Par>
       <Par rotulo="Cadastrado em">{formatarDataHora(documento.criadoEm)}</Par>
       <Par rotulo="Última modificação">{formatarDataHora(documento.dataModificacao)}</Par>
       {/* "Revisa o documento" (idDocumentoOrigem) fica escondido até a F8 (revisões), por pedido do Eric
@@ -264,6 +477,40 @@ function Dados({ documento }: { documento: Documento }) {
         <span className={estilos.textoLivre}>{documento.observacao?.trim() || '—'}</span>
       </Par>
     </dl>
+  );
+}
+
+/**
+ * Metas do ciclo (decisão 0012; contrato F5, 5.4 e 6.6): início da revisão (14 dias) e conclusão
+ * (40 dias), contadas do recebimento. Datas dos marcos saem dos eventos pelas mesmas funções puras
+ * da API; o texto vem pronto de `avaliarMetas`. Estado escrito por extenso: a cor nunca vai sozinha.
+ */
+function MetasDoCiclo({ detalhe }: { detalhe: DetalheDocumento }) {
+  const { documento, eventos, hoje } = detalhe;
+  const metas = avaliarMetas(
+    { ...documento, dataInicioRevisao: dataInicioRevisao(eventos), dataAprovacao: dataAprovacao(eventos) },
+    hoje,
+  );
+  return (
+    <dl className={estilos.metas}>
+      <LinhaMeta rotulo="Início da revisão" meta={metas.inicioRevisao} />
+      <LinhaMeta rotulo="Conclusão" meta={metas.conclusao} />
+    </dl>
+  );
+}
+
+function LinhaMeta({ rotulo, meta }: { rotulo: string; meta: SituacaoMeta }) {
+  return (
+    <div className={estilos.meta}>
+      <dt className={estilos.rotulo}>
+        {rotulo}
+        {meta.estado === 'nao_se_aplica' && <span className={estilos.limiteMeta}> (meta: {plural(meta.limite, 'dia', 'dias')})</span>}
+      </dt>
+      <dd className={estilos.valorMeta} data-tom={meta.tom}>
+        <span className={`${estilos.estadoMeta} ${estilos[meta.tom] ?? ''}`}>{ROTULO_ESTADO_META[meta.estado]}</span>
+        {meta.estado !== 'nao_se_aplica' && <span>{meta.texto}</span>}
+      </dd>
+    </div>
   );
 }
 

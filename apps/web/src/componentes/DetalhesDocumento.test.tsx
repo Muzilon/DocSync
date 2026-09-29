@@ -1,12 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ArquivoDocumento, DetalheDocumento, Documento, EventoHistorico, Pessoa } from '@docsync/compartilhado';
+import type {
+  ArquivoDocumento,
+  DetalheDocumento,
+  Documento,
+  EventoHistorico,
+  Pessoa,
+  PessoaResumo,
+  ResultadoTransicao,
+  StatusDocumento,
+} from '@docsync/compartilhado';
 import { ContextoApi, nomeDoCabecalho, type Api } from '../api/cliente.ts';
 import { ErroApi } from '../api/erros.ts';
 import { ContextoSessao } from '../autenticacao/Sessao.tsx';
 import { formatarDataHora } from '../formatacao.ts';
-import { DetalhesDocumento, ehIdDocumento } from './DetalhesDocumento.tsx';
+import { DetalhesDocumento, acoesRapidas, ehIdDocumento } from './DetalhesDocumento.tsx';
+import { textoOpcaoEtapa } from './DialogoAtualizarEtapa.tsx';
 
 
 // Dados fictícios (CLAUDE.md, seção 4).
@@ -14,13 +24,15 @@ const HOJE = '2026-09-29';
 const QUALIDADE: Pessoa = { id: 'USR-1', nome: 'Bruna Teste', email: 'bruna@exemplo.test', perfil: 'Qualidade', area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
 const LEITOR: Pessoa = { ...QUALIDADE, id: 'USR-3', perfil: 'Leitor' };
 const SOLICITANTE_OUTRA_AREA: Pessoa = { ...QUALIDADE, id: 'USR-2', perfil: 'Solicitante', area: 'Engenharia', areaId: 'a1' };
+const SOLICITANTE_DA_AREA: Pessoa = { ...QUALIDADE, id: 'USR-4', perfil: 'Solicitante' };
+const ADMIN: Pessoa = { ...QUALIDADE, id: 'USR-0', perfil: 'Administrador' };
 
 const DOCUMENTO: Documento = {
   id: 'DOC-1', codigo: 'PR-QUA-0007', titulo: 'Controle de informação documentada', status: 'Devolvido para correção',
   tipoDocumentoId: 'TIPO-1', tipoDocumento: 'PR - Procedimento', revisao: 2, dataRecebimento: '2026-09-01', dataRevisao: '2026-10-09',
   reprogramado: true, qtdReprogramacoes: 1, remetente: 'Ana Exemplo', areaId: 'a2', area: 'Qualidade', disciplina: null,
   observacao: 'Linha um.\nLinha dois <b>sem HTML</b>.', nomePasta: 'x', nomeArquivoPrincipal: 'x.pdf', qtdAnexos: 2,
-  idDocumentoOrigem: null, versao: 4, criadoPor: 'USR-9', criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-10T15:00:00Z',
+  idDocumentoOrigem: null, responsavelId: 'USR-5', responsavel: 'Célia Teste', versao: 4, criadoPor: 'USR-9', criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-10T15:00:00Z',
 };
 
 const ARQUIVOS: ArquivoDocumento[] = [
@@ -33,7 +45,7 @@ function evento(n: number, extra: Partial<EventoHistorico> = {}): EventoHistoric
   return {
     id: `HIST-${n}`, idDocumento: 'DOC-1', codigo: 'PR-QUA-0007', tipoAcao: 'STATUS', status: 'Em revisão da qualidade',
     statusAnterior: 'Recebido', dataHora: `2026-09-${String(n).padStart(2, '0')}T12:00:00Z`, destino: null, responsavel: null,
-    autorId: 'USR-9', autorNome: `Pessoa ${n}`, detalhes: [], observacao: null, ...extra,
+    responsavelId: null, autorId: 'USR-9', autorNome: `Pessoa ${n}`, detalhes: [], observacao: null, ...extra,
   };
 }
 
@@ -64,20 +76,59 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
       documento: { ...DOCUMENTO, dataRevisao: dados.novoPrazo, versao: 5, qtdReprogramacoes: 2 },
       evento: evento(9),
     })),
+    responsaveis: vi.fn().mockResolvedValue(RESPONSAVEIS),
+    mudarStatus: vi.fn(async (_id, dados) => resultado({ status: dados.para, responsavelId: dados.responsavelId, versao: 5 })),
+    cancelarDocumento: vi.fn(async () => resultado({ status: 'Cancelado', versao: 5 }, 'CANCELAMENTO')),
+    reativarDocumento: vi.fn(async () => resultado({ status: 'Devolvido para correção', versao: 6 })),
     ...sobrescrever,
   };
 }
 
-function renderizar(api: Api, { eu = QUALIDADE, id = 'DOC-1', aoFechar = vi.fn(), aoAtualizarDocumento = vi.fn() } = {}) {
+// Responsáveis elegíveis (GET /responsaveis), em ordem pt-BR.
+const RESPONSAVEIS: PessoaResumo[] = [
+  { id: 'USR-7', nome: 'Alice Área', perfil: 'Solicitante', areaId: 'a2', area: 'Qualidade' },
+  { id: 'USR-1', nome: 'Bruna Teste', perfil: 'Qualidade', areaId: 'a2', area: 'Qualidade' },
+  { id: 'USR-8', nome: 'Diego Engenharia', perfil: 'Solicitante', areaId: 'a1', area: 'Engenharia' },
+  { id: 'USR-9', nome: 'Zeca Qualidade', perfil: 'Qualidade', areaId: 'a3', area: 'Suprimentos' },
+];
+
+function resultado(mudancas: Partial<Documento>, tipoAcao: EventoHistorico['tipoAcao'] = 'STATUS'): ResultadoTransicao {
+  const documento = { ...DOCUMENTO, ...mudancas };
+  return { documento, evento: evento(20, { tipoAcao, status: documento.status, statusAnterior: DOCUMENTO.status }) };
+}
+
+function comStatus(status: StatusDocumento, extra: Partial<Documento> = {}, eventos = EVENTOS) {
+  return vi.fn().mockResolvedValue(detalhe({ documento: { ...DOCUMENTO, status, ...extra }, eventos }));
+}
+
+function renderizar(
+  api: Api,
+  { eu = QUALIDADE, id = 'DOC-1', aoFechar = vi.fn(), aoAtualizarDocumento = vi.fn(), aoMudarStatus = vi.fn(), aoCancelar = vi.fn(), aoReativar = vi.fn() } = {},
+) {
   const usuario = userEvent.setup();
   render(
     <ContextoApi.Provider value={api}>
       <ContextoSessao.Provider value={{ eu, sair: () => undefined }}>
-        <DetalhesDocumento documentoId={id} aoFechar={aoFechar} aoAtualizarDocumento={aoAtualizarDocumento} />
+        <DetalhesDocumento
+          documentoId={id}
+          aoFechar={aoFechar}
+          aoAtualizarDocumento={aoAtualizarDocumento}
+          aoMudarStatus={aoMudarStatus}
+          aoCancelar={aoCancelar}
+          aoReativar={aoReativar}
+        />
       </ContextoSessao.Provider>
     </ContextoApi.Provider>,
   );
-  return { usuario, aoFechar, aoAtualizarDocumento };
+  return { usuario, aoFechar, aoAtualizarDocumento, aoMudarStatus, aoCancelar, aoReativar };
+}
+
+/** Botões do rodapé, na ordem da tela. */
+function rodape(dialogo: HTMLElement): string[] {
+  const botoes = within(dialogo).getAllByRole('button');
+  const fechar = botoes.findIndex((b) => b.textContent === 'Fechar');
+  const primeiro = botoes.findIndex((b, i) => i <= fechar && b.parentElement === botoes[fechar]!.parentElement);
+  return botoes.slice(primeiro, fechar + 1).map((b) => b.textContent ?? '');
 }
 
 const modal = () => screen.findByRole('dialog', { name: 'Controle de informação documentada' });
@@ -139,12 +190,13 @@ describe('DetalhesDocumento', () => {
     expect(valor('Disciplina')).toHaveTextContent('—');
     expect(valor('Data de recebimento')).toHaveTextContent('01/09/2026');
     expect(valor('Prazo (data de revisão)')).toHaveTextContent('09/10/2026');
+    expect(valor('Responsável atual')).toHaveTextContent('Célia Teste');
     expect(valor('Cadastrado em')).toHaveTextContent('01/09/2026, 09:00');
     expect(valor('Observações complementares')).toHaveTextContent('Linha dois <b>sem HTML</b>.');
     expect(dados.querySelector('b')).toBeNull();
     expect(within(dados).queryByText('Revisão de')).not.toBeInTheDocument();
-    // Nada decorativo: sem Editar, Histórico completo, ações de status, Anexar.
-    expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar|Atualizar Etapa|Cancelar/ })).not.toBeInTheDocument();
+    // Nada decorativo: sem Editar, Histórico completo, Anexar (F6, F7).
+    expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar/ })).not.toBeInTheDocument();
   });
 
   it('Arquivos: principal primeiro, tamanho e Baixar com o nome devolvido pelo servidor (sem Visualizar)', async () => {
@@ -298,7 +350,8 @@ describe('DetalhesDocumento', () => {
   });
 
   it('Reprogramar dentro do modal: envia com a versão do documento, atualiza o cartão e recarrega os detalhes', async () => {
-    const api = apiSimulada();
+    // Decisão 0015: Reprogramar só aparece com prazo vencido.
+    const api = apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao: '2026-09-20' }) });
     const { usuario, aoAtualizarDocumento } = renderizar(api);
     const dialogo = await modal();
     await usuario.click(within(dialogo).getByRole('button', { name: 'Reprogramar' }));
@@ -317,8 +370,14 @@ describe('DetalhesDocumento', () => {
   it.each([
     ['Leitor', LEITOR],
     ['Solicitante', SOLICITANTE_OUTRA_AREA],
-  ])('%s não vê Reprogramar no modal', async (_nome, eu) => {
-    renderizar(apiSimulada(), { eu });
+  ])('%s não vê Reprogramar no modal, mesmo com prazo vencido', async (_nome, eu) => {
+    renderizar(apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao: '2026-09-20' }) }), { eu });
+    await modal();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+  });
+
+  it('prazo ainda não vencido (inclusive "vence hoje"): sem Reprogramar', async () => {
+    renderizar(apiSimulada({ documento: comStatus('Devolvido para correção', { dataRevisao: HOJE }) }));
     await modal();
     expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
   });
@@ -330,4 +389,219 @@ describe('DetalhesDocumento', () => {
   });
 
 
+});
+
+describe('funções puras do rodapé (F5)', () => {
+  it('acoesRapidas: a principal primeiro, no máximo 3', () => {
+    const acao = (para: StatusDocumento, principal = false) => ({ para, rotulo: para, principal, exigeResponsavel: true, exigeConfirmacao: false });
+    const lista = [acao('Em revisão junto à área'), acao('Devolvido para correção'), acao('Em revisão do solicitante'), acao('Para aprovação da área solicitante', true)];
+    expect(acoesRapidas(lista).map((a) => a.para)).toEqual(['Para aprovação da área solicitante', 'Em revisão junto à área', 'Devolvido para correção']);
+    expect(acoesRapidas([])).toEqual([]);
+  });
+
+  it('textoOpcaoEtapa: o rótulo e o status entre parênteses, sem repetir', () => {
+    expect(textoOpcaoEtapa('Iniciar revisão', 'Em revisão da qualidade')).toBe('Iniciar revisão (Em revisão da qualidade)');
+    expect(textoOpcaoEtapa('Mover para Em revisão do solicitante', 'Em revisão do solicitante')).toBe('Mover para Em revisão do solicitante');
+  });
+});
+
+describe('DetalhesDocumento: ações de status (F5)', () => {
+  it('Qualidade em Recebido: principal "Iniciar revisão" primeiro, mais 2 rápidas, Atualizar etapa…, Cancelar e Fechar', async () => {
+    renderizar(apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) }));
+    const dialogo = await modal();
+    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Revisar junto à área', 'Devolver à área', 'Atualizar etapa…', 'Cancelar', 'Fechar']);
+    expect(within(dialogo).getByRole('button', { name: 'Iniciar revisão' })).toHaveClass('primario');
+    // Nenhum botão desabilitado "de enfeite".
+    for (const botao of within(dialogo).getAllByRole('button')) expect(botao).toBeEnabled();
+  });
+
+  it.each([
+    ['Leitor', LEITOR, 'Devolvido para correção' as StatusDocumento],
+    ['Solicitante de outra área', SOLICITANTE_OUTRA_AREA, 'Devolvido para correção' as StatusDocumento],
+    ['Qualidade em Aprovado', QUALIDADE, 'Aprovado' as StatusDocumento],
+  ])('%s: rodapé só com Fechar', async (_nome, eu, status) => {
+    renderizar(apiSimulada({ documento: comStatus(status) }), { eu });
+    const dialogo = await modal();
+    expect(rodape(dialogo)).toEqual(['Fechar']);
+  });
+
+  it('Solicitante da área em Devolvido: só "Reenviar à Qualidade" (principal) e Atualizar etapa…; sem Cancelar', async () => {
+    renderizar(apiSimulada(), { eu: SOLICITANTE_DA_AREA });
+    const dialogo = await modal();
+    expect(rodape(dialogo)).toEqual(['Reenviar à Qualidade', 'Atualizar etapa…', 'Fechar']);
+  });
+
+  it('Cancelado: Reativar (Administrador), sem etapas nem Cancelar; Leitor não vê Reativar', async () => {
+    const cancelado = comStatus('Cancelado', {}, [...EVENTOS, evento(5, { tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Devolvido para correção' })]);
+    renderizar(apiSimulada({ documento: cancelado }), { eu: ADMIN });
+    const dialogo = await modal();
+    expect(rodape(dialogo)).toEqual(['Reativar', 'Fechar']);
+  });
+
+  it('ação rápida abre "Atualizar etapa" já preenchido, com o responsável sugerido; envia { para, responsavelId, observacao, versao }', async () => {
+    const api = apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) });
+    const { usuario, aoMudarStatus, aoAtualizarDocumento } = renderizar(api);
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    expect(within(etapa).getByRole('combobox', { name: /Etapa/ })).toHaveValue('Em revisão da qualidade');
+    expect(etapa).toHaveTextContent('De:');
+    const responsavel = await within(etapa).findByRole('combobox', { name: /Responsável/ });
+    // Revisão: Qualidade/Administrador sugeridos, e "eu" (Bruna, Qualidade) em primeiro.
+    expect(responsavel).toHaveValue('USR-1');
+    const grupos = within(responsavel).getAllByRole('group');
+    expect(grupos.map((g) => g.getAttribute('label'))).toEqual(['Sugeridos', 'Outras pessoas']);
+    expect(within(grupos[0]!).getAllByRole('option').map((o) => o.textContent)).toEqual(['Bruna Teste (Qualidade)', 'Zeca Qualidade (Suprimentos)']);
+    await usuario.type(within(etapa).getByLabelText(/Observação/), '  Começando pela seção 4.  ');
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    await waitFor(() =>
+      expect(api.mudarStatus).toHaveBeenCalledWith('DOC-1', {
+        para: 'Em revisão da qualidade', responsavelId: 'USR-1', observacao: 'Começando pela seção 4.', versao: 4,
+      }),
+    );
+    await waitFor(() => expect(aoMudarStatus).toHaveBeenCalled());
+    expect(aoAtualizarDocumento).toHaveBeenCalledWith(expect.objectContaining({ status: 'Em revisão da qualidade' }));
+    expect(await screen.findByText('Etapa registrada: Em revisão da qualidade.')).toBeInTheDocument();
+    await waitFor(() => expect(api.documento).toHaveBeenCalledTimes(2));
+  });
+
+  it('Atualizar etapa…: valida etapa e responsável com resumo focável e erros inline; destino na área sugere a área', async () => {
+    const api = apiSimulada();
+    const { usuario } = renderizar(api);
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    const resumo = await within(etapa).findByText('Corrija 1 campo:');
+    await waitFor(() => expect(resumo.parentElement).toHaveFocus());
+    expect(within(etapa).getByRole('combobox', { name: /Etapa/ })).toHaveAccessibleDescription('Escolha a etapa.');
+    expect(api.mudarStatus).not.toHaveBeenCalled();
+    // Devolver à área: sugere pessoas da área do documento (Qualidade, a2).
+    await usuario.selectOptions(within(etapa).getByRole('combobox', { name: /Etapa/ }), 'Devolvido para área para revisão');
+    const responsavel = await within(etapa).findByRole('combobox', { name: /Responsável/ });
+    const sugeridos = within(responsavel).getAllByRole('group')[0]!;
+    expect(within(sugeridos).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['USR-1', 'USR-7']);
+    await usuario.selectOptions(responsavel, '');
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    expect(await within(etapa).findByText('Responsável: Informe o responsável por esta etapa.')).toBeInTheDocument();
+    expect(api.mudarStatus).not.toHaveBeenCalled();
+  });
+
+  it('409 conflito_versao: mostra o status atual, refaz as opções e reenvia com a versão nova', async () => {
+    const atual: Documento = { ...DOCUMENTO, status: 'Em revisão junto à área', versao: 7 };
+    const mudarStatus = vi
+      .fn()
+      .mockRejectedValueOnce(new ErroApi(409, 'conflito_versao', {}, atual))
+      .mockResolvedValueOnce(resultado({ status: 'Para aprovação da área solicitante', versao: 8 }));
+    const { usuario, aoAtualizarDocumento } = renderizar(apiSimulada({ mudarStatus }));
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Retomar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await within(etapa).findByRole('combobox', { name: /Responsável/ });
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    expect(await within(etapa).findByText('Alguém alterou este documento: agora está em Em revisão junto à área.')).toBeInTheDocument();
+    expect(aoAtualizarDocumento).toHaveBeenCalledWith(atual);
+    // "Retomar revisão" (Em revisão da qualidade) continua valendo a partir de "Em revisão junto à área".
+    const opcoes = within(within(etapa).getByRole('combobox', { name: /Etapa/ })).getAllByRole('option').map((o) => o.getAttribute('value'));
+    expect(opcoes).toContain('Aprovado');
+    expect(opcoes).not.toContain('Em revisão junto à área');
+    await usuario.selectOptions(within(etapa).getByRole('combobox', { name: /Etapa/ }), 'Para aprovação da área solicitante');
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    await waitFor(() => expect(mudarStatus.mock.calls[1]![1]).toMatchObject({ para: 'Para aprovação da área solicitante', versao: 7 }));
+  });
+
+  it('403 e 409 acao_nao_permitida: mensagem do servidor no diálogo', async () => {
+    const mudarStatus = vi.fn().mockRejectedValue(new ErroApi(403, 'sem_permissao', {}, null, 'Seu perfil não pode aplicar esta etapa.'));
+    const { usuario } = renderizar(apiSimulada({ mudarStatus }));
+    await usuario.click(within(await modal()).getByRole('button', { name: 'Retomar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await within(etapa).findByRole('combobox', { name: /Responsável/ });
+    await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
+    expect(await within(etapa).findByText('Seu perfil não pode aplicar esta etapa.')).toBeInTheDocument();
+  });
+
+  it('lista de responsáveis com erro: "Tentar de novo" recarrega', async () => {
+    const responsaveis = vi.fn().mockRejectedValueOnce(new ErroApi(0, 'sem_conexao')).mockResolvedValue(RESPONSAVEIS);
+    const { usuario } = renderizar(apiSimulada({ responsaveis }));
+    await usuario.click(within(await modal()).getByRole('button', { name: 'Retomar revisão' }));
+    const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await usuario.click(await within(etapa).findByRole('button', { name: 'Tentar de novo' }));
+    expect(await within(etapa).findByRole('combobox', { name: /Responsável/ })).toBeInTheDocument();
+  });
+
+  it('Aprovar pede confirmação ("a aprovação é final") e envia responsavelId null', async () => {
+    const api = apiSimulada({ documento: comStatus('Para aprovação qualidade') });
+    const { usuario } = renderizar(api);
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Aprovar' }));
+    const confirmar = await screen.findByRole('dialog', { name: 'Aprovar documento' });
+    expect(confirmar).toHaveTextContent('Aprovar Controle de informação documentada?');
+    expect(confirmar).toHaveTextContent('A aprovação é final e encerra a tramitação.');
+    await usuario.click(within(confirmar).getByRole('button', { name: 'Voltar' }));
+    expect(api.mudarStatus).not.toHaveBeenCalled();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Aprovar' }));
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Aprovar documento' })).getByRole('button', { name: 'Aprovar' }));
+    await waitFor(() =>
+      expect(api.mudarStatus).toHaveBeenCalledWith('DOC-1', { para: 'Aprovado', responsavelId: null, observacao: null, versao: 4 }),
+    );
+    expect(await screen.findByText('Etapa registrada: Aprovado.')).toBeInTheDocument();
+  });
+
+  it('Cancelar exige motivo de 10 a 500 caracteres e entrega o resultado ao Painel', async () => {
+    const api = apiSimulada();
+    const { usuario, aoCancelar } = renderizar(api);
+    await usuario.click(within(await modal()).getByRole('button', { name: 'Cancelar' }));
+    const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
+    const motivo = within(cancelar).getByLabelText(/Motivo do cancelamento/);
+    await waitFor(() => expect(motivo).toHaveFocus());
+    await usuario.type(motivo, 'curto');
+    await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
+    expect(await within(cancelar).findByText(/Motivo do cancelamento: /)).toBeInTheDocument();
+    expect(motivo).toHaveAccessibleDescription(/5\/500/);
+    expect(api.cancelarDocumento).not.toHaveBeenCalled();
+    await usuario.type(motivo, ' demais: documento substituído');
+    await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
+    await waitFor(() =>
+      expect(api.cancelarDocumento).toHaveBeenCalledWith('DOC-1', { motivo: 'curto demais: documento substituído', versao: 4 }),
+    );
+    await waitFor(() => expect(aoCancelar).toHaveBeenCalledWith(expect.objectContaining({ documento: expect.objectContaining({ status: 'Cancelado' }) })));
+  });
+
+  it('Reativar confirma nomeando o status de volta (último cancelamento) e usa a rota de reativação', async () => {
+    const eventos = [
+      ...EVENTOS,
+      evento(5, { tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Em revisão da qualidade' }),
+      evento(6, { status: 'Em revisão da qualidade', statusAnterior: 'Cancelado' }),
+      evento(7, { tipoAcao: 'CANCELAMENTO', status: 'Cancelado', statusAnterior: 'Devolvido para correção' }),
+    ];
+    const api = apiSimulada({ documento: comStatus('Cancelado', {}, eventos) });
+    const { usuario, aoReativar } = renderizar(api);
+    await usuario.click(within(await modal()).getByRole('button', { name: 'Reativar' }));
+    const confirmar = await screen.findByRole('dialog', { name: 'Reativar documento' });
+    expect(confirmar).toHaveTextContent('Ele volta para Devolvido para correção.');
+    await usuario.click(within(confirmar).getByRole('button', { name: 'Reativar' }));
+    await waitFor(() => expect(api.reativarDocumento).toHaveBeenCalledWith('DOC-1', { observacao: null, versao: 4 }));
+    await waitFor(() => expect(aoReativar).toHaveBeenCalled());
+    expect(await screen.findByText('Documento reativado: Devolvido para correção.')).toBeInTheDocument();
+  });
+
+  it('Metas do ciclo nos três tons, com o estado por extenso', async () => {
+    // Recebido em 01/09, revisão iniciada em 02/09 (1 dia: cumprida), sem aprovação (28 dias: no prazo).
+    renderizar(apiSimulada());
+    await modal();
+    const metas = secao('Metas do ciclo');
+    expect(metas).toHaveTextContent('Início da revisãoCumpridaIniciada em 1 dia (meta: 14)');
+    expect(metas).toHaveTextContent('ConclusãoNo prazoEm andamento: 28 dias (meta: 40)');
+    expect(within(metas).getByText('Cumprida').parentElement).toHaveAttribute('data-tom', 'sucesso');
+    expect(within(metas).getByText('No prazo').parentElement).toHaveAttribute('data-tom', 'neutro');
+  });
+
+  it('Metas do ciclo: revisão não iniciada há mais de 14 dias fica "Estourada"; cancelado "Não se aplica"', async () => {
+    const semRevisao = [EVENTOS[0]!];
+    renderizar(apiSimulada({ documento: comStatus('Recebido', {}, semRevisao) }));
+    await modal();
+    const metas = secao('Metas do ciclo');
+    expect(metas).toHaveTextContent('EstouradaAinda não iniciada: 28 dias (meta: 14)');
+    expect(within(metas).getByText('Estourada').parentElement).toHaveAttribute('data-tom', 'erro');
+  });
 });

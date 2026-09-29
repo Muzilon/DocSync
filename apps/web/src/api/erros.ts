@@ -30,7 +30,7 @@ const MENSAGENS: Record<CodigoErro, string> = {
   id_existente: 'Este registro colidiu com outro já gravado. Tente novamente.',
   nao_encontrado: 'Documento não encontrado. Ele pode ter sido removido ou você não tem acesso a ele.',
   conflito_versao: 'Alguém alterou este documento enquanto você o via. Confira o prazo atual e tente de novo.',
-  acao_nao_permitida: 'Este documento não aceita esta ação no status atual (aprovado ou cancelado).',
+  acao_nao_permitida: 'Este documento não aceita esta ação no status atual.',
   arquivo_indisponivel: 'Este arquivo não está disponível no momento. Avise o administrador do DocSync.',
   sem_conexao: 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
   desconhecido: 'Ocorreu um erro inesperado. Tente novamente.',
@@ -43,8 +43,20 @@ export class ErroApi extends Error {
   /** Em 409 `conflito_versao`: o estado atual do documento, devolvido pela API. */
   readonly documento: Documento | null;
 
-  constructor(status: number, codigo: CodigoErro, campos: Record<string, string> = {}, documento: Documento | null = null) {
-    super(MENSAGENS[codigo]);
+  /**
+   * `mensagem` do servidor (pt-BR) só substitui a padrão em `acao_nao_permitida` e `sem_permissao`
+   * (contrato F5, 3.7: "Documento aprovado é final.", "Seu perfil não pode aplicar esta etapa.").
+   */
+  constructor(
+    status: number,
+    codigo: CodigoErro,
+    campos: Record<string, string> = {},
+    documento: Documento | null = null,
+    mensagemServidor: string | null = null,
+  ) {
+    const doServidor = mensagemServidor?.trim() ?? '';
+    const usaServidor = doServidor !== '' && (codigo === 'acao_nao_permitida' || codigo === 'sem_permissao');
+    super(usaServidor ? doServidor : MENSAGENS[codigo]);
     this.name = 'ErroApi';
     this.status = status;
     this.codigo = codigo;

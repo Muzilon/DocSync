@@ -1,4 +1,4 @@
-/* Cartão do Painel Kanban (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
+/* Cartão do Painel no estilo do Planner (decisão 0015), cores Vigen (decisão 0009). Sem botões de ação. */
 .item {
   list-style: none;
 }
@@ -59,11 +59,7 @@
   }
 }
 
-.envoltorio {
-  display: inline-flex;
-}
-
-/* Marcador lateral com a cor da fase (decorativo: o badge diz o status em texto). */
+/* Marcador lateral com a cor da fase (decorativo: a etiqueta diz o status em texto). */
 .recebido {
   border-left-color: var(--status-recebido-borda);
 }
@@ -83,29 +79,22 @@
   border-left-color: var(--status-cancelado-borda);
 }
 
-.topo {
+/* Etiquetas no topo (status e "Reprogramado"), como as etiquetas coloridas do Planner. */
+.etiquetas {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: var(--fs-caption);
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
-.codigo {
-  font-family: var(--font-mono);
-  font-weight: var(--fw-semibold);
-  color: var(--text-strong);
-  overflow-wrap: anywhere;
+.etiquetas > span {
+  max-width: 100%;
+  white-space: normal;
 }
 
-.semCodigo {
-  font-style: italic;
-  color: var(--text-secondary);
-}
-
-.revisao {
-  flex-shrink: 0;
-  color: var(--text-secondary);
+/* Etiqueta de status no tamanho das demais etiquetas do cartão (mais leve que o badge das listas). */
+.etiquetas > span:first-child {
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
 }
 
 .titulo {
@@ -116,59 +105,79 @@
   overflow-wrap: anywhere;
 }
 
-.linhaStatus {
+.corpo {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.linhaStatus > span {
-  white-space: normal;
-}
-
-.data {
+/* Área: texto secundário, no lugar da lista de verificação do Planner. */
+.area {
   font-size: var(--fs-caption);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
-.etiquetas {
+/* Rodapé: prazo à esquerda, responsável à direita. */
+.rodape {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--avatar-cartao);
 }
 
-/* Etiqueta neutra de área: #1E293B sobre #F1F5F9 (claro), #F1F5F9 sobre #193942 (escuro). */
-.area {
+.prazo {
   display: inline-flex;
   align-items: center;
-  max-width: 100%;
+  gap: var(--space-1);
   padding: calc(var(--space-1) / 2) var(--space-2);
-  border: var(--borda-fina) solid var(--border-subtle);
   border-radius: var(--radius-xs);
-  background: var(--bg-hover);
-  color: var(--text-strong);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   line-height: var(--lh-base);
-  overflow-wrap: anywhere;
-}
-
-.devolucoes {
-  display: inline-flex;
-  align-items: center;
-  padding: calc(var(--space-1) / 2) var(--space-2);
-  border-radius: var(--radius-xs);
-  background: var(--status-devolvido-bg);
-  color: var(--status-devolvido-cor);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
 
-.acoes {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: var(--space-1);
-  border-top: var(--borda-fina) solid var(--border-soft);
+.prazo svg {
+  flex-shrink: 0;
+}
+
+/* Em dia: neutro (#475569 sobre #FFFFFF). */
+.neutro {
+  padding-left: 0;
+  color: var(--text-secondary);
+}
+
+/* Vencendo (hoje até 5 dias): laranja, #B45309 sobre #FFFBEB. */
+.alerta {
+  background: var(--cor-alerta-fundo);
+  color: var(--cor-alerta-texto);
+}
+
+/* Vencido: vermelho, #B91C1C sobre #FEF2F2. */
+.erro {
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro);
+}
+
+.responsavel {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+/* Iniciais em círculo: #FFFFFF sobre #4B798F (4,7:1), o mesmo par do botão primário. */
+.iniciais {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-cartao);
+  height: var(--avatar-cartao);
+  border-radius: var(--radius-circle);
+  background: var(--cor-marca);
+  color: var(--cor-texto-sobre-marca);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-titulo);
 }
 
 /* Tela de toque: o título (que abre os detalhes) também tem alvo de 44px (decisão 0005). */

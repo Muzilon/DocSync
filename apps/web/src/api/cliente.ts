@@ -5,17 +5,22 @@ import type {
   DetalheDocumento,
   Documento,
   NovaPessoa,
+  NovaReativacao,
   NovaReprogramacao,
+  NovaTransicao,
+  NovoCancelamento,
   NovoDocumento,
   Pessoa,
+  PessoaResumo,
   RespostaPainel,
   ResultadoReprogramacao,
+  ResultadoTransicao,
   TipoDocumento,
 } from '@docsync/compartilhado';
 import { ErroApi, codigoConhecido } from './erros.ts';
 
 // Contrato das rotas vem do pacote compartilhado (fonte única com a API).
-export type { AlteracaoPessoa, NovaPessoa, NovaReprogramacao, NovoDocumento };
+export type { AlteracaoPessoa, NovaPessoa, NovaReativacao, NovaReprogramacao, NovaTransicao, NovoCancelamento, NovoDocumento };
 
 /** Parâmetros de GET /painel (contrato F3, seção 4.1). Só os informados vão na query. */
 export interface ConsultaPainel {
@@ -88,6 +93,17 @@ export interface Api {
    * `nomeOriginal` é só a reserva do nome (vale o que o servidor devolver em Content-Disposition).
    */
   baixarArquivo(id: string, arquivoId: string, nomeOriginal: string): Promise<ArquivoBaixado>;
+  /** POST /documentos/:id/transicoes (contrato F5, 3.2). 409 conflito_versao traz o documento atual. */
+  mudarStatus(id: string, dados: NovaTransicao): Promise<ResultadoTransicao>;
+  /** POST /documentos/:id/cancelamentos (contrato F5, 3.3). */
+  cancelarDocumento(id: string, dados: NovoCancelamento): Promise<ResultadoTransicao>;
+  /**
+   * POST /documentos/:id/reativacoes (contrato F5, 3.4). Caminho ÚNICO de reativação (P-17): o
+   * "Desfazer" do toast e o botão Reativar dos detalhes chamam esta mesma função.
+   */
+  reativarDocumento(id: string, dados: NovaReativacao): Promise<ResultadoTransicao>;
+  /** GET /responsaveis (contrato F5, 3.5): pessoas elegíveis, em ordem pt-BR, sem e-mail. */
+  responsaveis(): Promise<PessoaResumo[]>;
 }
 
 /** Cliente HTTP real: prefixo /api (o proxy do Vite o remove) e token Bearer em toda chamada. */
@@ -96,10 +112,11 @@ export function criarApi(obterToken: () => Promise<string>): Api {
   function erroDaResposta(resposta: Response, dados: unknown): ErroApi {
     // Proxy sem API atrás responde 5xx sem corpo: tratamos como falta de conexão.
     if (dados === null && resposta.status >= 500) return new ErroApi(resposta.status, 'sem_conexao');
-    const erro = (dados ?? {}) as { codigo?: unknown; campos?: unknown; documento?: unknown };
+    const erro = (dados ?? {}) as { codigo?: unknown; mensagem?: unknown; campos?: unknown; documento?: unknown };
     const campos = erro.campos && typeof erro.campos === 'object' ? (erro.campos as Record<string, string>) : {};
     const documento = erro.documento && typeof erro.documento === 'object' ? (erro.documento as Documento) : null;
-    return new ErroApi(resposta.status, codigoConhecido(erro.codigo), campos, documento);
+    const mensagem = typeof erro.mensagem === 'string' ? erro.mensagem : null;
+    return new ErroApi(resposta.status, codigoConhecido(erro.codigo), campos, documento, mensagem);
   }
 
   /** Caminho binário, separado de `chamar()` (que sempre lê JSON). Erro continua vindo em JSON. */
@@ -169,6 +186,13 @@ export function criarApi(obterToken: () => Promise<string>): Api {
       const blob = await resposta.blob();
       return { blob, nomeArquivo: nomeDoCabecalho(resposta.headers.get('Content-Disposition'), nomeOriginal) };
     },
+    mudarStatus: (id, dados) =>
+      chamar<ResultadoTransicao>('POST', `/documentos/${encodeURIComponent(id)}/transicoes`, dados),
+    cancelarDocumento: (id, dados) =>
+      chamar<ResultadoTransicao>('POST', `/documentos/${encodeURIComponent(id)}/cancelamentos`, dados),
+    reativarDocumento: (id, dados) =>
+      chamar<ResultadoTransicao>('POST', `/documentos/${encodeURIComponent(id)}/reativacoes`, dados),
+    responsaveis: () => chamar<PessoaResumo[]>('GET', '/responsaveis'),
   };
 }
 

@@ -25,3 +25,20 @@ export function formatarDataHora(instante: string | null): string {
   const data = new Date(instante);
   return Number.isNaN(data.getTime()) ? '—' : FORMATO_DATA_HORA.format(data);
 }
+
+/** 'AAAA-MM-DD' → 'DD/MM' (data curta do cartão, decisão 0015). Nulo vira '—'. */
+export function formatarDiaMes(data: string | null): string {
+  if (!data) return '—';
+  const [, mes, dia] = data.slice(0, 10).split('-');
+  return mes && dia ? `${dia}/${mes}` : data;
+}
+
+const MES_ANO = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** 'AAAA-MM-DD' → 'setembro de 2026' (subtítulo do KPI "Aprovados no mês"). Sem fuso: a data já é o dia. */
+export function formatarMesAno(data: string): string {
+  const [ano, mes] = data.slice(0, 10).split('-').map(Number);
+  if (!ano || !mes) return data;
+  return MES_ANO.format(new Date(Date.UTC(ano, mes - 1, 15)));
+}
+

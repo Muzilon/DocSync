@@ -159,3 +159,76 @@
 .conteudo {
   gap: var(--space-4);
 }
+
+/*
+ * Rodapé de ações (contrato F5, 6.2): etapas, Cancelar, Reativar, Reprogramar e Fechar, nessa
+ * ordem. Quebra em mais de uma linha em telas estreitas, sem rolagem horizontal.
+ */
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.rodape > button {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Metas do ciclo (decisão 0012): rótulo, estado por extenso e o texto de `avaliarMetas`. */
+.metas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.limiteMeta {
+  font-weight: var(--fw-regular);
+}
+
+.valorMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-primary);
+}
+
+.estadoMeta {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-base);
+  white-space: nowrap;
+}
+
+/* Mesmas cores das etiquetas de prazo: #047857 sobre #ECFDF5, #B91C1C sobre #FEF2F2, #1E293B sobre #F1F5F9. */
+.sucesso {
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
+}
+
+.erro {
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro);
+}
+
+.neutro {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}

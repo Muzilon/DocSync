@@ -1,9 +1,9 @@
 /* Tela Painel (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
 
-/* Três KPIs (P-13): rótulo, valor e subtítulo coerentes. */
+/* Quatro KPIs (P-12, P-13): rótulo, valor e subtítulo coerentes. 4 → 2 → 1 colunas, só CSS. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
@@ -29,6 +29,10 @@
   border-left-color: var(--cor-erro-ponto);
 }
 
+.sucesso {
+  border-left-color: var(--cor-sucesso-ponto);
+}
+
 .kpiRotulo {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
@@ -47,6 +51,13 @@
 .kpiApoio {
   font-size: var(--fs-caption);
   color: var(--text-secondary);
+}
+
+/* "N dentro da meta de 40 dias": #047857 sobre #FFFFFF (5,5:1). */
+.kpiMeta {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--cor-sucesso-texto);
 }
 
 /* Filtros: busca, área, Cancelados e contagem. */
@@ -177,13 +188,20 @@
   }
 }
 
-/* Tablet: KPIs continuam em 3 colunas, mais compactos. */
+/* Tablet: KPIs em 2 colunas, mais compactos. */
 @media (max-width: 1023px) {
   .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-3);
   }
 
   .kpi {
     padding: var(--space-3) var(--space-4);
+  }
+}
+
+@media (max-width: 599px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

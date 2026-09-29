@@ -4,6 +4,8 @@ import { Archive, FilePlus2, FilterX } from 'lucide-react';
 import {
   FASES,
   FASE_DO_STATUS,
+  META_DIAS_CONCLUSAO,
+  OBSERVACAO_CANCELAMENTO_DESFEITO,
   ROTULO_FASE,
   calcularKpis,
   filtrarCartoes,
@@ -13,21 +15,21 @@ import {
   type Documento,
   type Fase,
   type RespostaPainel,
+  type ResultadoTransicao,
 } from '@docsync/compartilhado';
 import { useApi } from '../api/cliente.ts';
-import { mensagemDeErro } from '../api/erros.ts';
+import { ErroApi, mensagemDeErro } from '../api/erros.ts';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import { Botao } from '../componentes/Botao.tsx';
 import { CampoSelecao, CampoTexto } from '../componentes/Campo.tsx';
 import { CartaoDocumento } from '../componentes/CartaoDocumento.tsx';
 import { ColunaKanban } from '../componentes/ColunaKanban.tsx';
 import { DetalhesDocumento } from '../componentes/DetalhesDocumento.tsx';
-import { DialogoReprogramar } from '../componentes/DialogoReprogramar.tsx';
 import { ErroCarregamento } from '../componentes/Estados.tsx';
 import { JanelaCancelados } from '../componentes/JanelaCancelados.tsx';
 import { useToast } from '../componentes/Toast.tsx';
-import { formatarData, plural } from '../formatacao.ts';
-import { podeCadastrarDocumento, podeReprogramar } from '../permissoes.ts';
+import { formatarMesAno, plural } from '../formatacao.ts';
+import { podeCadastrarDocumento } from '../permissoes.ts';
 import estiloBotao from '../componentes/Botao.module.css';
 import pagina from './Pagina.module.css';
 import estilos from './TelaPainel.module.css';
@@ -39,8 +41,9 @@ export const FASES_DO_QUADRO: Fase[] = FASES.filter((f) => f !== 'cancelado');
 const ESPERA_CONTAGEM_MS = 400;
 
 /**
- * Cartão atualizado com o documento devolvido pela API (reprogramação ou 409 com o estado atual),
- * sem recarregar o painel. Contagens vindas de eventos (devoluções, aprovação) ficam como estavam.
+ * Cartão atualizado com o documento devolvido pela API (reprogramação, etapa, cancelamento,
+ * reativação ou 409 com o estado atual), sem esperar o painel. Campos vindos de eventos
+ * (devoluções, datas do ciclo) ficam como estavam até a recarga silenciosa depois de uma etapa.
  */
 export function mesclarDocumento(cartao: CartaoPainel, documento: Documento): CartaoPainel {
   return {
@@ -58,6 +61,8 @@ export function mesclarDocumento(cartao: CartaoPainel, documento: Documento): Ca
     dataRevisao: documento.dataRevisao,
     reprogramado: documento.reprogramado,
     qtdReprogramacoes: documento.qtdReprogramacoes,
+    responsavelId: documento.responsavelId,
+    responsavel: documento.responsavel,
     versao: documento.versao,
     dataModificacao: documento.dataModificacao,
   };
@@ -87,7 +92,7 @@ export function ordenarCartoesPainel(cartoes: readonly CartaoPainel[]): CartaoPa
 
 /** Setas ↑ ↓ entre cartões da coluna e ← → entre colunas (desejável; Tab sozinho alcança tudo). */
 function navegarPorSetas(evento: KeyboardEvent<HTMLElement>) {
-  if (evento.target !== evento.currentTarget) return; // teclas vindas do botão Reprogramar
+  if (evento.target !== evento.currentTarget) return;
   const atual = evento.currentTarget;
   const coluna = atual.closest('[data-fase]');
   const quadro = coluna?.parentElement;
@@ -112,19 +117,15 @@ function navegarPorSetas(evento: KeyboardEvent<HTMLElement>) {
   }
 }
 
-interface EstadoReprogramacao {
-  cartao: CartaoPainel;
-  /** Muda a cada abertura, para o diálogo começar limpo. */
-  chave: number;
-  aberto: boolean;
-}
-
 /** Parâmetro da URL com o documento aberto nos detalhes (contrato F4, 5.1): /painel?documento=<DOC-uuid>. */
 export const PARAMETRO_DOCUMENTO = 'documento';
 
 /**
- * Tela Painel (F3): KPIs, filtros e quadro Kanban de 5 fases, com reprogramação de prazo.
+ * Tela Painel (F3): KPIs, filtros e quadro Kanban de 5 fases.
  * F4: o cartão abre os detalhes; o documento aberto fica na URL (recarregável e compartilhável).
+ * F5 (decisão 0015): cartões sem botões, no estilo do Planner; todas as ações ficam nos detalhes.
+ * Etapa registrada move o cartão de coluna; cancelar tira o cartão e oferece "Desfazer" (8 s);
+ * reativar (Desfazer ou detalhes) devolve o cartão pela mesma rota (P-17).
  */
 export function TelaPainel() {
   const api = useApi();
@@ -144,13 +145,23 @@ export function TelaPainel() {
   /** Contagem do botão Cancelados com a busca e a área em vigor; null = indisponível. */
   const [qtdCancelados, setQtdCancelados] = useState<number | null>(null);
   const [cancelados, setCancelados] = useState(false);
-  const [reprogramacao, setReprogramacao] = useState<EstadoReprogramacao | null>(null);
-  const chaveReprogramacao = useRef(0);
+  /** Muda depois de uma reativação: a janela de cancelados recarrega a lista. */
+  const [recargaCancelados, setRecargaCancelados] = useState(0);
+  /** Cartões tirados do quadro por cancelamento, para o "Desfazer" devolvê-los sem esperar a recarga. */
+  const removidos = useRef(new Map<string, CartaoPainel>());
+
+  // Mudança só de `recarga` = atualização silenciosa (depois de uma etapa): o quadro fica na tela.
+  const [recarga, setRecarga] = useState(0);
+  const ultimaRecarga = useRef(0);
 
   useEffect(() => {
     let ativo = true;
-    setErro(null);
-    setDados(null);
+    const silenciosa = recarga !== ultimaRecarga.current;
+    ultimaRecarga.current = recarga;
+    if (!silenciosa) {
+      setErro(null);
+      setDados(null);
+    }
     api
       .painel()
       .then((resposta) => {
@@ -159,12 +170,13 @@ export function TelaPainel() {
         setQtdCancelados(resposta.qtdCancelados);
       })
       .catch((e: unknown) => {
-        if (ativo) setErro(mensagemDeErro(e));
+        // Falha na recarga silenciosa: o quadro continua com o que já foi atualizado localmente.
+        if (ativo && !silenciosa) setErro(mensagemDeErro(e));
       });
     return () => {
       ativo = false;
     };
-  }, [api, tentativa]);
+  }, [api, tentativa, recarga]);
 
   // Filtro de área: todas as áreas ativas, em ordem alfabética pt-BR (decisão 0006; contrato, resposta 5).
   useEffect(() => {
@@ -233,15 +245,6 @@ export function TelaPainel() {
     );
   }, []);
 
-  function abrirReprogramacao(cartao: CartaoPainel) {
-    chaveReprogramacao.current += 1;
-    setReprogramacao({ cartao, chave: chaveReprogramacao.current, aberto: true });
-  }
-
-  function fecharReprogramacao() {
-    setReprogramacao((atual) => (atual ? { ...atual, aberto: false } : atual));
-  }
-
   const abrirDetalhes = useCallback(
     (cartao: CartaoPainel) => {
       setParametros(
@@ -272,6 +275,61 @@ export function TelaPainel() {
     });
   }
 
+  /** Etapa registrada nos detalhes: o cartão já mudou de coluna; a recarga traz devoluções e datas do ciclo. */
+  const etapaRegistrada = useCallback(() => setRecarga((n) => n + 1), []);
+
+  /** Cartão devolvido ao quadro por uma reativação (Desfazer ou detalhes), localizado pelo ID. */
+  const documentoReativado = useCallback((resultado: ResultadoTransicao) => {
+    const { documento } = resultado;
+    const salvo = removidos.current.get(documento.id);
+    removidos.current.delete(documento.id);
+    setDados((atual) => {
+      if (!atual) return atual;
+      const presente = atual.cartoes.some((c) => c.id === documento.id);
+      const cartoes = presente
+        ? atual.cartoes.map((c) => (c.id === documento.id ? mesclarDocumento(c, documento) : c))
+        : salvo
+          ? [...atual.cartoes, mesclarDocumento(salvo, documento)]
+          : atual.cartoes;
+      return { ...atual, cartoes: ordenarCartoesPainel(cartoes), qtdCancelados: Math.max(0, atual.qtdCancelados - 1) };
+    });
+    setRecargaCancelados((n) => n + 1);
+    // Reativado a partir da janela de cancelados: o cartão não estava no quadro; a recarga o traz.
+    setRecarga((n) => n + 1);
+  }, []);
+
+  /** "Desfazer" do toast: a MESMA rota do botão Reativar (P-17), com a versão devolvida pelo cancelamento. */
+  async function desfazerCancelamento(documento: Documento) {
+    try {
+      const resultado = await api.reativarDocumento(documento.id, {
+        observacao: OBSERVACAO_CANCELAMENTO_DESFEITO,
+        versao: documento.versao,
+      });
+      documentoReativado(resultado);
+      toast(`Cancelamento desfeito: o documento voltou para ${resultado.documento.status}.`);
+    } catch (e) {
+      if (e instanceof ErroApi && e.codigo === 'conflito_versao') {
+        toast('Não foi possível desfazer: o documento foi alterado. Veja em Cancelados.', undefined, 'erro');
+      } else {
+        toast(`Não foi possível desfazer. ${mensagemDeErro(e)}`, undefined, 'erro');
+      }
+    }
+  }
+
+  /** Cancelado nos detalhes: fecha o modal, tira o cartão do quadro e oferece "Desfazer" por 8 s. */
+  function documentoCancelado(resultado: ResultadoTransicao) {
+    const { documento } = resultado;
+    const cartao = dados?.cartoes.find((c) => c.id === documento.id);
+    if (cartao) removidos.current.set(documento.id, cartao);
+    setDados((atual) =>
+      atual
+        ? { ...atual, cartoes: atual.cartoes.filter((c) => c.id !== documento.id), qtdCancelados: atual.qtdCancelados + 1 }
+        : atual,
+    );
+    fecharDetalhes();
+    toast('Documento cancelado.', { rotulo: 'Desfazer', aoAcionar: () => void desfazerCancelamento(documento) });
+  }
+
   function limparFiltros() {
     setBusca('');
     setAreaId('');
@@ -300,6 +358,13 @@ export function TelaPainel() {
         <Kpi rotulo="Em tramitação" apoio="Documentos não concluídos" valor={kpis?.emTramitacao} />
         <Kpi rotulo="Vencendo em até 5 dias" apoio="Prazo entre hoje e daqui a 5 dias" valor={kpis?.vencendo} tom="alerta" />
         <Kpi rotulo="Atrasados" apoio="Passaram do prazo" valor={kpis?.atrasados} tom="erro" />
+        <Kpi
+          rotulo="Aprovados no mês"
+          apoio={dados ? `Concluídos em ${formatarMesAno(dados.hoje)}` : 'Concluídos no mês'}
+          valor={kpis?.aprovadosNoMes}
+          tom="sucesso"
+          meta={kpis ? `${kpis.aprovadosNoMesNaMeta} dentro da meta de ${META_DIAS_CONCLUSAO} dias` : undefined}
+        />
       </section>
 
       <div className={estilos.filtros} role="search" aria-label="Filtrar documentos">
@@ -307,7 +372,7 @@ export function TelaPainel() {
           <CampoTexto
             id="painel-busca"
             type="search"
-            rotulo="Buscar por título, código ou remetente"
+            rotulo="Buscar por título, código, remetente ou responsável"
             autoComplete="off"
             maxLength={200}
             value={busca}
@@ -376,15 +441,7 @@ export function TelaPainel() {
             return (
               <ColunaKanban key={fase} fase={fase} quantidade={lista.length}>
                 {lista.map((c) => (
-                  <CartaoDocumento
-                    key={c.id}
-                    cartao={c}
-                    hoje={dados.hoje}
-                    podeReprogramar={podeReprogramar(eu, c)}
-                    aoReprogramar={abrirReprogramacao}
-                    aoTeclaNavegacao={navegarPorSetas}
-                    aoAbrir={abrirDetalhes}
-                  />
+                  <CartaoDocumento key={c.id} cartao={c} hoje={dados.hoje} aoTeclaNavegacao={navegarPorSetas} aoAbrir={abrirDetalhes} />
                 ))}
               </ColunaKanban>
             );
@@ -398,30 +455,32 @@ export function TelaPainel() {
         quantidadeInicial={qtdCancelados}
         aoFechar={() => setCancelados(false)}
         aoAbrirDetalhes={abrirDetalhes}
+        recarga={recargaCancelados}
       />
 
-      <DetalhesDocumento documentoId={documentoAberto} aoFechar={fecharDetalhes} aoAtualizarDocumento={substituirCartao} />
+      <DetalhesDocumento
+        documentoId={documentoAberto}
+        aoFechar={fecharDetalhes}
+        aoAtualizarDocumento={substituirCartao}
+        aoMudarStatus={etapaRegistrada}
+        aoCancelar={documentoCancelado}
+        aoReativar={documentoReativado}
+      />
 
-      {reprogramacao && dados && (
-        <DialogoReprogramar
-          key={reprogramacao.chave}
-          cartao={reprogramacao.cartao}
-          aberto={reprogramacao.aberto}
-          hoje={dados.hoje}
-          aoFechar={fecharReprogramacao}
-          aoReprogramar={(documento) => {
-            substituirCartao(documento);
-            fecharReprogramacao();
-            toast(`Prazo reprogramado para ${formatarData(documento.dataRevisao)}`);
-          }}
-          aoConflito={(documento) => substituirCartao(documento)}
-        />
-      )}
     </>
   );
 }
 
-function Kpi({ rotulo, apoio, valor, tom }: { rotulo: string; apoio: string; valor: number | undefined; tom?: 'alerta' | 'erro' }) {
+interface PropsKpi {
+  rotulo: string;
+  apoio: string;
+  valor: number | undefined;
+  tom?: 'alerta' | 'erro' | 'sucesso';
+  /** Linha extra (ex.: "3 dentro da meta de 40 dias"); só com o valor carregado. */
+  meta?: string | undefined;
+}
+
+function Kpi({ rotulo, apoio, valor, tom, meta }: PropsKpi) {
   return (
     <div className={`${estilos.kpi} ${tom ? estilos[tom] : ''}`}>
       <p className={estilos.kpiRotulo}>{rotulo}</p>
@@ -437,6 +496,7 @@ function Kpi({ rotulo, apoio, valor, tom }: { rotulo: string; apoio: string; val
         )}
       </p>
       <p className={estilos.kpiApoio}>{apoio}</p>
+      {meta && <p className={estilos.kpiMeta}>{meta}</p>}
     </div>
   );
 }
