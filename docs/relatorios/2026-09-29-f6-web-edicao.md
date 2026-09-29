@@ -36,7 +36,7 @@
 
 ## O que ficou pendente
 
-- Revisão do `agente-qa-revisao` e do `agente-visao-minimalista` (rodapé do modal agora tem até 5 botões para Qualidade/Administrador; em 768px quebra em duas linhas, sem rolagem horizontal, ver `editar-dados-salvo-*`).
+- Revisão do `agente-qa-revisao` e do `agente-visao-minimalista` (rodapé do modal agora tem até 6 botões para Qualidade/Administrador; em 768px quebra em duas linhas, sem rolagem horizontal, ver `editar-dados-salvo-*`).
 - Verificação integrada com a API real (o Vitest e o e2e usam API simulada).
 
 ## Divergências registradas (não corrigidas por mim)
@@ -55,3 +55,11 @@
 ## Decisões tomadas ou necessárias
 
 - Nenhuma decisão nova de arquitetura. As divergências 1 e 2 acima pedem só o "de acordo" do Claude principal (ou uma linha no contrato).
+
+## Correções pós-QA (2026-09-29, agente-visao-minimalista / Opus)
+
+- **B2:** "N° de revisão" marcado como obrigatório (asterisco + "(obrigatório)" acessível, prop `obrigatorio` do `CampoTexto`) na tela Novo documento e no `DialogoEditarDados`, como o contrato (2.1) e a API já exigem.
+- **B3:** "Nenhum campo foi alterado." saiu do bloco de erro vermelho (`role="alert"`) para um bloco informativo neutro próprio (`.informativo`, borda `--cor-info-ponto`, fundo `--cor-info-fundo`, texto `--text-primary`), com `role="status"` e `tabIndex={-1}`; o foco continua indo para o bloco. O resumo de erros (`role="alert"`) só aparece quando há erros. Testes ajustados: Vitest confere `role="status"`, foco no bloco e ausência de `alert`; o e2e "sem alteração não envia" confere o mesmo.
+- **B4:** e2e novo em `edicao.spec.ts` ("rodapé com 6 botões", claro e escuro): Administrador no DOC-P4 (prazo vencido) em 768px; confere 6 botões no rodapé (ação rápida, Atualizar etapa…, Editar dados, Cancelar documento, Reprogramar, Fechar), nenhum saindo do rodapé ou da janela, rodapé sem rolagem interna, página sem rolagem horizontal, axe sem violações. Texto "até 5" corrigido para "até 6" acima.
+- Arquivos: `apps/web/src/componentes/DialogoEditarDados.tsx`, `DialogoEditarDados.module.css`, `DialogoEditarDados.test.tsx`, `apps/web/src/telas/TelaNovoDocumento.tsx`, `apps/web/e2e/edicao.spec.ts`.
+- Validação: `npm run typecheck` e `npm test` (567) verdes; `edicao.spec.ts` inteiro verde (16/16, inclusive os 2 casos novos). **Não rodados** (a ferramenta de terminal ficou indisponível no fim da sessão): `npm run build`, `npm run segredos` e a suíte e2e completa; rodar antes de levar ao Eric.

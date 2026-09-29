@@ -624,6 +624,7 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
         <CampoTexto
           id={ID_CAMPO.revisao}
           rotulo="N° de revisão"
+          obrigatorio
           type="number"
           inputMode="numeric"
           min={0}

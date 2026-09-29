@@ -62,3 +62,8 @@
 ## Decisões tomadas ou necessárias
 
 Nenhuma decisão grande nova; tudo dentro do contrato aprovado. Nota de processo: implementado com Opus por falta de créditos do Fable.
+
+## Correções pós-QA (2026-09-29, agente-visao-minimalista / Opus)
+
+- **B1:** dois casos novos em `apps/api/src/documentos.test.ts` ("POST /documentos — cadastro"), sem mudar código da API: cadastro sem `revisao` → `400 dados_invalidos` com `campos` só em `revisao`; `revisao: "2"` (texto numérico, como o formulário envia) → `201` com `revisao: 2` (número) no documento gravado. Comportamento conferido antes: a API já aceitava "2" (contrato 2.1).
+- Validação: `npx vitest run apps/api/src/documentos.test.ts` e `npm test` verdes.

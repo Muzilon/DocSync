@@ -421,34 +421,34 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
                 )}
               </div>
             )}
-            {(listaErros.length > 0 || semAlteracao) && (
+            {listaErros.length > 0 && (
               <div ref={resumo} className={estilos.resumoErros} role="alert" tabIndex={-1}>
-                {listaErros.length > 0 ? (
-                  <>
-                    <p>
-                      {listaErros.length === 1
-                        ? 'Corrija 1 campo antes de salvar:'
-                        : `Corrija ${listaErros.length} campos antes de salvar:`}
-                    </p>
-                    <ul>
-                      {listaErros.map((c) => (
-                        <li key={c}>
-                          <a
-                            href={`#${ID_CAMPO_EDICAO[c]}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              document.getElementById(ID_CAMPO_EDICAO[c])?.focus();
-                            }}
-                          >
-                            {NOME_CAMPO_DOCUMENTO[c]}: {exibidos[c]}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : (
-                  <p>{MENSAGEM_SEM_ALTERACAO}</p>
-                )}
+                <p>
+                  {listaErros.length === 1
+                    ? 'Corrija 1 campo antes de salvar:'
+                    : `Corrija ${listaErros.length} campos antes de salvar:`}
+                </p>
+                <ul>
+                  {listaErros.map((c) => (
+                    <li key={c}>
+                      <a
+                        href={`#${ID_CAMPO_EDICAO[c]}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById(ID_CAMPO_EDICAO[c])?.focus();
+                        }}
+                      >
+                        {NOME_CAMPO_DOCUMENTO[c]}: {exibidos[c]}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {listaErros.length === 0 && semAlteracao && (
+              // Informativo, não erro: nada foi recusado, só não há o que salvar.
+              <div ref={resumo} className={estilos.informativo} role="status" tabIndex={-1}>
+                <p>{MENSAGEM_SEM_ALTERACAO}</p>
               </div>
             )}
 
@@ -538,6 +538,7 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
             <CampoTexto
               id={ID_CAMPO_EDICAO.revisao}
               rotulo={NOME_CAMPO_DOCUMENTO.revisao}
+              obrigatorio
               type="number"
               inputMode="numeric"
               min={0}

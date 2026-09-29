@@ -114,7 +114,9 @@ test('sem alteração não envia; remetente vazio é recusado (P-14)', async ({ 
   await abrir(page, { extra: '&editar=1' });
   const dialogo = edicao(page);
   await dialogo.getByRole('button', { name: 'Salvar alterações' }).click();
-  await expect(dialogo.getByRole('alert')).toContainText('Nenhum campo foi alterado.');
+  const informativo = dialogo.getByRole('status').filter({ hasText: 'Nenhum campo foi alterado.' });
+  await expect(informativo).toBeFocused();
+  await expect(dialogo.getByRole('alert')).toHaveCount(0);
   await dialogo.getByLabel(/Remetente/).fill('   ');
   await dialogo.getByRole('button', { name: 'Salvar alterações' }).click();
   await expect(dialogo.getByRole('link', { name: 'Remetente / solicitante: Informe o remetente ou solicitante.' })).toBeVisible();
@@ -158,6 +160,30 @@ test('Aprovado: sem "Editar dados" (nem para o Administrador)', async ({ page })
   await expect(page.getByRole('dialog', { name: 'Manual do Sistema de Gestão Integrada' }).getByRole('region', { name: 'Dados' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Editar dados' })).toHaveCount(0);
 });
+
+for (const tema of TEMAS) {
+  test(`rodapé com 6 botões ${tema} (Administrador, DOC-P4 com prazo vencido) em 768px: quebra sem rolagem horizontal`, async ({ page }) => {
+    await abrir(page, { tema, largura: 768, documento: 'DOC-P4' });
+    const fechar = page.getByRole('button', { name: 'Fechar', exact: true });
+    await expect(fechar).toBeVisible();
+    const rodape = fechar.locator('..');
+    const botoes = rodape.getByRole('button');
+    await expect(botoes).toHaveCount(6);
+    for (const nome of ['Atualizar etapa…', 'Editar dados', 'Cancelar documento', 'Reprogramar', 'Fechar']) {
+      await expect(rodape.getByRole('button', { name: nome, exact: true })).toBeVisible();
+    }
+    await semRolagemHorizontal(page);
+    // Cada botão cabe inteiro na janela e dentro do rodapé (nenhum cortado nem empurrado para fora).
+    const caixaRodape = (await rodape.boundingBox())!;
+    for (const caixa of await Promise.all((await botoes.all()).map((b) => b.boundingBox()))) {
+      expect(caixa!.x).toBeGreaterThanOrEqual(caixaRodape.x - 1);
+      expect(caixa!.x + caixa!.width).toBeLessThanOrEqual(Math.min(caixaRodape.x + caixaRodape.width, 768) + 1);
+    }
+    const rolaPorDentro = await rodape.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(rolaPorDentro).toBe(false);
+    await axe(page);
+  });
+}
 
 test.describe('toque', () => {
   test.use({ hasTouch: true, isMobile: false });

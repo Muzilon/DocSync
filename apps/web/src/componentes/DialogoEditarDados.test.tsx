@@ -203,7 +203,11 @@ describe('DetalhesDocumento: Editar dados (F6)', () => {
     // Espaços a mais não contam: a validação apara antes de comparar.
     await usuario.type(campo(dialogo, /Título do documento/), '  ');
     await usuario.click(within(dialogo).getByRole('button', { name: 'Salvar alterações' }));
-    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Nenhum campo foi alterado.');
+    // Informativo (role=status), não erro; o foco vai para o bloco.
+    const aviso = within(dialogo).getByRole('status');
+    expect(aviso).toHaveTextContent('Nenhum campo foi alterado.');
+    expect(aviso).toHaveFocus();
+    expect(within(dialogo).queryByRole('alert')).toBeNull();
     expect(api.editarDados).not.toHaveBeenCalled();
   });
 
