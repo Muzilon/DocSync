@@ -6,7 +6,7 @@ Vamos retomar o projeto DocSync. Trabalhe SOMENTE no repositório C:\Users\eric2
 
 Antes de qualquer ação, leia nesta ordem:
 1. `CLAUDE.md` (regras do projeto: papéis, delegação por módulo, fatias pequenas, segredos, CHANGELOG, decisões).
-2. `docs/estado-atual.md` (onde paramos, o que falta, perguntas em aberto).
+2. `docs/estado-atual.md` (onde paramos, o que falta, perguntas em aberto) e `docs/historico-sessao-inicial.md` (por que as coisas estão como estão).
 3. `docs/plano-fundacao.md` (fatias da Fundação).
 4. Todos os arquivos de `docs/decisoes/` (0001 a 0010 ou mais). As decisões mais recentes prevalecem sobre a especificação.
 5. O `CHANGELOG.md` e os relatórios mais recentes em `docs/relatorios/`.

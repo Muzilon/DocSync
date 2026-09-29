@@ -24,3 +24,4 @@ Uma linha por mudança relevante, na data em que aconteceu, com link para a deci
 - Decisão [0010](docs/decisoes/0010-prazo-e-area-do-administrador.md), parte 2 (API): o primeiro Administrador nasce com a área de `AREA_ADMINISTRADOR_INICIAL` (padrão Qualidade), auditada como sistema; área inexistente/inativa → sem área e aviso no log; Administrador já existente sem área não é alterado no login. Relatório: [docs/relatorios/2026-09-29-f2-api-cadastro-documentos.md](docs/relatorios/2026-09-29-f2-api-cadastro-documentos.md).
 - Decisão [0010](docs/decisoes/0010-prazo-e-area-do-administrador.md): prazo fora do cadastro (será automático); Administrador inicial nasce na área Qualidade.
 - Comando `/retomar` (`.claude/commands/retomar.md`) e `docs/estado-atual.md` para passagem entre sessões.
+- Resumo da sessão inicial em [docs/historico-sessao-inicial.md](docs/historico-sessao-inicial.md).

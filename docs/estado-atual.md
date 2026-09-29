@@ -11,7 +11,7 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | **F2 Modelo de dados + cadastro de documento** | **Pronta, QA aprovado, aguardando validação do Eric** | **Não commitada** (as mudanças estão no disco, no working tree) |
 | F3 Painel Kanban | Próxima | — |
 
-Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
+Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/). Como chegamos até aqui: [historico-sessao-inicial.md](historico-sessao-inicial.md).
 
 ## F2: o que falta
 
