@@ -78,12 +78,14 @@ class ErroNegocio extends Error {
   }
 }
 
-const ERRO_CODIGO_REVISAO = (codigo: string, revisao: number) =>
-  new ErroNegocio(409, {
-    codigo: 'codigo_revisao_existente',
-    mensagem: `Já existe um documento com o código ${codigo} na revisão ${revisao}.`,
-    campos: { codigo: 'Este código já está cadastrado nesta revisão.' },
-  });
+/** Corpo do 409 de código + revisão repetidos (decisão 0004): o mesmo no cadastro e na edição (F6). */
+export const corpoErroCodigoRevisao = (codigo: string, revisao: number): ErroApi => ({
+  codigo: 'codigo_revisao_existente',
+  mensagem: `Já existe um documento com o código ${codigo} na revisão ${revisao}.`,
+  campos: { codigo: 'Este código já está cadastrado nesta revisão.' },
+});
+
+const ERRO_CODIGO_REVISAO = (codigo: string, revisao: number) => new ErroNegocio(409, corpoErroCodigoRevisao(codigo, revisao));
 
 const ERRO_ID_EXISTENTE = new ErroNegocio(409, {
   codigo: 'id_existente',

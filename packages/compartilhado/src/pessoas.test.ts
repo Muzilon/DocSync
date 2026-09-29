@@ -30,6 +30,8 @@ describe('pode — tabela de permissões (sem contexto)', () => {
     mudarStatus: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: false },
     cancelarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
     reativarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
+    // Contrato F6 (3.1): Solicitante só na sua área e só em fase 'devolvido' (bloco próprio abaixo).
+    editarDados: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: false },
   };
 
   for (const [acao, porPerfil] of Object.entries(tabela) as [Acao, Record<Perfil, boolean>][]) {
@@ -187,6 +189,46 @@ describe('pode — com contexto de área (documento 02, seção 7.3)', () => {
         expect(pode(pessoa(perfil), acao, suaArea)).toBe(false);
       }
     }
+  });
+
+  describe('editarDados (contrato F6, 3.1)', () => {
+    const FASE_DEVOLVIDO = new Set(['Devolvido para área para revisão', 'Devolvido para correção', 'Em revisão do solicitante']);
+
+    it('Administrador e Qualidade: sim em qualquer área e em qualquer status (a fase final é conferida por podeEditarAgora)', () => {
+      for (const perfil of ['Administrador', 'Qualidade'] as const) {
+        expect(pode(pessoa(perfil), 'editarDados')).toBe(true);
+        expect(pode(pessoa(perfil), 'editarDados', outraArea)).toBe(true);
+        for (const status of STATUS_DOCUMENTO) {
+          expect(pode(pessoa(perfil), 'editarDados', { areaId: 'AREA-outra', status })).toBe(true);
+        }
+      }
+    });
+
+    it('Leitor: nunca, nem na sua área em devolvido', () => {
+      expect(pode(pessoa('Leitor'), 'editarDados')).toBe(false);
+      expect(pode(pessoa('Leitor'), 'editarDados', { areaId: 'AREA-teste', status: 'Devolvido para correção' })).toBe(false);
+    });
+
+    it('Solicitante: sem contexto sim; com área só a sua; com status só na fase devolvido', () => {
+      const s = pessoa('Solicitante');
+      expect(pode(s, 'editarDados')).toBe(true);
+      expect(pode(s, 'editarDados', suaArea)).toBe(true);
+      expect(pode(s, 'editarDados', outraArea)).toBe(false);
+      for (const status of STATUS_DOCUMENTO) {
+        const devolvido = FASE_DEVOLVIDO.has(status);
+        expect(pode(s, 'editarDados', { status }), status).toBe(devolvido);
+        expect(pode(s, 'editarDados', { areaId: 'AREA-teste', status }), status).toBe(devolvido);
+        expect(pode(s, 'editarDados', { areaId: 'AREA-outra', status }), status).toBe(false);
+      }
+    });
+
+    it('sem acesso liberado: nunca (inativo, sem perfil, Solicitante sem área)', () => {
+      const ctx = { areaId: 'AREA-teste', status: 'Devolvido para correção' as const };
+      expect(pode(pessoa('Administrador', { status: 'Inativo' }), 'editarDados', ctx)).toBe(false);
+      expect(pode(pessoa(null), 'editarDados', ctx)).toBe(false);
+      expect(pode(pessoa('Solicitante', { areaId: null, area: null }), 'editarDados', ctx)).toBe(false);
+      expect(pode(null, 'editarDados')).toBe(false);
+    });
   });
 
   it('Administrador sem área continua podendo cadastrar e ver com contexto', () => {

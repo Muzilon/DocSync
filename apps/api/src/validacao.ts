@@ -1,4 +1,5 @@
 import {
+  CAMPOS_EDITAVEIS,
   ehDataSoDia,
   ehPerfil,
   ehStatusDocumento,
@@ -7,8 +8,10 @@ import {
   validarJustificativa,
   validarMotivoCancelamento,
   validarNovoPrazo,
+  validarDadosDocumento,
   validarObservacao,
   type AlteracaoPessoa,
+  type EdicaoDocumento,
   type NovaPessoa,
   type NovaReativacao,
   type NovaReprogramacao,
@@ -100,66 +103,23 @@ export function validarAlteracaoPessoa(corpo: unknown): Validado<AlteracaoPessoa
 // ---------------------------------------------------------------------------
 
 const ID_DOCUMENTO = /^DOC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const LIMITES_TEXTO = { codigo: 100, titulo: 300, remetente: 200, disciplina: 100, observacao: 2000 } as const;
-const REVISAO_MAXIMA = 999;
 
-const CAMPOS_NOVO_DOCUMENTO = [
-  'id',
-  'codigo',
-  'titulo',
-  'tipoDocumentoId',
-  'revisao',
-  'remetente',
-  'areaId',
-  'disciplina',
-  'observacao',
-] as const satisfies readonly (keyof NovoDocumento)[];
+const CAMPOS_NOVO_DOCUMENTO = ['id', ...CAMPOS_EDITAVEIS] as const satisfies readonly (keyof NovoDocumento)[];
 
 /** Data só-dia válida: a mesma regra da interface, em `@docsync/compartilhado`. */
 export { ehDataSoDia };
-
-/**
- * Texto opcional: ausente, null ou só espaços → null. Aparado.
- * Registra erro se não for texto ou passar do limite.
- */
-function textoOpcional(
-  corpo: Record<string, unknown>,
-  campo: keyof typeof LIMITES_TEXTO,
-  rotulo: string,
-  campos: Record<string, string>,
-): string | null {
-  const valor = corpo[campo];
-  if (valor === undefined || valor === null) return null;
-  if (typeof valor !== 'string') {
-    campos[campo] = `${rotulo} inválido.`;
-    return null;
-  }
-  const limpo = valor.trim();
-  if (limpo.length > LIMITES_TEXTO[campo]) campos[campo] = `${rotulo} pode ter até ${LIMITES_TEXTO[campo]} caracteres.`;
-  return limpo === '' ? null : limpo;
-}
-
-function textoObrigatorio(
-  corpo: Record<string, unknown>,
-  campo: keyof typeof LIMITES_TEXTO,
-  mensagemVazio: string,
-  rotulo: string,
-  campos: Record<string, string>,
-): string {
-  const valor = textoOpcional(corpo, campo, rotulo, campos);
-  if (valor === null && !campos[campo]) campos[campo] = mensagemVazio;
-  return valor ?? '';
-}
 
 /**
  * Valida a parte 'dados' do cadastro (documento 03, seção 6). Esquema fechado:
  * campo desconhecido é recusado, e `status` tem mensagem própria (P-03).
  * `dataRecebimento` e `dataRevisao` são do servidor (decisões 0011 e 0012):
  * enviá-las é "Campo não permitido.", como qualquer campo fora do esquema.
+ * Os 8 campos cadastrais passam por `validarDadosDocumento` (compartilhado), a
+ * mesma função da edição e da interface (contrato F6, 2.2; P-14).
  */
 export function validarNovoDocumento(corpo: unknown): Validado<NovoDocumento> {
   if (!ehObjeto(corpo)) return { ok: false, campos: { dados: 'Envie os dados do documento.' } };
-  const campos = camposDesconhecidos(corpo, CAMPOS_NOVO_DOCUMENTO);
+  const campos: Record<string, string> = camposDesconhecidos(corpo, CAMPOS_NOVO_DOCUMENTO);
   if ('status' in corpo) {
     campos.status = 'O status inicial é sempre Recebido e não pode ser escolhido no cadastro.';
   }
@@ -169,39 +129,36 @@ export function validarNovoDocumento(corpo: unknown): Validado<NovoDocumento> {
     campos.id = 'Identificador inválido. Recarregue o formulário e tente de novo.';
   }
 
-  const titulo = textoObrigatorio(corpo, 'titulo', 'Informe o título do documento.', 'O título', campos);
-  const codigo = textoOpcional(corpo, 'codigo', 'O código', campos);
-  const remetente = textoObrigatorio(corpo, 'remetente', 'Informe o remetente ou solicitante.', 'O remetente', campos);
-  const disciplina = textoOpcional(corpo, 'disciplina', 'A disciplina', campos);
-  const observacao = textoOpcional(corpo, 'observacao', 'A observação', campos);
+  const { erros, dados } = validarDadosDocumento(corpo);
+  Object.assign(campos, erros);
 
-  const tipoDocumentoId = corpo.tipoDocumentoId;
-  if (typeof tipoDocumentoId !== 'string' || tipoDocumentoId.trim() === '') {
-    campos.tipoDocumentoId = 'Selecione o tipo de documento.';
-  }
-  const areaId = corpo.areaId;
-  if (typeof areaId !== 'string' || areaId.trim() === '') campos.areaId = 'Selecione a área.';
+  if (Object.keys(campos).length > 0 || dados === null) return { ok: false, campos };
+  return { ok: true, dados: { id: id as string, ...dados } };
+}
 
-  const revisao = corpo.revisao ?? 0;
-  if (typeof revisao !== 'number' || !Number.isInteger(revisao) || revisao < 0 || revisao > REVISAO_MAXIMA) {
-    campos.revisao = `O número de revisão deve ser um inteiro de 0 a ${REVISAO_MAXIMA}.`;
-  }
+// ---------------------------------------------------------------------------
+// Edição de dados (F6) — corpo de PUT /documentos/:id/dados
+// ---------------------------------------------------------------------------
 
-  if (Object.keys(campos).length > 0) return { ok: false, campos };
-  return {
-    ok: true,
-    dados: {
-      id: id as string,
-      codigo,
-      titulo,
-      tipoDocumentoId: tipoDocumentoId as string,
-      revisao: revisao as number,
-      remetente,
-      areaId: areaId as string,
-      disciplina,
-      observacao,
-    },
-  };
+const CAMPOS_EDICAO = [...CAMPOS_EDITAVEIS, 'versao'] as const satisfies readonly (keyof EdicaoDocumento)[];
+
+/**
+ * Valida a edição (contrato F6, 4.2, passo 5): esquema fechado (os 8 campos + `versao`;
+ * `status` com mensagem própria, P-14), `validarDadosDocumento` (a mesma do cadastro)
+ * e `versao` inteiro ≥ 1. O corpo é sempre completo: campo ausente é tratado como
+ * vazio (e recusado se obrigatório), nunca como "manter".
+ */
+export function validarEdicaoDocumento(corpo: unknown): Validado<EdicaoDocumento> {
+  if (!ehObjeto(corpo)) return { ok: false, campos: { corpo: 'Envie os dados do documento e a versão.' } };
+  const campos: Record<string, string> = camposDesconhecidos(corpo, CAMPOS_EDICAO);
+  if ('status' in corpo) campos.status = 'O status muda só por Atualizar etapa.';
+
+  const { erros, dados } = validarDadosDocumento(corpo);
+  Object.assign(campos, erros);
+  const versao = validarVersao(corpo.versao, campos);
+
+  if (Object.keys(campos).length > 0 || dados === null) return { ok: false, campos };
+  return { ok: true, dados: { ...dados, versao } };
 }
 
 // ---------------------------------------------------------------------------

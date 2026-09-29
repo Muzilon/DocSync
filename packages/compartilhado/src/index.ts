@@ -73,6 +73,7 @@ export {
   dataInicioRevisao,
   descreverEvento,
   formatarValorHistorico,
+  resumoEdicao,
   rotuloCampoHistorico,
   type DescricaoEvento,
   type DiferencaExibida,
@@ -132,3 +133,17 @@ export {
   type Metas,
   type SituacaoMeta,
 } from './metas.ts';
+export {
+  CAMPOS_EDITAVEIS,
+  LIMITES_TEXTO_DOCUMENTO,
+  REVISAO_MAXIMA,
+  diferencasDocumento,
+  podeEditarAgora,
+  validarDadosDocumento,
+  type CampoEditavel,
+  type DadosDocumento,
+  type DetalheEdicao,
+  type EdicaoDocumento,
+  type ResultadoEdicao,
+  type ValidacaoDados,
+} from './edicao.ts';

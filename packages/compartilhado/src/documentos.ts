@@ -6,6 +6,8 @@
  * listas e regras.
  */
 
+import type { DadosDocumento } from './edicao.ts';
+
 // ---------------------------------------------------------------------------
 // Fases (colunas do quadro) e status
 // ---------------------------------------------------------------------------
@@ -180,16 +182,8 @@ export interface DetalheDocumento {
  * O `id` 'DOC-uuid' é gerado pelo cliente (crypto.randomUUID) para permitir
  * reenvio idempotente.
  */
-export interface NovoDocumento {
+export interface NovoDocumento extends DadosDocumento {
   id: string;
-  codigo: string | null;
-  titulo: string;
-  tipoDocumentoId: string;
-  revisao: number;
-  remetente: string;
-  areaId: string;
-  disciplina: string | null;
-  observacao: string | null;
 }
 
 /** Gera um ID de documento novo ('DOC-' + UUID). Funciona no navegador e no Node. */

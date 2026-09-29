@@ -18,7 +18,10 @@ Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios 
 
 ## F6: em andamento
 
-Edição de dados (plano-fundacao.md): mesma obrigatoriedade do cadastro (P-14), evento EDICAO com "antes → depois". Primeiro passo: contrato em `docs/contratos/f6-edicao-de-dados.md`, aprovado pelo Eric antes do código.
+Edição de dados (plano-fundacao.md): mesma obrigatoriedade do cadastro (P-14), evento EDICAO com "antes → depois". Contrato aprovado em `docs/contratos/f6-edicao-de-dados.md`.
+
+- Parte servidor concluída (Opus, sem créditos do Fable): regras em `packages/compartilhado/src/edicao.ts`, rota `PUT /documentos/:id/dados`, testes verdes. Relatório: [relatorios/2026-09-29-f6-api-edicao.md](relatorios/2026-09-29-f6-api-edicao.md).
+- Falta: parte interface (em andamento por outro agente), verificação integrada, QA e validação do Eric.
 
 ## Contas de teste no Entra
 

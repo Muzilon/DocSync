@@ -6,7 +6,7 @@
  * (que apenas esconde o que a pessoa não pode fazer).
  */
 
-import type { Documento, StatusDocumento } from './documentos.ts';
+import { FASE_DO_STATUS, type Documento, type StatusDocumento } from './documentos.ts';
 
 export const PERFIS = ['Administrador', 'Qualidade', 'Solicitante', 'Leitor'] as const;
 export type Perfil = (typeof PERFIS)[number];
@@ -45,7 +45,8 @@ export type Acao =
   | 'baixarArquivo'
   | 'mudarStatus'
   | 'cancelarDocumento'
-  | 'reativarDocumento';
+  | 'reativarDocumento'
+  | 'editarDados';
 
 /**
  * Contexto do registro sobre o qual a ação é feita: a área do documento (o
@@ -60,6 +61,8 @@ export interface ContextoPermissao {
    * mostrar o rodapé de ações).
    */
   transicao?: { de: StatusDocumento; para: StatusDocumento };
+  /** Só em 'editarDados' (F6): status atual do documento (o Solicitante só edita em fase 'devolvido'). */
+  status?: StatusDocumento;
 }
 
 /**
@@ -85,7 +88,7 @@ function transicaoDoSolicitante(transicao: { de: StatusDocumento; para: StatusDo
  * - 'daSuaArea': sem contexto → sim; com contexto → só se a área for a da pessoa.
  * - 'somenteComSuaArea': exige contexto com a área da pessoa (sem contexto → não).
  */
-type Regra = 'sim' | 'nao' | 'daSuaArea' | 'somenteComSuaArea' | 'daSuaAreaETransicaoPermitida';
+type Regra = 'sim' | 'nao' | 'daSuaArea' | 'somenteComSuaArea' | 'daSuaAreaETransicaoPermitida' | 'daSuaAreaSeDevolvido';
 
 const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   gerenciarPessoas: { Administrador: 'sim', Qualidade: 'nao', Solicitante: 'nao', Leitor: 'nao' },
@@ -103,6 +106,10 @@ const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   mudarStatus: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaAreaETransicaoPermitida', Leitor: 'nao' },
   cancelarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
   reativarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
+  // Contrato F6 (3.1, resposta 1 do Eric): Administrador e Qualidade editam em qualquer
+  // fase de tramitação (Aprovado/Cancelado ficam de fora por `podeEditarAgora`, para
+  // todos); o Solicitante só na sua área e só com o documento em fase 'devolvido'.
+  editarDados: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaAreaSeDevolvido', Leitor: 'nao' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -131,7 +138,11 @@ export function acessoLiberado(pessoa: Pessoa | null): pessoa is Pessoa & { perf
  * - `mudarStatus`: como `verDocumentos` quanto à área; com `contexto.transicao`,
  *   só se o par estiver em TRANSICOES_SOLICITANTE. `pode` NÃO embute a máquina de
  *   estados (transicoes.ts): "o fluxo aceita?" e "este perfil pode?" são conferidos
- *   separadamente pela API; a interface usa `acoesDeStatus`, que combina os dois.
+ *   separadamente pela API; a interface usa `acoesDeStatus`, que combina os dois;
+ * - `editarDados`: como `verDocumentos` quanto à área; com `contexto.status`, só se
+ *   o status estiver na fase 'devolvido'. Sem contexto → sim (pergunta genérica).
+ *   Para mudar a área do documento, a API pergunta também com a área NOVA: o
+ *   Solicitante não move documento de área.
  */
 export function pode(pessoa: Pessoa | null, acao: Acao, contexto?: ContextoPermissao): boolean {
   if (!acessoLiberado(pessoa)) return false;
@@ -149,6 +160,9 @@ export function pode(pessoa: Pessoa | null, acao: Acao, contexto?: ContextoPermi
     case 'daSuaAreaETransicaoPermitida':
       if (areaDoContexto !== undefined && !ehDaSuaArea) return false;
       return contexto?.transicao === undefined || transicaoDoSolicitante(contexto.transicao);
+    case 'daSuaAreaSeDevolvido':
+      if (areaDoContexto !== undefined && !ehDaSuaArea) return false;
+      return contexto?.status === undefined || FASE_DO_STATUS[contexto.status] === 'devolvido';
   }
 }
 
