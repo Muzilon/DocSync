@@ -257,6 +257,21 @@ describe('POST /documentos — cadastro', () => {
     });
   });
 
+  it('F6: revisão é obrigatória no cadastro (ausente → 400 no campo revisao)', async () => {
+    const { revisao: _omitida, ...semRevisao } = await novoDocumento();
+    const resposta = await cadastrar(ADMIN, semRevisao);
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json().codigo).toBe('dados_invalidos');
+    expect(Object.keys(resposta.json().campos)).toEqual(['revisao']);
+  });
+
+  it('F6: revisão como texto numérico ("2") é aceita e gravada como número', async () => {
+    const dados = { ...(await novoDocumento()), revisao: '2' };
+    const resposta = await cadastrar(ADMIN, dados);
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.json<Documento>().revisao).toBe(2);
+  });
+
   it('sem a parte dados, ou com JSON inválido → 400 no campo dados', async () => {
     const semDados = await amb.enviarFormulario(ADMIN, '/documentos', [PDF]);
     expect(semDados.json().campos.dados).toBe('Envie os dados do documento.');
