@@ -12,25 +12,18 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
 | F5 Mudança de status | Validada pelo Eric em 2026-09-29 | `ed3d59d`…`c89c7e2` |
-| **F6 Edição de dados** | **Servidor e interface entregues; QA aprovado com ressalvas; ajustes da validação feitos; aguardando validação do Eric** | `3c45b60`…`83d2d8c` |
+| F6 Edição de dados | Validada pelo Eric em 2026-09-29 | `3c45b60`…`4f16912` |
+| **F7 Anexos posteriores + versões de arquivo** | **Próxima; não começou (pausa combinada)** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
-## F6: o que falta
+## Próximo passo: F7
 
-1. Ajustes feitos (rodapé enxuto, "Editar" no título de Dados, reprogramar com prazo vencendo). O Eric roda o roteiro abaixo.
-2. Se ele disser "F6 validada": plano, CHANGELOG e seguir para a F7 (anexos posteriores + versões de arquivo, decisão 0014).
+Anexos posteriores + versões de arquivo (decisão 0014): anexo nunca cria documento; evento ANEXO; nova versão do arquivo com justificativa obrigatória e histórico de versões (1, 2, 3…, anterior nunca apagada); nome baixado `[código]-[título]_[revisão]=[versão]`; podem enviar Qualidade/Administrador e o Solicitante da área quando o documento está devolvido. Office Online fica com o SharePoint.
 
-Relatórios: `relatorios/2026-09-29-f6-*.md`. A parte servidor foi feita com Opus (Fable sem créditos).
+Como retomar: ler este arquivo, pedir o contrato da F7 ao agente de arquitetura (se o Fable seguir sem créditos, usar Opus e registrar), o Eric aprova, depois servidor e interface em paralelo, QA e validação.
 
-Roteiro da F6:
-- Detalhes → "Editar" (título da seção Dados): mudar Título e Área e salvar → aviso, cartão atualizado e "Edição de dados" na linha do tempo com "antes → depois".
-- Apagar o Remetente e salvar → recusado com a mesma mensagem do cadastro.
-- Salvar sem mudar nada → "Nenhum campo foi alterado." e nada é gravado.
-- Código + revisão iguais aos de outro documento → recusado no campo Código, nada é mesclado.
-- Duas abas: salvar na primeira; na segunda, mudar outro campo e salvar → aviso com o que mudou; salvar de novo não desfaz a primeira.
-- Esc com alteração → "Descartar alterações?".
-- Solicitante: botão só em Devolvido da sua área, com Área travada. Leitor: sem botão. Aprovado e Cancelado: sem botão para ninguém.
+Pendências gerais: `main` ainda não tem F3 a F6 (tudo na branch `claude/busy-lamport-d8ggj1`; fazer merge ou PR quando o Eric quiser); contas de teste do Entra (script pronto); Painel do visualizador (ideia); F9 (chave de idempotência por evento); teste integrado com a API real (a vitrine simula a API).
 
 ## Contas de teste no Entra
 
