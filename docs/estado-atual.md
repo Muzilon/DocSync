@@ -11,27 +11,14 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
-| **F5 Mudança de status** | **Servidor e interface entregues; QA aprovado com ressalvas; correções pós-QA feitas; aguardando validação do Eric** | `ed3d59d`…`1f9da60` |
+| F5 Mudança de status | Validada pelo Eric em 2026-09-29 | `ed3d59d`…`c89c7e2` |
+| **F6 Edição de dados** | **Em andamento: contrato** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
-## F5: o que falta
+## F6: em andamento
 
-1. Correções pós-QA feitas (rodapé enxuto, quadro com a altura da janela, "Cancelar documento"). O Eric roda o roteiro abaixo.
-2. Se ele disser "F5 validada": marcar no plano, CHANGELOG e seguir para a F6.
-
-Relatórios: `relatorios/2026-09-29-f5-*.md` (API, web, QA). Pendências: F9 (chave de idempotência por evento); regra "só adia" sem efeito prático depois da 0015.
-
-Roteiro da F5 (com `npm.cmd run dev` reiniciado; a migração 0005 roda sozinha):
-- Cartão sem botões: prazo neutro/laranja/vermelho e iniciais do responsável; clique ou Enter abre os detalhes. Só as colunas rolam; a página não.
-- Detalhes → ação principal (ex.: "Iniciar revisão") com responsável; o cartão muda de coluna e mostra as iniciais.
-- "Atualizar etapa…": todas as outras transições permitidas; responsável obrigatório em revisão, devolvido e aprovação.
-- Aprovar pede confirmação ("a aprovação é final"); o KPI "Aprovados no mês" sobe.
-- "Cancelar documento": motivo curto dá erro; motivo válido → aviso com "Desfazer" (8 s) que traz o documento de volta.
-- Cancelados → abrir um → Reativar: a confirmação diz para qual status ele volta.
-- "Reprogramar" só aparece com prazo vencido.
-- Duas abas no mesmo documento: a segunda mudança avisa que alguém alterou.
-- Contas de teste: Solicitante só reenvia devolvidos e aprova pela área; Leitor só vê.
+Edição de dados (plano-fundacao.md): mesma obrigatoriedade do cadastro (P-14), evento EDICAO com "antes → depois". Primeiro passo: contrato em `docs/contratos/f6-edicao-de-dados.md`, aprovado pelo Eric antes do código.
 
 ## Contas de teste no Entra
 
@@ -47,6 +34,7 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 ## Ambiente local do Eric
 
 - **Máquina principal (a partir de 2026-09-29): notebook da Monto**, Windows, repositório clonado dentro do OneDrive. O PowerShell bloqueia scripts: usar `npm.cmd ...` ou o cmd. Recomendado mover o clone para fora do OneDrive (ex.: `C:\dev\DocSync`), por causa de `node_modules` e `dados-locais/`.
+- No notebook, banco e arquivos fora do OneDrive (`BANCO_PASTA=C:/dev/docsync-dados/banco`, `ARMAZENAMENTO_PASTA=C:/dev/docsync-dados/arquivos`): o PGlite não abre dentro da pasta sincronizada.
 - `.env` do notebook montado à mão a partir do `.env.example` (IDs do locatário e do aplicativo de teste, `ADMINISTRADORES_INICIAIS`, `AREA_ADMINISTRADOR_INICIAL=Qualidade`). Banco local começa vazio nessa máquina.
 - Risco: a rede/política da Monto pode barrar o login com o locatário de teste; se acontecer, avaliar com a TI ou usar a máquina pessoal.
 - Máquina anterior (`eric2`, pessoal): Node 24, sem Docker, PGlite em `dados-locais/banco`; o Eric faz commits pelo GitHub Desktop; o pre-commit (secretlint) funciona nele.
