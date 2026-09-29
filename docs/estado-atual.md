@@ -10,23 +10,14 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F1 Login Microsoft, casca, pessoas e perfis, visual Vigen | Validada | `a8a8d7a`, `9617d33` |
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
-| **F4 Detalhes + histórico** | **Pronta (servidor e interface); QA aprovado com ressalvas, correções em andamento; depois vai para validação do Eric** | `8cd5ee7`…`733a9b3` |
+| F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
+| **F5 Mudança de status** | **Em andamento: contrato** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
-## F4: o que falta
+## F5: em andamento
 
-1. Correções pós-QA terminando; depois, o Eric roda o roteiro abaixo e responde os pontos do [QA](relatorios/2026-09-29-f4-qa.md).
-2. Se ele disser "F4 validada": marcar no plano, CHANGELOG, commit e seguir para a F5.
-
-Roteiro da F4 (com `npm.cmd run dev` reiniciado; a migração 0004 roda sozinha):
-- Painel: Tab até o título de um cartão + Enter abre os detalhes; Tab fica dentro; Esc fecha e o foco volta ao título. Clicar no corpo do cartão também abre; "Reprogramar" no cartão não abre os detalhes.
-- Linha do tempo: mais recente primeiro, autor e data/hora certos; reprogramar pelo modal atualiza o prazo no modal e no cartão e cria o evento com "Prazo: antigo → novo" e a justificativa.
-- Baixar (Administrador/Qualidade): principal como `CÓDIGO-Título_Revisão=1.pdf`, sem código `SEM-CODIGO-...`; anexos com o nome original; conteúdo igual ao enviado. Testar um arquivo com acento no Edge/Chrome.
-- Leitor: vê os detalhes e a lista de arquivos, sem "Baixar" e sem "Reprogramar". Solicitante: baixa só na sua área; `/documentos/<id>` de outra área mostra "não encontrado".
-- Cancelados: clicar num cartão da janela abre os detalhes por cima; Esc volta para a janela.
-- Links: "Abrir detalhes" no aviso do cadastro; a URL `/painel?documento=...` reabre ao recarregar; `/documentos/<id>` redireciona.
-- 768px: sem rolagem horizontal; a linha do tempo fica abaixo de Dados e Arquivos.
+Mudança de status (plano-fundacao.md), com o KPI "Aprovados no mês" e as metas de 14/40 dias (decisão 0012). Primeiro passo: contrato em `docs/contratos/f5-mudanca-de-status.md`, aprovado pelo Eric antes do código. Em paralelo, ajustes finais da F4 ("Revisa o documento" escondido; frase do Leitor).
 
 ## Contas de teste no Entra
 

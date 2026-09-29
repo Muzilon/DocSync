@@ -300,7 +300,8 @@ Decisão [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md): **sem v
 ## 11. Ajustes de implementação (registrados após o QA, 2026-09-29)
 
 1. Erro de download e sucesso da reprogramação feita no modal aparecem **dentro do modal** (alerta e status anunciado), não em toast: com o modal aberto, o fundo fica inerte e o toast não seria anunciado.
-2. "Revisa o documento" mostra o `DOC-uuid` de origem (o `Documento` não traz o código da origem); a forma final vem na F8. Hoje nenhum documento tem origem. *(Aguarda o Eric.)*
+2. "Revisa o documento" fica **escondido até a F8** (resposta do Eric).
 3. Ícone de imagem: `FileImage` (lucide), no lugar de `Image`.
-4. Nome do principal baixado limitado a 200 caracteres (corte só no título, preservando código, revisão, versão e extensão) e espaços repetidos unidos em um: limite prático do Windows. *(Aguarda o Eric.)*
+4. Nome do principal baixado limitado a 200 caracteres (corte só no título, preservando código, revisão, versão e extensão) e espaços repetidos unidos em um. O Eric pediu que o limite siga o do Windows: o Explorador aceita caminhos de até 260 caracteres, e 200 deixa margem para a pasta Downloads (aprovado).
 5. HEAD desligado nas rotas de leitura e download (não pode gerar registro de acesso).
+6. Leitor vê a frase "Seu perfil pode ver, mas não baixar arquivos." na seção Arquivos (resposta do Eric).
