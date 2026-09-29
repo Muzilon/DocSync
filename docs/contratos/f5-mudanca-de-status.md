@@ -528,3 +528,14 @@ Mantidos os três pontos decididos na implementação do servidor: (1) documento
 1. Rodapé do modal enxuto: ação principal, "Atualizar etapa…", "Cancelar", "Reprogramar" (só vencido) e "Fechar"; as demais transições ficam dentro de "Atualizar etapa…".
 2. Reativar dos cancelados fica nos detalhes (cartão sem botões).
 3. KPIs em 2 colunas abaixo de 1200px.
+
+## 14. Ajustes de implementação registrados após o QA (2026-09-29)
+
+1. Rodapé do modal: a ação principal vem primeiro (não "as três primeiras" da lista); com a seção 13, o rodapé fica só com principal, "Atualizar etapa…", "Cancelar documento", "Reprogramar" (vencido), "Reativar" (cancelado) e "Fechar". O botão destrutivo se chama "Cancelar documento".
+2. Reativar da janela de cancelados só nos detalhes (decisão 0015; mesmo caminho do Desfazer, P-17).
+3. KPIs em 2 colunas abaixo de 1200px.
+4. A vitrine não tem `?toast=cancelado`; o e2e cobre o fluxo real de cancelar e desfazer.
+5. Toast com tom de erro; `ErroApi` usa a mensagem do servidor só em `acao_nao_permitida` e `sem_permissao`.
+6. `pode(Solicitante, 'mudarStatus')` sem `areaId` responde `true` (libera `GET /responsaveis`); as rotas sempre passam a área do documento.
+7. Reenvio com a versão anterior sobre documento já final responde `409 conflito_versao` com o documento (nada é gravado), não `acao_nao_permitida`.
+8. Quadro com a altura da janela: só as colunas rolam na vertical (decisão 0015, item 4).

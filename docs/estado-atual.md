@@ -11,13 +11,27 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
-| **F5 Mudança de status** | **Em andamento: contrato aprovado, implementação** | — |
+| **F5 Mudança de status** | **Servidor e interface entregues; QA aprovado com ressalvas; correções pós-QA (rodapé enxuto, rolagem do quadro) em andamento; depois validação do Eric** | `ed3d59d`…`1f9da60` |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
-## F5: em andamento
+## F5: o que falta
 
-Mudança de status (plano-fundacao.md), com o KPI "Aprovados no mês" e as metas de 14/40 dias (decisão 0012). Contrato em `docs/contratos/f5-mudanca-de-status.md`, aprovado pelo Eric (seção 11 prevalece). **Parte servidor entregue** em 2026-09-29 (relatório `relatorios/2026-09-29-f5-api-status.md`): tipos e regras no compartilhado, migração 0005, rotas de transição/cancelamento/reativação, `GET /responsaveis`, reprogramação só com prazo vencido (decisão 0015). Parte interface em andamento por outro agente (typecheck da web pendente até ela absorver `Documento.responsavelId/responsavel` e as funções novas do cliente). Depois: verificação integrada, QA e roteiro para o Eric.
+1. Correções pós-QA terminando (rodapé enxuto aprovado, quadro com a altura da janela, pequenos ajustes). Depois, o Eric roda o roteiro abaixo.
+2. Se ele disser "F5 validada": marcar no plano, CHANGELOG e seguir para a F6.
+
+Relatórios: `relatorios/2026-09-29-f5-*.md` (API, web, QA). Pendências: F9 (chave de idempotência por evento); regra "só adia" sem efeito prático depois da 0015.
+
+Roteiro da F5 (com `npm.cmd run dev` reiniciado; a migração 0005 roda sozinha):
+- Cartão sem botões: prazo neutro/laranja/vermelho e iniciais do responsável; clique ou Enter abre os detalhes. Só as colunas rolam; a página não.
+- Detalhes → ação principal (ex.: "Iniciar revisão") com responsável; o cartão muda de coluna e mostra as iniciais.
+- "Atualizar etapa…": todas as outras transições permitidas; responsável obrigatório em revisão, devolvido e aprovação.
+- Aprovar pede confirmação ("a aprovação é final"); o KPI "Aprovados no mês" sobe.
+- "Cancelar documento": motivo curto dá erro; motivo válido → aviso com "Desfazer" (8 s) que traz o documento de volta.
+- Cancelados → abrir um → Reativar: a confirmação diz para qual status ele volta.
+- "Reprogramar" só aparece com prazo vencido.
+- Duas abas no mesmo documento: a segunda mudança avisa que alguém alterou.
+- Contas de teste: Solicitante só reenvia devolvidos e aprova pela área; Leitor só vê.
 
 ## Contas de teste no Entra
 
