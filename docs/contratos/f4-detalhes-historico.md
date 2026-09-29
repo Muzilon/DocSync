@@ -292,3 +292,7 @@ A vitrine (`apps/web/e2e/vitrine/`) ganha um documento com 6+ eventos de todos o
 6. Link direto como proposto (`/painel?documento=<id>` e `/documentos/<id>` redirecionando).
 7. Campos do bloco Dados: mantidos como propostos.
 8. Cartões da janela de cancelados abrem detalhes (modal sobre modal).
+
+## 10. Correção do Eric (2026-09-29) — prevalece sobre a seção 9
+
+Decisão [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md): **sem visualizador e sem marca d'água**; PDF e demais formatos só com "Baixar". `baixarArquivo`: Administrador, Qualidade e Solicitante da área; Leitor não. Registro imutável de cada download mantido. Nome do principal baixado: `[código]-[título]_[revisão]=[versão].[ext]` (sem código: `SEM-CODIGO-...`; versão = 1 até a F7); anexos com o nome original. Versões de arquivo com justificativa: F7. Office Online: fatia do SharePoint.

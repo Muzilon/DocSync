@@ -1,7 +1,7 @@
 # 0013 — Visualizador de PDF, marca d'água "CÓPIA NÃO CONTROLADA" e registro de acesso a arquivos
 
 - **Data:** 2026-09-29
-- **Status:** Aprovada pelo Eric (respostas ao contrato da F4). O item 5 aguarda confirmação.
+- **Status:** **Substituída** pela decisão [0014](0014-download-nome-e-versoes-de-arquivo.md) em 2026-09-29 (só o registro de acesso continua valendo).
 - **Muda:** o contrato da F4 (seção 8, pontos 3 e 4) e acrescenta duas bibliotecas à stack (decisão 0001).
 
 ## Contexto
