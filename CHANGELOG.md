@@ -48,3 +48,4 @@ Uma linha por mudança relevante, na data em que aconteceu, com link para a deci
 
 - F4: QA aprovado com ressalvas; ajustes de implementação registrados no contrato (seção 11). Relatório: [docs/relatorios/2026-09-29-f4-qa.md](docs/relatorios/2026-09-29-f4-qa.md).
 - F4 validada pelo Eric: detalhes, linha do tempo, download com nome padronizado e registro de acesso ([contrato](docs/contratos/f4-detalhes-historico.md), [QA](docs/relatorios/2026-09-29-f4-qa.md)). Ajustes finais: "Revisa o documento" escondido até a F8; frase para o Leitor.
+- F4 (validação): modal de detalhes esconde "Revisa o documento" até a F8 e mostra "Seu perfil pode ver, mas não baixar arquivos." a quem não baixa (contrato F4, 11.2 e 11.6). Relatório: [docs/relatorios/2026-09-29-f4-web-detalhes.md](docs/relatorios/2026-09-29-f4-web-detalhes.md) (seção "Ajustes finais (validação)").
