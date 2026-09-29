@@ -294,3 +294,12 @@ A vitrine (`apps/web/e2e/vitrine/`) ganha `?editar=1` (abre os detalhes do docum
 4. Sem justificativa na edição.
 
 Nota de processo: sem créditos do Fable, a parte servidor da F6 é implementada com Opus (registrado no relatório).
+
+## 10. Ajustes durante a implementação (registrados após o QA, 2026-09-29)
+
+1. Mensagem única da revisão, na API e nas telas: "O número de revisão deve ser um inteiro de 0 a 999." (teto 999 também na tela). *(Aguarda o Eric.)*
+2. Conflito de versão: o que a pessoa digitou fica; os campos que ela não tocou passam ao valor atual do servidor, para o reenvio não desfazer a mudança da outra pessoa (decisão 0002). *(Aguarda o Eric.)*
+3. Dica em "N° de revisão": "Corrige o número deste documento; não cria uma revisão nova." *(Aguarda o Eric.)*
+4. `revisao` passou a ser obrigatória também no `POST /documentos` (antes, ausente virava 0); a tela sempre envia o campo.
+5. O perfil é conferido de novo dentro da transação.
+6. O rodapé do modal pode ter até 6 botões (Administrador/Qualidade com prazo vencido); em 768px quebra em duas linhas, sem rolagem horizontal.
