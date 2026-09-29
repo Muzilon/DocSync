@@ -1,14 +1,12 @@
 /**
- * F4 (parte servidor): GET /documentos/:id estendido, download e visualização de
- * arquivos com marca d'água, registro imutável de acesso (decisão 0013).
+ * F4 (parte servidor): GET /documentos/:id estendido, download de arquivos sem marca
+ * d'água, nome do principal pela decisão 0014 e registro imutável de acesso.
  * Banco PGlite em memória, armazenamento em memória, JWKS local. Nada de internet.
  */
 import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import type { Area, DetalheDocumento, Documento, NovoDocumento, Pessoa, TipoDocumento } from '@docsync/compartilhado';
-import { TEXTO_MARCA_DAGUA } from '@docsync/compartilhado';
 import type { JWTPayload } from 'jose';
-import { PDFDocument } from 'pdf-lib';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   ADMIN,
@@ -19,20 +17,16 @@ import {
   type EntraFalso,
   type ParteFormulario,
 } from './apoio-testes.ts';
-import { pdfDeTeste } from './armazenamento/marca-dagua.test.ts';
 import { listarAcessosArquivos } from './banco/documentos.ts';
 import { hojeNoFuso } from './datas.ts';
 
 let entra: EntraFalso;
 let amb: Ambiente;
-let pdfValido: Buffer;
+/** Conteúdo fictício com cabeçalho de PDF; a API não interpreta o conteúdo (decisão 0014). */
+const pdfValido = Buffer.from('%PDF-1.4\n% conteúdo fictício de teste\n%%EOF\n');
 
 beforeAll(async () => {
   entra = await criarEntraFalso();
-  pdfValido = await pdfDeTeste([
-    [595, 842],
-    [595, 842],
-  ]);
 });
 beforeEach(async () => {
   amb = await criarAmbiente(entra);
@@ -158,8 +152,8 @@ describe('GET /documentos/:id — detalhe estendido (contrato F4, seção 2)', (
   });
 });
 
-describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, seção 4; decisão 0013)', () => {
-  it('não PDF: 200 com o corpo igual ao gravado, Content-Length, tipo pela extensão e prefixo no nome', async () => {
+describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, seções 4 e 10; decisão 0014)', () => {
+  it('anexo: 200 com o corpo igual ao gravado, Content-Length, tipo pela extensão e nome original (sem prefixo)', async () => {
     const detalhe = await cadastrarComArquivos();
     const anexo = anexoDe(detalhe, 'Zebra.xlsx');
     const resposta = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${anexo.id}`);
@@ -168,37 +162,37 @@ describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, se�
     expect(resposta.headers['content-length']).toBe(String(Buffer.byteLength('xlsx-zebra')));
     expect(resposta.headers['content-type']).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     expect(resposta.headers['content-disposition']).toBe(
-      `attachment; filename="COPIA-NAO-CONTROLADA_Zebra.xlsx"; filename*=UTF-8''COPIA-NAO-CONTROLADA_Zebra.xlsx`,
+      `attachment; filename="Zebra.xlsx"; filename*=UTF-8''Zebra.xlsx`,
     );
     expect(resposta.headers['x-content-type-options']).toBe('nosniff');
     expect(resposta.headers['cache-control']).toBe('private, no-store');
     expect(resposta.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
   });
 
-  it('PDF: sai com "CÓPIA NÃO CONTROLADA" em todas as páginas, sem prefixo, nome com acento codificado; original intacto', async () => {
-    const detalhe = await cadastrarComArquivos();
+  it('principal: sai byte a byte igual ao gravado, sem marca, com nome [código]-[título]_[revisão]=[versão].[ext]', async () => {
+    const detalhe = await cadastrarComArquivos(ADMIN, { codigo: 'PR-QUA-0010', titulo: 'Procedimento de auditoria: interna', revisao: 2 });
     const principal = principalDe(detalhe);
     const resposta = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${principal.id}`);
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers['content-type']).toBe('application/pdf');
     expect(resposta.headers['content-disposition']).toBe(
-      `attachment; filename="Relat_rio Final.pdf"; filename*=UTF-8''Relat%C3%B3rio%20Final.pdf`,
+      `attachment; filename="PR-QUA-0010-Procedimento de auditoria- interna_2=1.pdf"; filename*=UTF-8''PR-QUA-0010-Procedimento%20de%20auditoria-%20interna_2%3D1.pdf`,
     );
-    expect(resposta.headers['content-length']).toBe(String(resposta.rawPayload.length));
-
-    const entregue = await PDFDocument.load(resposta.rawPayload);
-    expect(entregue.getPageCount()).toBe(2);
-    const hexMarca = Buffer.from(TEXTO_MARCA_DAGUA, 'latin1').toString('hex');
-    const textoPdf = resposta.rawPayload.toString('latin1');
-    // O conteúdo entregue é diferente do original e traz a fonte da marca.
-    expect(resposta.rawPayload.equals(pdfValido)).toBe(false);
-    expect(textoPdf).toContain('Helvetica-Bold');
-    expect(textoPdf.length).toBeGreaterThan(0);
-    expect(hexMarca.length).toBe(TEXTO_MARCA_DAGUA.length * 2);
-
+    expect(resposta.headers['content-length']).toBe(String(pdfValido.length));
+    expect(resposta.rawPayload.equals(pdfValido)).toBe(true);
     // Original no armazenamento não muda.
     const gravado = await amb.armazenamento.ler(detalhe.documento.id, 'Relatório Final.pdf');
     expect(gravado!.equals(pdfValido)).toBe(true);
+  });
+
+  it('principal sem código: SEM-CODIGO-[título]_[revisão]=1; anexo com acento sai com o nome original codificado', async () => {
+    const detalhe = await cadastrarComArquivos();
+    const principal = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${principalDe(detalhe).id}`);
+    expect(principal.headers['content-disposition']).toBe(
+      `attachment; filename="SEM-CODIGO-Procedimento de teste_0=1.pdf"; filename*=UTF-8''SEM-CODIGO-Procedimento%20de%20teste_0%3D1.pdf`,
+    );
+    const anexo = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, 'ábaco.docx').id}`);
+    expect(anexo.headers['content-disposition']).toBe(`attachment; filename="_baco.docx"; filename*=UTF-8''%C3%A1baco.docx`);
   });
 
   it('tipo_mime gravado como text/html nunca sai como text/html', async () => {
@@ -224,7 +218,7 @@ describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, se�
     expect(await listarAcessosArquivos(amb.banco, a.documento.id)).toEqual([]);
   });
 
-  it('documento invisível (Solicitante de outra área) → 404 mesmo com arquivoId certo; Leitor → 200; sem acesso → 403; sem token → 401', async () => {
+  it('documento invisível (Solicitante de outra área) → 404 mesmo com arquivoId certo; Leitor → 403 (decisão 0014); sem acesso → 403; sem token → 401', async () => {
     const detalhe = await cadastrarComArquivos(ADMIN, { areaId: await idDaArea('Custos') });
     const url = `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, 'Foto.JPG').id}`;
     const solicitante = await pessoaComPerfil('sol', 'Solicitante', 'Engenharia');
@@ -232,17 +226,26 @@ describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, se�
     const escondido = await amb.chamar(solicitante, 'GET', url);
     expect(escondido.statusCode).toBe(404);
     expect(escondido.json()).toEqual({ codigo: 'nao_encontrado' });
-    expect((await amb.chamar(leitor, 'GET', url)).statusCode).toBe(200);
+    const doLeitor = await amb.chamar(leitor, 'GET', url);
+    expect(doLeitor.statusCode).toBe(403);
+    expect(doLeitor.json()).toEqual({ codigo: 'sem_permissao' });
+    // O Leitor continua vendo os detalhes (só não baixa).
+    expect((await amb.chamar(leitor, 'GET', `/documentos/${detalhe.documento.id}`)).statusCode).toBe(200);
     expect((await amb.chamar(pessoaFicticia('sem'), 'GET', url)).statusCode).toBe(403);
     expect((await amb.app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    // Recusas não geram registro de acesso.
+    expect(await listarAcessosArquivos(amb.banco, detalhe.documento.id)).toEqual([]);
   });
 
-  it('Solicitante da área do documento baixa', async () => {
+  it('Solicitante da área do documento e Qualidade de outra área baixam', async () => {
     const detalhe = await cadastrarComArquivos(ADMIN, { areaId: await idDaArea('Engenharia') });
     const solicitante = await pessoaComPerfil('sol', 'Solicitante', 'Engenharia');
-    const resposta = await amb.chamar(solicitante, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, 'Foto.JPG').id}`);
+    const qualidade = await pessoaComPerfil('qua', 'Qualidade', 'Qualidade');
+    const url = `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, 'Foto.JPG').id}`;
+    const resposta = await amb.chamar(solicitante, 'GET', url);
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers['content-type']).toBe('image/jpeg');
+    expect((await amb.chamar(qualidade, 'GET', url)).statusCode).toBe(200);
   });
 
   it('arquivo ausente no armazenamento → 404 arquivo_indisponivel, sem registro de acesso', async () => {
@@ -263,21 +266,13 @@ describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, se�
     expect(resposta.json()).toEqual({ codigo: 'erro_interno' });
   });
 
-  it('PDF que não aceita a marca (cifrado ou corrompido) → 409 arquivo_indisponivel, nunca entrega sem marca', async () => {
-    const cifrado = await PDFDocument.create();
-    cifrado.addPage();
-    cifrado.context.trailerInfo.Encrypt = cifrado.context.obj({ Filter: 'Standard', V: 1, R: 2, P: -1 });
+  it('PDF cifrado ou corrompido é entregue como está (sem marca d\u2019água, nada a aplicar)', async () => {
     const detalhe = await cadastrarComArquivos(ADMIN, {}, [
-      { campo: 'anexos', arquivo: 'cifrado.pdf', conteudo: Buffer.from(await cifrado.save({ useObjectStreams: false })) },
       { campo: 'anexos', arquivo: 'quebrado.pdf', conteudo: '%PDF-1.4 conteúdo fictício' },
     ]);
-    for (const nome of ['cifrado.pdf', 'quebrado.pdf']) {
-      const resposta = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, nome).id}`);
-      expect(resposta.statusCode).toBe(409);
-      expect(resposta.json()).toMatchObject({ codigo: 'arquivo_indisponivel' });
-      expect(resposta.headers['content-type']).toContain('application/json');
-    }
-    expect(await listarAcessosArquivos(amb.banco, detalhe.documento.id)).toEqual([]);
+    const resposta = await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${anexoDe(detalhe, 'quebrado.pdf').id}`);
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.rawPayload.toString()).toBe('%PDF-1.4 conteúdo fictício');
   });
 
   it('esquema fechado: parâmetro de query → 400', async () => {
@@ -323,50 +318,31 @@ describe('GET /documentos/:id/arquivos/:arquivoId — download (contrato F4, se�
   });
 });
 
-describe('GET /documentos/:id/arquivos/:arquivoId/visualizacao — visualizador (decisão 0013)', () => {
-  it('PDF: 200 inline, com marca, no-store; não PDF → 409 acao_nao_permitida', async () => {
+describe('rota de visualização removida (decisão 0014)', () => {
+  it('GET .../visualizacao → 404 sem registro de acesso', async () => {
     const detalhe = await cadastrarComArquivos();
-    const base = `/documentos/${detalhe.documento.id}/arquivos`;
-    const pdf = await amb.chamar(ADMIN, 'GET', `${base}/${principalDe(detalhe).id}/visualizacao`);
-    expect(pdf.statusCode).toBe(200);
-    expect(pdf.headers['content-type']).toBe('application/pdf');
-    expect(pdf.headers['content-disposition']).toMatch(/^inline; filename="Relat_rio Final\.pdf"/);
-    expect(pdf.headers['cache-control']).toBe('private, no-store');
-    expect(pdf.headers['x-content-type-options']).toBe('nosniff');
-    expect(pdf.rawPayload.toString('latin1')).toContain('Helvetica-Bold');
-    expect(pdf.rawPayload.equals(pdfValido)).toBe(false);
-
-    const naoPdf = await amb.chamar(ADMIN, 'GET', `${base}/${anexoDe(detalhe, 'Zebra.xlsx').id}/visualizacao`);
-    expect(naoPdf.statusCode).toBe(409);
-    expect(naoPdf.json()).toMatchObject({ codigo: 'acao_nao_permitida' });
-  });
-
-  it('mesmas checagens do download: documento invisível → 404, sem acesso → 403, sem token → 401', async () => {
-    const detalhe = await cadastrarComArquivos(ADMIN, { areaId: await idDaArea('Custos') });
     const url = `/documentos/${detalhe.documento.id}/arquivos/${principalDe(detalhe).id}/visualizacao`;
-    const solicitante = await pessoaComPerfil('sol', 'Solicitante', 'Engenharia');
-    expect((await amb.chamar(solicitante, 'GET', url)).statusCode).toBe(404);
-    expect((await amb.chamar(pessoaFicticia('sem'), 'GET', url)).statusCode).toBe(403);
-    expect((await amb.app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    expect((await amb.chamar(ADMIN, 'GET', url)).statusCode).toBe(404);
+    expect(await listarAcessosArquivos(amb.banco, detalhe.documento.id)).toEqual([]);
   });
 });
 
-describe('registros_acesso_arquivos — registro imutável (decisão 0013, item 4)', () => {
-  it('grava VISUALIZACAO e DOWNLOAD com autor do token, em ordem, sem tocar na linha do tempo', async () => {
+describe('registros_acesso_arquivos — registro imutável (decisão 0014, item 3)', () => {
+  it('grava DOWNLOAD com autor do token, em ordem, sem tocar na linha do tempo', async () => {
     const detalhe = await cadastrarComArquivos();
-    const leitor = await pessoaComPerfil('lei', 'Leitor', 'Suprimentos');
+    const qualidade = await pessoaComPerfil('qua', 'Qualidade', 'Qualidade');
     const base = `/documentos/${detalhe.documento.id}/arquivos`;
     const principal = principalDe(detalhe);
     const anexo = anexoDe(detalhe, 'Foto.JPG');
-    expect((await amb.chamar(leitor, 'GET', `${base}/${principal.id}/visualizacao`)).statusCode).toBe(200);
+    expect((await amb.chamar(qualidade, 'GET', `${base}/${principal.id}`)).statusCode).toBe(200);
     expect((await amb.chamar(ADMIN, 'GET', `${base}/${anexo.id}`)).statusCode).toBe(200);
-    expect((await amb.chamar(leitor, 'GET', `${base}/${principal.id}`)).statusCode).toBe(200);
+    expect((await amb.chamar(qualidade, 'GET', `${base}/${principal.id}`)).statusCode).toBe(200);
 
-    const eu = (await amb.chamar(leitor, 'GET', '/eu')).json<Pessoa>();
+    const eu = (await amb.chamar(qualidade, 'GET', '/eu')).json<Pessoa>();
     const admin = (await amb.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
     const registros = await listarAcessosArquivos(amb.banco, detalhe.documento.id);
     expect(registros.map((r) => [r.tipo, r.idArquivo, r.autorId, r.autorNome])).toEqual([
-      ['VISUALIZACAO', principal.id, eu.id, eu.nome],
+      ['DOWNLOAD', principal.id, eu.id, eu.nome],
       ['DOWNLOAD', anexo.id, admin.id, admin.nome],
       ['DOWNLOAD', principal.id, eu.id, eu.nome],
     ]);
@@ -381,7 +357,7 @@ describe('registros_acesso_arquivos — registro imutável (decisão 0013, item 
     expect(depois.documento.versao).toBe(detalhe.documento.versao);
   });
 
-  it('UPDATE, DELETE e TRUNCATE são recusados; tipo fora da lista e autor inexistente também', async () => {
+  it('UPDATE, DELETE e TRUNCATE são recusados; tipo fora da lista também (VISUALIZACAO fica previsto, sem uso)', async () => {
     const detalhe = await cadastrarComArquivos();
     const principal = principalDe(detalhe);
     expect((await amb.chamar(ADMIN, 'GET', `/documentos/${detalhe.documento.id}/arquivos/${principal.id}`)).statusCode).toBe(200);

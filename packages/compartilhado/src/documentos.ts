@@ -351,16 +351,54 @@ export function tipoMimePorExtensao(nome: string): string {
     : TIPO_MIME_GENERICO;
 }
 
-/** Só PDF tem visualizador e marca d'água (decisão 0013). */
+/** O arquivo é um PDF (pela extensão). Sem uso especial na tramitação desde a decisão 0014. */
 export function ehPdf(nome: string): boolean {
   return extensaoArquivo(nome) === 'pdf';
 }
 
-/** Texto da marca d'água aplicada em cada página do PDF entregue (decisão 0013). */
-export const TEXTO_MARCA_DAGUA = 'CÓPIA NÃO CONTROLADA';
+// ---------------------------------------------------------------------------
+// Nome do arquivo principal baixado (decisão 0014, item 4)
+// ---------------------------------------------------------------------------
 
-/** Prefixo do nome de download de arquivos que não recebem marca d'água (decisão 0013, item 5). */
-export const PREFIXO_COPIA_NAO_CONTROLADA = 'COPIA-NAO-CONTROLADA_';
+/** Caracteres que o Windows não aceita em nome de arquivo, mais os de controle. */
+const PROIBIDOS_WINDOWS = /[\\/:*?"<>|\u0000-\u001f\u007f]/g;
+
+/** Código usado quando o documento ainda não tem código (decisão 0014, item 4). */
+export const CODIGO_AUSENTE_DOWNLOAD = 'SEM-CODIGO';
+
+/** Versão de todo arquivo até a F7 (versionamento com justificativa). */
+export const VERSAO_ARQUIVO_INICIAL = 1;
+
+/** Limite prático do nome baixado (sistemas de arquivos aceitam 255; folga para a pasta). */
+export const TAMANHO_MAXIMO_NOME_DOWNLOAD = 200;
+
+function semProibidosWindows(texto: string): string {
+  return texto.replace(PROIBIDOS_WINDOWS, '-').replace(/\s+/g, ' ').replace(/^[\s.]+|[\s.]+$/g, '');
+}
+
+/**
+ * Nome do arquivo PRINCIPAL baixado: `[código]-[título]_[revisão]=[versão].[ext]`, ex.:
+ * `PR-QUA-0010-Procedimento de auditoria interna_1=3.pdf`. Sem código, `SEM-CODIGO-...`.
+ * O título entra inteiro, só sem os caracteres que o Windows não aceita (`\ / : * ? " < > |`
+ * e de controle) e sem ponto ou espaço nas pontas. A extensão vem do nome do arquivo
+ * (minúscula); sem extensão, sem ponto. Nome maior que 200 caracteres é cortado no
+ * título, preservando o sufixo de revisão/versão e a extensão. Anexos NÃO passam por
+ * aqui: baixam com o nome original.
+ */
+export function nomeDownloadPrincipal(
+  documento: Pick<Documento, 'codigo' | 'titulo' | 'revisao'>,
+  nomeArquivo: string,
+  versao: number = VERSAO_ARQUIVO_INICIAL,
+): string {
+  const codigo = semProibidosWindows(documento.codigo ?? '') || CODIGO_AUSENTE_DOWNLOAD;
+  const titulo = semProibidosWindows(documento.titulo) || 'Documento';
+  const extensao = extensaoArquivo(nomeArquivo);
+  const sufixo = `_${documento.revisao}=${versao}${extensao ? `.${extensao}` : ''}`;
+  const prefixo = `${codigo}-`;
+  const espaco = TAMANHO_MAXIMO_NOME_DOWNLOAD - prefixo.length - sufixo.length;
+  const tituloCabe = titulo.length > espaco ? titulo.slice(0, Math.max(espaco, 1)).replace(/[\s.]+$/g, '') || 'Documento' : titulo;
+  return `${prefixo}${tituloCabe}${sufixo}`;
+}
 
 const UNIDADES_TAMANHO = ['B', 'KB', 'MB', 'GB'] as const;
 const formatadorTamanho = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });

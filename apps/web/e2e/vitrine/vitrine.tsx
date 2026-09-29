@@ -9,6 +9,7 @@ import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
 import {
   FASE_DO_STATUS,
   filtrarCartoes,
+  nomeDownloadPrincipal,
   somarDias,
   type Area,
   type ArquivoDocumento,
@@ -191,12 +192,13 @@ function detalheDe(c: CartaoPainel) {
   return { documento, arquivos, eventos, hoje: HOJE };
 }
 
-function acharArquivo(id: string, arquivoId: string): { arquivo: ArquivoDocumento } {
+function acharArquivo(id: string, arquivoId: string): { documento: Documento; arquivo: ArquivoDocumento } {
   const c = cartoes.find((x) => x.id === id);
   if (!c) throw new ErroApi(404, 'nao_encontrado');
-  const achado = detalheDe(c).arquivos.find((a) => a.id === arquivoId);
+  const detalhe = detalheDe(c);
+  const achado = detalhe.arquivos.find((a) => a.id === arquivoId);
   if (!achado) throw new ErroApi(404, 'nao_encontrado');
-  return { arquivo: achado };
+  return { documento: detalhe.documento, arquivo: achado };
 }
 
 const api: Api = {
@@ -222,9 +224,10 @@ const api: Api = {
   baixarArquivo: async (id, arquivoId) => {
     await esperar(400);
     if (modoDownload === 'erro') throw new ErroApi(404, 'arquivo_indisponivel');
-    const { arquivo: a } = acharArquivo(id, arquivoId);
-    // O nome vem do servidor (Content-Disposition); aqui, o original. Conteúdo fictício.
-    return { blob: new Blob(['conteudo ficticio'], { type: 'application/octet-stream' }), nomeArquivo: a.nomeOriginal };
+    const { documento: d, arquivo: a } = acharArquivo(id, arquivoId);
+    // Como o servidor (decisão 0014): principal `[código]-[título]_[revisão]=[versão].[ext]`, anexo com o nome original.
+    const nomeArquivo = a.papel === 'principal' ? nomeDownloadPrincipal(d, a.nomeOriginal) : a.nomeOriginal;
+    return { blob: new Blob(['conteudo ficticio'], { type: 'application/octet-stream' }), nomeArquivo };
   },
   painel: async (consulta = {}) => {
     if (modoPainel === 'carregando') await new Promise(() => undefined);

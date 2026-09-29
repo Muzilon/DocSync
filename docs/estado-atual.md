@@ -16,7 +16,7 @@ Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios 
 
 ## F4: em andamento
 
-Detalhes + histórico (plano-fundacao.md). Contrato em `docs/contratos/f4-detalhes-historico.md` aprovado (seção 9 prevalece; decisão 0013). Parte servidor pronta: detalhe estendido, download e visualização com marca d'água, migração 0004 (registro de acesso). A confirmar com o Eric: a marca é desenhada por cima do conteúdo com opacidade 0,4 (não atrás), para continuar visível em páginas digitalizadas.
+Detalhes + histórico (plano-fundacao.md). Contrato em `docs/contratos/f4-detalhes-historico.md` aprovado (seção 10 prevalece; decisão 0014 substitui a 0013). Parte servidor pronta e corrigida pela 0014: detalhe estendido, download sem marca d'água (nome do principal `[código]-[título]_[revisão]=[versão].[ext]`, anexos com o nome original, Leitor não baixa), migração 0004 (registro de acesso; `VISUALIZACAO` sem uso). Interface pronta; testes ajustados. Aguarda validação do Eric e revisão de QA.
 
 ## Contas de teste no Entra
 
@@ -40,7 +40,6 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 ## Perguntas em aberto com o Eric
 
 - Contas de teste: aguardam o Eric rodar o script.
-- Painel do visualizador: quais perfis (Solicitante, Leitor ou ambos) e o que ele mostra.
 - Cartão do Kanban: "responsável atual" e outras informações entram conforme o Eric for decidindo (responsável depende da F5).
 
 Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cores diferentes; prazo = cadastro + 30 dias com reprogramação justificada (decisão 0011).
@@ -49,4 +48,4 @@ Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cor
 
 - Envio de arquivos fica todo em memória (até ~120 MB por requisição): trocar por streaming antes da produção.
 - Regra do último administrador usa `pg_advisory_xact_lock`: validar com PostgreSQL real antes da produção.
-- Sem verificação de conteúdo/antivírus dos arquivos. Download e marca d'água ficam em memória (PDF até 20 MB): streaming antes da produção. Histórico sem paginação (rota `?apos=` quando a F12 importar centenas de eventos). Sem tela para `registros_acesso_arquivos` (fatia futura).
+- Sem verificação de conteúdo/antivírus dos arquivos. Download fica em memória (arquivo até 20 MB): streaming antes da produção. Histórico sem paginação (rota `?apos=` quando a F12 importar centenas de eventos). Sem tela para `registros_acesso_arquivos` (fatia futura).

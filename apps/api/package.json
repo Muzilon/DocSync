@@ -13,8 +13,7 @@
     "@electric-sql/pglite": "^0.5.8",
     "@fastify/multipart": "^10.1.2",
     "fastify": "^5.12.5",
-    "jose": "^6.2.12",
-    "pdf-lib": "^1.17.1"
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

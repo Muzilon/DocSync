@@ -8,8 +8,9 @@ import {
   STATUS_INICIAL,
   DIAS_PRAZO_PADRAO,
   LIMITES_JUSTIFICATIVA,
-  PREFIXO_COPIA_NAO_CONTROLADA,
-  TEXTO_MARCA_DAGUA,
+  CODIGO_AUSENTE_DOWNLOAD,
+  TAMANHO_MAXIMO_NOME_DOWNLOAD,
+  nomeDownloadPrincipal,
   TIPO_MIME_GENERICO,
   TIPO_MIME_POR_EXTENSAO,
   calcularPrazoAutomatico,
@@ -267,11 +268,61 @@ describe('TIPO_MIME_POR_EXTENSAO e tipoMimePorExtensao (contrato F4, 4.3)', () =
     expect(tipoMimePorExtensao('x.constructor')).toBe(TIPO_MIME_GENERICO);
   });
 
-  it('ehPdf e constantes da decisão 0013', () => {
+  it('ehPdf decide pela extensão', () => {
     expect(ehPdf('a.pdf')).toBe(true);
     expect(ehPdf('a.PDF')).toBe(true);
     expect(ehPdf('a.docx')).toBe(false);
-    expect(TEXTO_MARCA_DAGUA).toBe('CÓPIA NÃO CONTROLADA');
-    expect(PREFIXO_COPIA_NAO_CONTROLADA).toBe('COPIA-NAO-CONTROLADA_');
+  });
+});
+
+describe('nomeDownloadPrincipal (decisão 0014, item 4)', () => {
+  const doc = { codigo: 'PR-QUA-0010', titulo: 'Procedimento de auditoria interna', revisao: 1 };
+
+  it('exemplo da decisão: código-título_revisão=versão.ext', () => {
+    expect(nomeDownloadPrincipal(doc, 'Relatório Final.pdf', 3)).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=3.pdf');
+  });
+
+  it('versão 1 por padrão (até a F7) e extensão minúscula pelo nome do arquivo', () => {
+    expect(nomeDownloadPrincipal(doc, 'ARQUIVO.PDF')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1.pdf');
+    expect(nomeDownloadPrincipal(doc, 'Anexos/planilha.xlsx')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1.xlsx');
+    expect(nomeDownloadPrincipal(doc, 'sem-extensao')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1');
+  });
+
+  it('acentos e cedilha ficam (o Windows aceita)', () => {
+    expect(nomeDownloadPrincipal({ codigo: 'IT-SSO-001', titulo: 'Instrução de Segurança: Içamento', revisao: 0 }, 'a.docx')).toBe(
+      'IT-SSO-001-Instrução de Segurança- Içamento_0=1.docx',
+    );
+  });
+
+  it('sem código → SEM-CODIGO; código só de caracteres proibidos também', () => {
+    expect(CODIGO_AUSENTE_DOWNLOAD).toBe('SEM-CODIGO');
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: 'Procedimento de teste', revisao: 0 }, 'x.pdf')).toBe(
+      'SEM-CODIGO-Procedimento de teste_0=1.pdf',
+    );
+    expect(nomeDownloadPrincipal({ codigo: '   ', titulo: 'Procedimento de teste', revisao: 0 }, 'x.pdf')).toBe(
+      'SEM-CODIGO-Procedimento de teste_0=1.pdf',
+    );
+  });
+
+  it('caracteres proibidos no Windows viram hífen; ponto e espaço nas pontas saem; controle sai', () => {
+    const titulo = ' Plano "A/B" <v2>: revisão? *final*|\\ ok. ';
+    expect(nomeDownloadPrincipal({ codigo: 'PL/01', titulo, revisao: 2 }, 'a.pdf')).toBe(
+      'PL-01-Plano -A-B- -v2-- revisão- -final--- ok_2=1.pdf',
+    );
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: 'a\u0000b\tc', revisao: 0 }, 'a.pdf')).toBe('SEM-CODIGO-a-b-c_0=1.pdf');
+    // Título sem nada aproveitável nunca some.
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: '...', revisao: 0 }, 'a.pdf')).toBe('SEM-CODIGO-Documento_0=1.pdf');
+  });
+
+  it('título longo: nome cortado em 200 caracteres, preservando código, sufixo e extensão', () => {
+    const longo = `${'Procedimento operacional '.repeat(20)}fim`;
+    const nome = nomeDownloadPrincipal({ codigo: 'PR-0001', titulo: longo, revisao: 3 }, 'a.pdf');
+    expect(nome.length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome.startsWith('PR-0001-Procedimento operacional')).toBe(true);
+    expect(nome.endsWith('_3=1.pdf')).toBe(true);
+    expect(nome).not.toMatch(/\s_3=1\.pdf$/);
+    // Título de 300 caracteres (limite do cadastro) cabe inteiro? Não: fica o começo.
+    const exato = 'x'.repeat(300);
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: exato, revisao: 0 }, 'a.pdf')).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
   });
 });

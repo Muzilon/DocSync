@@ -61,9 +61,9 @@ const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   // Decisão 0011: reprogramam Qualidade e Administrador. O contexto de área é aceito
   // (regra uniforme), mas hoje não altera o resultado.
   reprogramarPrazo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
-  // Contrato F4 (4.5) e decisão 0013: hoje igual a verDocumentos, mas separada para
-  // poder ser apertada depois (ex.: Leitor sem download) sem mexer na visibilidade.
-  baixarArquivo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'sim' },
+  // Decisão 0014 (item 2): Administrador e Qualidade baixam qualquer arquivo; o
+  // Solicitante só de documentos da sua área; o Leitor vê os detalhes, mas não baixa.
+  baixarArquivo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'nao' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -157,10 +157,7 @@ export type CodigoErroApi =
   | 'conflito_versao'
   /** 409: o estado do documento não aceita a ação (ex.: reprogramar prazo de Aprovado/Cancelado). */
   | 'acao_nao_permitida'
-  /**
-   * 404: o registro do arquivo existe, mas o conteúdo não está no armazenamento.
-   * 409: o PDF não aceita a marca d'água (senha, corrompido); nunca é entregue sem marca (decisão 0013).
-   */
+  /** 404: o registro do arquivo existe, mas o conteúdo não está no armazenamento. */
   | 'arquivo_indisponivel'
   | 'erro_interno';
 

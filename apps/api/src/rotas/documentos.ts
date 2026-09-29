@@ -2,12 +2,11 @@ import { createHash } from 'node:crypto';
 import type { Multipart } from '@fastify/multipart';
 import {
   LIMITES_ARQUIVO,
-  PREFIXO_COPIA_NAO_CONTROLADA,
   STATUS_INICIAL,
   calcularPrazoAutomatico,
-  ehPdf,
   filtrarCartoes,
   lerReprogramacao,
+  nomeDownloadPrincipal,
   pode,
   sanitizarNomePasta,
   validarArquivo,
@@ -22,18 +21,17 @@ import {
   type NovoDocumento,
   type RespostaPainel,
   type ResultadoReprogramacao,
-  type TipoAcessoArquivo,
 } from '@docsync/compartilhado';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   ErroArmazenamento,
   planejarArquivos,
   type ArmazenamentoArquivos,
+  sanitizarNomeArquivo,
   type ArquivoParaSalvar,
   type PapelArquivo,
 } from '../armazenamento/arquivos.ts';
 import { cabecalhosDownload } from '../armazenamento/download.ts';
-import { ErroMarcaDagua, aplicarMarcaDagua } from '../armazenamento/marca-dagua.ts';
 import { enviarErro } from '../autenticacao/plugin.ts';
 import type { Banco, Executor } from '../banco/conexao.ts';
 import {
@@ -479,21 +477,17 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
     return detalhe;
   });
 
-  // --- Arquivos: download e visualização (F4, contrato seção 4 e 9; decisão 0013) --------
+  // --- Arquivos: download (F4, contrato seções 4 e 10; decisão 0014) ------------------
 
   type ParamsArquivo = { Params: { id: string; arquivoId: string } };
 
   /**
-   * Entrega um arquivo do documento (download ou visualização). Ordem de decisão do
-   * contrato (4.2): permissão geral → existência/visibilidade do documento → permissão
-   * da ação → arquivo pertence a ESTE documento → conteúdo no armazenamento → marca
-   * d'água (PDF) → registro de acesso → resposta. O original nunca é alterado.
+   * Entrega um arquivo do documento para download. Ordem de decisão do contrato (4.2):
+   * permissão geral → existência/visibilidade do documento → permissão da ação →
+   * arquivo pertence a ESTE documento → conteúdo no armazenamento → registro de
+   * acesso → resposta. O conteúdo sai como foi gravado (sem marca d'água, decisão 0014).
    */
-  async function entregarArquivo(
-    requisicao: FastifyRequest<ParamsArquivo>,
-    resposta: FastifyReply,
-    tipo: TipoAcessoArquivo,
-  ) {
+  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', async (requisicao, resposta) => {
     const eu = requisicao.usuario;
     const { id, arquivoId } = requisicao.params;
     if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
@@ -508,14 +502,6 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
     // O arquivoId sozinho nunca localiza nada: tem de pertencer a este documento.
     const arquivo = await buscarArquivoDoDocumento(banco, documento.id, arquivoId);
     if (!arquivo) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
-
-    const pdf = ehPdf(arquivo.nomeArmazenado);
-    if (tipo === 'VISUALIZACAO' && !pdf) {
-      return enviarErro(resposta, 409, {
-        codigo: 'acao_nao_permitida',
-        mensagem: 'Só arquivos PDF podem ser visualizados. Baixe o arquivo.',
-      });
-    }
 
     let conteudo: Buffer | null;
     try {
@@ -533,47 +519,23 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
       });
     }
 
-    // Decisão 0013: todo PDF sai com a marca; sem marca, não sai. Não PDF sai sem marca,
-    // com o prefixo no nome. O original no armazenamento não é tocado.
-    let entrega: Buffer;
-    if (pdf) {
-      try {
-        entrega = await aplicarMarcaDagua(conteudo);
-      } catch (erro) {
-        if (!(erro instanceof ErroMarcaDagua)) throw erro;
-        requisicao.log.warn({ idDocumento: documento.id, idArquivo: arquivo.id }, 'PDF não aceitou a marca d\u2019água');
-        return enviarErro(resposta, 409, {
-          codigo: 'arquivo_indisponivel',
-          mensagem: 'Este PDF não aceita a marca "CÓPIA NÃO CONTROLADA" (protegido ou danificado) e não pode ser entregue.',
-        });
-      }
-    } else {
-      entrega = conteudo;
-    }
-
-    // Registro imutável de acesso, com autor do token (decisão 0013, item 4).
+    // Registro imutável de acesso, com autor do token (decisão 0014, item 3).
     await registrarAcessoArquivo(banco, {
       idDocumento: documento.id,
       idArquivo: arquivo.id,
-      tipo,
+      tipo: 'DOWNLOAD',
       autorId: eu.id,
       autorNome: eu.nome,
     });
 
-    const cabecalhos = cabecalhosDownload(arquivo.nomeOriginal, arquivo.nomeArmazenado, entrega.length, {
-      disposicao: tipo === 'VISUALIZACAO' ? 'inline' : 'attachment',
-      prefixo: pdf ? '' : PREFIXO_COPIA_NAO_CONTROLADA,
-    });
-    return resposta.code(200).headers(cabecalhos).send(entrega);
-  }
-
-  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', (requisicao, resposta) =>
-    entregarArquivo(requisicao, resposta, 'DOWNLOAD'),
-  );
-
-  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId/visualizacao', (requisicao, resposta) =>
-    entregarArquivo(requisicao, resposta, 'VISUALIZACAO'),
-  );
+    // Decisão 0014 (item 4): principal como `[código]-[título]_[revisão]=[versão].[ext]`
+    // (versão 1 até a F7); anexo com o nome original.
+    const nome =
+      arquivo.papel === 'principal'
+        ? nomeDownloadPrincipal(documento, arquivo.nomeArmazenado)
+        : sanitizarNomeArquivo(arquivo.nomeOriginal);
+    return resposta.code(200).headers(cabecalhosDownload(nome, arquivo.nomeArmazenado, conteudo.length)).send(conteudo);
+  });
 
   // --- Painel (F3, contrato seção 4) --------------------------------------------------
 

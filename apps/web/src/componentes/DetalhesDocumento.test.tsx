@@ -181,7 +181,8 @@ describe('DetalhesDocumento', () => {
   });
 
   it.each([
-    ['Leitor', true, LEITOR],
+    // Decisão 0014: o Leitor vê os detalhes e os arquivos, mas não baixa.
+    ['Leitor', false, LEITOR],
     ['Solicitante de outra área', false, SOLICITANTE_OUTRA_AREA],
   ])('%s: botões Baixar visíveis = %s', async (_nome, visiveis, eu) => {
     renderizar(apiSimulada(), { eu });

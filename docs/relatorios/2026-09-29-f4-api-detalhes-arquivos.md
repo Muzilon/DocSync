@@ -67,3 +67,28 @@
 
 - Lacunas decididas pelo menor risco (registrar ou reverter conforme o Eric): marca por cima com opacidade 0,4 (ver pendências); visualização de não PDF → 409 `acao_nao_permitida`; PDF baixado sem prefixo no nome (a marca já identifica a cópia); registro de acesso gravado só quando a entrega acontece (recusas 403/404/409 não geram registro); query fechada também nas rotas de arquivo.
 - Nenhuma mudança de modelo de dados existente: a 0004 só cria a tabela nova prevista na decisão 0013.
+
+## Correção pela decisão 0014 (2026-09-29)
+
+A decisão [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md) substituiu a 0013 (marca d'água e visualizador eram do repositório do Vigen, não da tramitação). A seção 10 do [contrato](../contratos/f4-detalhes-historico.md) prevalece sobre a 9. Aplicado só o que a decisão pede:
+
+**Removido**
+
+- `apps/api/src/armazenamento/marca-dagua.ts` e `marca-dagua.test.ts`; dependência `pdf-lib` (`apps/api/package.json` e `package-lock.json` via `npm install`, 5 pacotes a menos).
+- Rota `GET /documentos/:id/arquivos/:arquivoId/visualizacao` e seus testes (agora responde 404 e não grava acesso; teste de regressão mantido).
+- `TEXTO_MARCA_DAGUA` e `PREFIXO_COPIA_NAO_CONTROLADA` do compartilhado (sem uso restante). `ehPdf` ficou como utilitário puro.
+- Opções `disposicao`/`prefixo` e `nomeDeDownload` de `download.ts`: `cabecalhosDownload(nome, nomeArmazenado, tamanho)` recebe o nome final e só o codifica (`filename` ASCII + `filename*` UTF-8, `nosniff`, `no-store`, CSP sandbox). O erro 409 `arquivo_indisponivel` (marca) deixou de existir; o 404 continua.
+- A migração 0004 **não** foi editada: o tipo `VISUALIZACAO` fica previsto na tabela e sem uso.
+
+**Alterado**
+
+- `pode(..., 'baixarArquivo', ctx)`: Administrador e Qualidade sim; Solicitante só na sua área; **Leitor não** (tabela de testes em `pessoas.test.ts` atualizada). Na API o Leitor recebe 403 `sem_permissao` no download e continua vendo `GET /documentos/:id`; recusas não geram registro de acesso.
+- Nome do download do arquivo **principal**: função pura `nomeDownloadPrincipal(documento, nomeArquivo, versao = 1)` em `packages/compartilhado/src/documentos.ts` → `${codigo ?? 'SEM-CODIGO'}-${titulo}_${revisao}=${versao}.${extensao}`. Título inteiro, só sem `\ / : * ? " < > |` e caracteres de controle (viram hífen), sem ponto/espaço nas pontas; extensão minúscula pelo nome armazenado; corte em 200 caracteres preservando código, sufixo e extensão (`TAMANHO_MAXIMO_NOME_DOWNLOAD`). Versão fixa em 1 (`VERSAO_ARQUIVO_INICIAL`) até a F7. Testes: exemplo da decisão, acentos, sem código, caracteres proibidos, título longo.
+- **Anexos** baixam com o nome original (sanitizado só para segurança: sem pasta, sem controle, nome reservado do Windows com `_`), sem prefixo.
+- Registro de acesso `DOWNLOAD` igual (autor do token, imutável).
+- Interface (ajuste mínimo): `DetalhesDocumento.test.tsx` e `e2e/detalhes.spec.ts` passam a esperar o Leitor **sem** botões Baixar (a tela já usava `pode`, então nada mudou no componente); a vitrine simula o nome do principal com a mesma `nomeDownloadPrincipal`.
+- `CLAUDE.md` (seção 7, item "Arquivos na entrega") e `docs/estado-atual.md` alinhados à 0014.
+
+**Validação:** `npm run typecheck`, `npm test` (19 arquivos, 359 testes), `npm run build` e `npm run segredos` limpos. Manual: baixar o principal de um documento com código `PR-QUA-0010`, título `Procedimento de auditoria interna`, revisão 1 → `PR-QUA-0010-Procedimento de auditoria interna_1=1.pdf`, conteúdo idêntico ao enviado; anexo baixa com o nome original; com Leitor, sem botão Baixar e API 403.
+
+**Pendências herdadas:** ver "O que ficou pendente" acima, exceto os itens da marca d'água (encerrados). Versionamento de arquivos (versão > 1 no nome) é da F7.

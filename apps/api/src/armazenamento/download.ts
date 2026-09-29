@@ -1,22 +1,12 @@
 /**
- * Cabeçalhos da entrega de arquivos (contrato F4, seção 4.3; decisão 0013).
+ * Cabeçalhos da entrega de arquivos (contrato F4, seção 4.3 e 10; decisão 0014).
  *
  * O tipo de conteúdo sai só da extensão do nome armazenado (tabela fechada do
  * compartilhado), nunca do `tipo_mime` declarado por quem enviou. O nome do download
- * é o nome original sanitizado pela mesma função do cadastro; arquivos que não recebem
- * marca d'água ganham o prefixo `COPIA-NAO-CONTROLADA_`.
+ * é decidido pela rota (principal: `nomeDownloadPrincipal`; anexo: nome original
+ * sanitizado) e chega aqui pronto; este módulo só o codifica para o cabeçalho.
  */
 import { tipoMimePorExtensao } from '@docsync/compartilhado';
-import { sanitizarNomeArquivo } from './arquivos.ts';
-
-export type Disposicao = 'attachment' | 'inline';
-
-export interface OpcoesCabecalhos {
-  /** `attachment` (download) por padrão; `inline` só para o fetch do visualizador. */
-  disposicao?: Disposicao;
-  /** Prefixo do nome de download (ex.: `COPIA-NAO-CONTROLADA_`). Sanitizado junto com o nome. */
-  prefixo?: string;
-}
 
 export interface CabecalhosDownload extends Record<string, string> {
   'Content-Type': string;
@@ -39,28 +29,16 @@ function nomeRfc5987(nome: string): string {
   return encodeURIComponent(nome).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
-/** Nome que a pessoa vai ver no download: original sanitizado, com prefixo opcional. */
-export function nomeDeDownload(nomeOriginal: string, prefixo = ''): string {
-  return sanitizarNomeArquivo(`${prefixo}${nomeOriginal}`);
-}
-
 /**
- * Cabeçalhos da resposta de GET /documentos/:id/arquivos/:arquivoId (e da visualização).
- * @param nomeOriginal nome como veio de quem enviou (vai sanitizado no Content-Disposition).
+ * Cabeçalhos da resposta de GET /documentos/:id/arquivos/:arquivoId (sempre `attachment`).
+ * @param nome nome final do download (vai em `filename` ASCII e `filename*` UTF-8).
  * @param nomeArmazenado caminho relativo gravado pelo servidor (decide o Content-Type).
- * @param tamanho bytes do conteúdo entregue (já com marca d'água, se houver).
+ * @param tamanho bytes do conteúdo entregue.
  */
-export function cabecalhosDownload(
-  nomeOriginal: string,
-  nomeArmazenado: string,
-  tamanho: number,
-  opcoes: OpcoesCabecalhos = {},
-): CabecalhosDownload {
-  const nome = nomeDeDownload(nomeOriginal, opcoes.prefixo);
-  const disposicao: Disposicao = opcoes.disposicao ?? 'attachment';
+export function cabecalhosDownload(nome: string, nomeArmazenado: string, tamanho: number): CabecalhosDownload {
   return {
     'Content-Type': tipoMimePorExtensao(nomeArmazenado),
-    'Content-Disposition': `${disposicao}; filename="${nomeAscii(nome)}"; filename*=UTF-8''${nomeRfc5987(nome)}`,
+    'Content-Disposition': `attachment; filename="${nomeAscii(nome)}"; filename*=UTF-8''${nomeRfc5987(nome)}`,
     'Content-Length': String(tamanho),
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'private, no-store',

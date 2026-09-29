@@ -165,14 +165,15 @@ test('reprogramar dentro dos detalhes: modal e cartão se atualizam, evento novo
   await expect(page.getByRole('article', { name: TITULO }).getByText('Prazo: 30/10/2026')).toBeVisible();
 });
 
-for (const [perfil, reprogramar] of [
-  ['Leitor', false],
-  ['Solicitante', false],
+// Decisão 0014: o Leitor vê os arquivos, mas não baixa; o Solicitante baixa os da sua área.
+for (const [perfil, baixar, reprogramar] of [
+  ['Leitor', 0, false],
+  ['Solicitante', 4, false],
 ] as const) {
-  test(`${perfil}: Baixar visível, sem Reprogramar, axe`, async ({ page }) => {
+  test(`${perfil}: ${baixar} botões Baixar, sem Reprogramar, axe`, async ({ page }) => {
     await abrir(page, { url: DIRETO, extra: `&perfil=${perfil}` });
     const dialogo = detalhes(page);
-    await expect(dialogo.getByRole('button', { name: /^Baixar/ })).toHaveCount(4);
+    await expect(dialogo.getByRole('button', { name: /^Baixar/ })).toHaveCount(baixar);
     await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(reprogramar ? 1 : 0);
     await axe(page);
   });
