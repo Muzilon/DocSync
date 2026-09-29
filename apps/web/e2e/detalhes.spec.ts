@@ -170,7 +170,7 @@ test('reprogramar (prazo vencido) dentro dos detalhes: modal e cartão se atuali
   await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(0);
   await expect(dialogo.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('article', { name: 'Inspeção de andaimes' }).getByText('30/10')).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Inspeção de andaimes' }).getByText('30/10', { exact: true })).toBeVisible();
 });
 
 // Decisão 0014: o Leitor vê os arquivos, mas não baixa; o Solicitante baixa os da sua área.

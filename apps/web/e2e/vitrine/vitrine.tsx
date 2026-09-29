@@ -243,7 +243,8 @@ function detalheDe(c: CartaoPainel) {
 // F5: mudança de status, cancelamento, reativação e responsáveis, com as MESMAS regras puras da API
 // (máquina de estados, `pode`, responsável obrigatório), para a vitrine recusar o que a API recusaria.
 let conflitoStatus = parametros.get('status') === 'conflito';
-let falharResponsaveis = parametros.get('responsaveis') === 'erro';
+// Duas falhas: o StrictMode do desenvolvimento roda o efeito de carga duas vezes ao abrir.
+let falhasResponsaveis = parametros.get('responsaveis') === 'erro' ? 2 : 0;
 let conflitoDesfazer = parametros.get('desfazer') === 'conflito';
 const AGORA = '2026-09-29T15:00:00Z';
 function documentoCompleto(c: CartaoPainel): Documento {
@@ -314,8 +315,8 @@ const api: Api = {
   },
   responsaveis: async () => {
     await esperar(150);
-    if (falharResponsaveis) {
-      falharResponsaveis = false;
+    if (falhasResponsaveis > 0) {
+      falhasResponsaveis -= 1;
       throw new ErroApi(0, 'sem_conexao');
     }
     if (!pode(eu, 'mudarStatus')) throw new ErroApi(403, 'sem_permissao');
@@ -393,9 +394,9 @@ const api: Api = {
       throw new ErroApi(409, 'acao_nao_permitida', {}, null, 'O prazo ainda não venceu: só é possível reprogramar depois do vencimento.');
     }
     if (conflitoReprogramacao) {
-      // Outra pessoa reprogramou antes: prazo +7 dias e versão nova.
+      // Outra pessoa mexeu antes (registrou uma etapa): versão nova, o prazo continua vencido.
       conflitoReprogramacao = false;
-      const alterado = { ...atual, dataRevisao: somarDias(atual.dataRevisao ?? HOJE, 7), versao: atual.versao + 1, reprogramado: true, qtdReprogramacoes: atual.qtdReprogramacoes + 1 };
+      const alterado = { ...atual, versao: atual.versao + 1 };
       cartoes = cartoes.map((c) => (c.id === id ? alterado : c));
       throw new ErroApi(409, 'conflito_versao', {}, documentoDoCartao(alterado));
     }
