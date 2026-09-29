@@ -39,7 +39,6 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 
 ## Perguntas em aberto com o Eric
 
-- Qual cor nova para Devolvido ou Cancelado (proposta no início da F3).
 - Contas de teste: aguardam o Eric rodar o script.
 
 Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cores diferentes; prazo = cadastro + 30 dias com reprogramação justificada (decisão 0011).

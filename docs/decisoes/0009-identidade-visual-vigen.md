@@ -47,7 +47,7 @@ Os contrastes são calculados por luminância relativa (WCAG 2.1) e devem ser re
 
 Devolvido e Cancelado compartilham a família vermelha; a distinção é sempre pelo texto do rótulo (cor nunca sozinha). Pode ser revisto quando o Kanban (F3) for validado.
 
-> **Atualização 2026-09-29:** o Eric decidiu **trocar** a cor de uma das duas fases, para que Devolvido e Cancelado não fiquem na mesma família. A proposta de cor (com contraste conferido) será apresentada no início da F3 e registrada aqui antes do código.
+> **Atualização 2026-09-29:** o Eric decidiu **trocar** a cor de uma das duas fases, para que Devolvido e Cancelado não fiquem na mesma família. Escolha do Eric: **Devolvido continua vermelho; Cancelado passa a grafite**: texto #334155 / fundo #E2E8F0 / borda #64748B (texto 8,4:1). O rótulo "Cancelado" continua sempre visível.
 
 ## Tema escuro
 O PDF só mostra o tema claro. O tema escuro é derivado da mesma família (fundos petróleo escuros, textos claros) e será mostrado ao Eric na validação da F1 antes de ser dado como final.
