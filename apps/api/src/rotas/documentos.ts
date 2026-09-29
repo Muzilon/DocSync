@@ -10,11 +10,13 @@ import {
   sanitizarNomePasta,
   validarArquivo,
   validarConjuntoArquivos,
+  validarNovoPrazo,
   type CartaoPainel,
   type DetalheDocumento,
   type Documento,
   type ErroApi,
   type EventoHistorico,
+  type NovaReprogramacao,
   type NovoDocumento,
   type RespostaPainel,
   type ResultadoReprogramacao,
@@ -105,26 +107,23 @@ function podeVer(eu: Usuario, documento: Pick<Documento, 'areaId'>): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * O pedido já foi aplicado? Sim quando `documento.versao === corpo.versao + 1` e o
+ * O pedido já foi aplicado? Sim quando `documento.versao === pedido.versao + 1` e o
  * último evento do documento é REPROGRAMACAO do mesmo autor, com o mesmo prazo novo
- * e a mesma justificativa (aparada). Devolve esse evento, ou null.
- * Lê o corpo cru (ainda não validado): só compara, não grava.
+ * e a mesma justificativa (já aparada). Devolve esse evento, ou null.
+ * Recebe o pedido já validado pelo esquema fechado (B2 do QA): só compara, não grava.
  */
 async function reprogramacaoJaAplicada(
   db: Executor,
   documento: Documento,
   eu: Usuario,
-  corpo: unknown,
+  pedido: NovaReprogramacao,
 ): Promise<EventoHistorico | null> {
-  if (typeof corpo !== 'object' || corpo === null) return null;
-  const { novoPrazo, justificativa, versao } = corpo as Record<string, unknown>;
-  if (typeof novoPrazo !== 'string' || typeof justificativa !== 'string' || typeof versao !== 'number') return null;
-  if (documento.versao !== versao + 1) return null;
+  if (documento.versao !== pedido.versao + 1) return null;
   const ultimo = await ultimoEvento(db, documento.id);
   if (!ultimo || ultimo.tipoAcao !== 'REPROGRAMACAO' || ultimo.autorId !== eu.id) return null;
-  if (ultimo.observacao !== justificativa.trim()) return null;
+  if (ultimo.observacao !== pedido.justificativa) return null;
   const prazo = lerReprogramacao(ultimo);
-  return prazo && prazo.prazoNovo === novoPrazo ? ultimo : null;
+  return prazo && prazo.prazoNovo === pedido.novoPrazo ? ultimo : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -494,7 +493,8 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
   escopo.post<{ Params: { id: string } }>('/documentos/:id/reprogramacoes', async (requisicao, resposta) => {
     const eu = requisicao.usuario;
     // Ordem de decisão do contrato (3.3): permissão geral → existência/visibilidade →
-    // permissão da ação → estado → corpo → transação.
+    // permissão da ação → estado → corpo (esquema fechado e formato) → transação
+    // (idempotência → conflito de versão → estado → "só adia" → gravação).
     if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
     const visto = await buscarDocumento(banco, requisicao.params.id);
     if (!visto || !podeVer(eu, visto)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
@@ -507,17 +507,11 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
         mensagem: `Documento ${visto.status === 'Aprovado' ? 'aprovado' : 'cancelado'} não tem prazo a reprogramar.`,
       });
     }
-    // Idempotência (contrato 3.3) antes de validar o corpo: como a reprogramação só adia,
-    // um reenvio idêntico (fila do cliente) reprovaria na regra "posterior ao prazo atual".
-    // O pedido já foi validado quando foi aplicado; aqui só se confirma que é o mesmo.
-    const repetido = await reprogramacaoJaAplicada(banco, visto, eu, requisicao.body);
-    if (repetido) {
-      const corpo: ResultadoReprogramacao = { documento: visto, evento: repetido };
-      return resposta.code(200).send(corpo);
-    }
-
+    // Corpo: esquema fechado, formato e "não anterior a hoje" (B2 do QA: campo desconhecido
+    // é 400 mesmo num reenvio idêntico). A regra "só adia", que depende do prazo atual,
+    // fica para dentro da transação, depois da idempotência e do conflito de versão.
     const hoje = hojeNoFuso();
-    const validacao = validarNovaReprogramacao(requisicao.body, visto.dataRevisao, hoje);
+    const validacao = validarNovaReprogramacao(requisicao.body, null, hoje);
     if (!validacao.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: validacao.campos });
     const pedido = validacao.dados;
 
@@ -525,10 +519,13 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
       const resultado = await banco.transaction(async (tx) => {
         const documento = (await buscarDocumentoParaAtualizar(tx, visto.id))!;
 
-        // Conferência final, com a linha bloqueada (corrida entre dois reenvios iguais).
-        const repetidoAgora = await reprogramacaoJaAplicada(tx, documento, eu, pedido);
-        if (repetidoAgora) return { criado: false, documento, evento: repetidoAgora };
-        // Concorrência otimista: versão desatualizada → conflito com o estado atual.
+        // Idempotência (contrato 3.3), com a linha bloqueada: reenvio idêntico já aplicado
+        // responde 200 sem gravar. Vem antes da regra "só adia" porque o reenvio, por
+        // definição, traz um prazo igual ao atual e reprovaria nela.
+        const repetido = await reprogramacaoJaAplicada(tx, documento, eu, pedido);
+        if (repetido) return { criado: false, documento, evento: repetido };
+        // Concorrência otimista (B1 do QA): versão desatualizada → conflito com o estado
+        // atual, antes de qualquer regra que dependa do prazo que a pessoa não viu.
         if (documento.versao !== pedido.versao) {
           throw new ErroNegocio(409, {
             codigo: 'conflito_versao',
@@ -540,6 +537,11 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
         // prazo e status, mas a conferência é barata e mantém a regra num lugar só).
         if (STATUS_SEM_PRAZO.has(documento.status)) {
           throw new ErroNegocio(409, { codigo: 'acao_nao_permitida', mensagem: 'Documento não tem prazo a reprogramar.' });
+        }
+        // "Só adia" (decisão 0012), contra o prazo atual da linha bloqueada.
+        const erroPrazo = validarNovoPrazo(pedido.novoPrazo, documento.dataRevisao, hoje);
+        if (erroPrazo) {
+          throw new ErroNegocio(400, { codigo: 'dados_invalidos', campos: { novoPrazo: erroPrazo } });
         }
 
         const atualizado = await aplicarReprogramacao(tx, documento.id, pedido.versao, pedido.novoPrazo);

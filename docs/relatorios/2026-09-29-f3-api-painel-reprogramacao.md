@@ -70,3 +70,15 @@ Lacunas do contrato resolvidas pelo menor risco (nenhuma é decisão de negócio
 4. **`dataAprovacao`** considera só eventos `STATUS` com status `Aprovado` (o dia da transição), e **`qtdDevolucoes`** conta eventos `STATUS`/`CANCELAMENTO` cujo status está na fase `devolvido` e cujo `statusAnterior` não está (mudança dentro da fase não conta). Dia no fuso de São Paulo.
 5. **Mensagem por campo das datas recusadas no cadastro:** `Campo não permitido.` (esquema fechado genérico), como o contrato pede em 2.2.
 6. `ehDataSoDia` saiu de `apps/api/src/validacao.ts` para `packages/compartilhado` (a API reexporta), para `validarNovoPrazo` valer igual nos dois lados.
+
+## Correções pós-QA (2026-09-29)
+
+Defeitos B1 e B2 do [relatório de QA](2026-09-29-f3-qa.md), só em `apps/api` (nada em `apps/web` nem em `packages/compartilhado`).
+
+- **B1** — Versão velha com prazo "não posterior" recebia `400` em vez de `409 conflito_versao`, porque a regra "só adia" rodava antes da conferência de versão. Agora a validação fora da transação é só esquema fechado + formato + "não anterior a hoje" (`validarNovaReprogramacao(corpo, null, hoje)`); dentro da transação, com `FOR UPDATE`, a ordem é idempotência → conflito de versão → estado → "só adia" (`validarNovoPrazo` contra o prazo da linha bloqueada, `400` em `campos.novoPrazo`) → gravação.
+- **B2** — O reenvio idêntico era detectado lendo o corpo cru, antes do esquema fechado; campo extra num reenvio devolvia `200`. A detecção prévia foi removida: `reprogramacaoJaAplicada` passa a receber o pedido já validado (`NovaReprogramacao`) e roda uma vez só, dentro da transação.
+- Consequência registrada no contrato (3.3): mesmo corpo enviado por **outro** autor com versão velha agora é `409 conflito_versao` (antes, `400`).
+
+Arquivos: `apps/api/src/rotas/documentos.ts`, `apps/api/src/painel.test.ts` (teste do outro autor ajustado; testes novos "B1" e "B2"), `docs/contratos/f3-painel-kanban.md` (seção 3.3), `CHANGELOG.md`.
+
+Validação: `npm run typecheck`, `npm test` (262 testes, 15 arquivos), `npm run segredos` — todos limpos em 2026-09-29. Não houve commit.

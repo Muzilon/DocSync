@@ -184,14 +184,41 @@ describe('POST /documentos/:id/reprogramacoes', () => {
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
-  it('mesmo pedido por outro autor não é reenvio: cai na validação normal (400, prazo não posterior ao atual) e nada é gravado', async () => {
+  it('mesmo pedido por outro autor não é reenvio: versão velha → 409 conflito_versao e nada é gravado', async () => {
     const qualidade = await pessoaComPerfil('q2', 'Qualidade');
     const doc = await cadastrar();
     const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
     expect((await reprogramar(ADMIN, doc.id, corpo)).statusCode).toBe(201);
     const outro = await reprogramar(qualidade, doc.id, corpo);
-    expect(outro.statusCode).toBe(400);
-    expect(outro.json().campos.novoPrazo).toMatch(/posterior ao prazo atual/);
+    expect(outro.statusCode).toBe(409);
+    expect(outro.json()).toMatchObject({ codigo: 'conflito_versao', documento: { id: doc.id, versao: 2 } });
+    expect(await eventosDe(doc.id)).toHaveLength(2);
+  });
+
+  it('B1: versão velha com prazo não posterior ao atual → 409 conflito_versao (antes da regra "só adia")', async () => {
+    // A vê prazo P (versão 1); B reprograma para P+10; A envia P+5 com versão 1.
+    const doc = await cadastrar();
+    expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
+    const deA = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 1 });
+    expect(deA.statusCode).toBe(409);
+    expect(deA.json()).toMatchObject({ codigo: 'conflito_versao', documento: { id: doc.id, versao: 2, dataRevisao: NOVO_PRAZO } });
+    // Com a versão atual, o mesmo prazo reprova na regra "só adia" (400), não em conflito.
+    const comVersaoAtual = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 2 });
+    expect(comVersaoAtual.statusCode).toBe(400);
+    expect(comVersaoAtual.json().campos).toEqual({ novoPrazo: expect.stringMatching(/posterior ao prazo atual/) });
+    expect(await eventosDe(doc.id)).toHaveLength(2);
+  });
+
+  it('B2: reenvio idêntico com campo extra → 400 dados_invalidos (esquema fechado antes da idempotência)', async () => {
+    const doc = await cadastrar();
+    const corpo = { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 };
+    expect((await reprogramar(ADMIN, doc.id, corpo)).statusCode).toBe(201);
+    const comExtra = await reprogramar(ADMIN, doc.id, { ...corpo, autorId: 'USR-x' });
+    expect(comExtra.statusCode).toBe(400);
+    expect(comExtra.json()).toEqual({ codigo: 'dados_invalidos', campos: { autorId: 'Campo não permitido.' } });
+    // Reenvio com formato inválido também não passa pela idempotência.
+    const malFormado = await reprogramar(ADMIN, doc.id, { ...corpo, versao: '1' });
+    expect(malFormado.statusCode).toBe(400);
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
