@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Archive, FilePlus2, FilterX } from 'lucide-react';
 import {
   FASES,
@@ -21,6 +21,7 @@ import { Botao } from '../componentes/Botao.tsx';
 import { CampoSelecao, CampoTexto } from '../componentes/Campo.tsx';
 import { CartaoDocumento } from '../componentes/CartaoDocumento.tsx';
 import { ColunaKanban } from '../componentes/ColunaKanban.tsx';
+import { DetalhesDocumento } from '../componentes/DetalhesDocumento.tsx';
 import { DialogoReprogramar } from '../componentes/DialogoReprogramar.tsx';
 import { ErroCarregamento } from '../componentes/Estados.tsx';
 import { JanelaCancelados } from '../componentes/JanelaCancelados.tsx';
@@ -118,11 +119,20 @@ interface EstadoReprogramacao {
   aberto: boolean;
 }
 
-/** Tela Painel (F3): KPIs, filtros e quadro Kanban de 5 fases, com reprogramação de prazo. */
+/** Parâmetro da URL com o documento aberto nos detalhes (contrato F4, 5.1): /painel?documento=<DOC-uuid>. */
+export const PARAMETRO_DOCUMENTO = 'documento';
+
+/**
+ * Tela Painel (F3): KPIs, filtros e quadro Kanban de 5 fases, com reprogramação de prazo.
+ * F4: o cartão abre os detalhes; o documento aberto fica na URL (recarregável e compartilhável).
+ */
 export function TelaPainel() {
   const api = useApi();
   const { eu } = useSessao();
   const toast = useToast();
+  const [parametros, setParametros] = useSearchParams();
+  const documentoAberto = parametros.get(PARAMETRO_DOCUMENTO);
+  const titulo = useRef<HTMLHeadingElement>(null);
 
   const [dados, setDados] = useState<RespostaPainel | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -232,6 +242,36 @@ export function TelaPainel() {
     setReprogramacao((atual) => (atual ? { ...atual, aberto: false } : atual));
   }
 
+  const abrirDetalhes = useCallback(
+    (cartao: CartaoPainel) => {
+      setParametros(
+        (atual) => {
+          const novos = new URLSearchParams(atual);
+          novos.set(PARAMETRO_DOCUMENTO, cartao.id);
+          return novos;
+        },
+        { replace: true },
+      );
+    },
+    [setParametros],
+  );
+
+  function fecharDetalhes() {
+    setParametros(
+      (atual) => {
+        const novos = new URLSearchParams(atual);
+        novos.delete(PARAMETRO_DOCUMENTO);
+        return novos;
+      },
+      { replace: true },
+    );
+    // Aberto pela URL (sem cartão de origem): o foco vai para o título da tela.
+    requestAnimationFrame(() => {
+      const ativo = document.activeElement;
+      if (!ativo || ativo === document.body) titulo.current?.focus();
+    });
+  }
+
   function limparFiltros() {
     setBusca('');
     setAreaId('');
@@ -243,7 +283,9 @@ export function TelaPainel() {
     <>
       <header className={pagina.cabecalho}>
         <div className={pagina.cabecalhoTexto}>
-          <h1 className={pagina.titulo}>Painel</h1>
+          <h1 ref={titulo} className={pagina.titulo} tabIndex={-1}>
+            Painel
+          </h1>
           <p className={pagina.subtitulo}>Acompanhe a tramitação dos documentos por fase.</p>
         </div>
         {podeCadastrar && (
@@ -341,6 +383,7 @@ export function TelaPainel() {
                     podeReprogramar={podeReprogramar(eu, c)}
                     aoReprogramar={abrirReprogramacao}
                     aoTeclaNavegacao={navegarPorSetas}
+                    aoAbrir={abrirDetalhes}
                   />
                 ))}
               </ColunaKanban>
@@ -354,7 +397,10 @@ export function TelaPainel() {
         filtro={filtro}
         quantidadeInicial={qtdCancelados}
         aoFechar={() => setCancelados(false)}
+        aoAbrirDetalhes={abrirDetalhes}
       />
+
+      <DetalhesDocumento documentoId={documentoAberto} aoFechar={fecharDetalhes} aoAtualizarDocumento={substituirCartao} />
 
       {reprogramacao && dados && (
         <DialogoReprogramar

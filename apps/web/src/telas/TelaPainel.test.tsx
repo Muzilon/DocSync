@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import {
   FASE_DO_STATUS,
   somarDias,
@@ -18,6 +18,7 @@ import { ContextoSessao } from '../autenticacao/Sessao.tsx';
 import { ProvedorToast } from '../componentes/Toast.tsx';
 import { prazoMinimo } from '../componentes/DialogoReprogramar.tsx';
 import { TelaPainel, ordenarCartoesPainel } from './TelaPainel.tsx';
+import { RedirecionarDocumento } from '../App.tsx';
 
 // Dados fictícios (CLAUDE.md, seção 4). "Hoje" vem do servidor simulado.
 const HOJE = '2026-09-29';
@@ -81,6 +82,8 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     alterarPessoa: vi.fn(),
     tiposDocumento: vi.fn(),
     criarDocumento: vi.fn(),
+    baixarArquivo: vi.fn(),
+    visualizarArquivo: vi.fn(),
     documentosRecentes: vi.fn(),
     documento: vi.fn(),
     painel: vi.fn(async (consulta) =>
@@ -117,6 +120,7 @@ const quadro = () => screen.findByRole('region', { name: 'Quadro de tramitação
 const coluna = (nome: RegExp) => screen.getByRole('region', { name: nome });
 const kpi = (rotulo: string) => screen.getByText(rotulo).parentElement!;
 const cartaoDe = (titulo: string) => screen.getByRole('article', { name: titulo });
+const botaoDe = (titulo: string) => screen.getByRole('button', { name: `${titulo}, abrir detalhes` });
 
 describe('queryPainel', () => {
   it('só manda parâmetros preenchidos (a API recusa desconhecidos)', () => {
@@ -200,9 +204,9 @@ describe('TelaPainel', () => {
     expect(devolvido).not.toHaveTextContent('José Ação');
     // Aprovado não tem etiqueta de prazo.
     expect(within(cartaoDe('Manual do SGI')).queryByText(/Atrasado|Vence|Prazo:/)).not.toBeInTheDocument();
-    // Nada decorativo: nenhum outro botão além de Reprogramar.
+    // Nada decorativo: só o título (abre os detalhes, F4) e Reprogramar.
     for (const artigo of screen.getAllByRole('article')) {
-      for (const botao of within(artigo).queryAllByRole('button')) expect(botao).toHaveTextContent('Reprogramar');
+      for (const botao of within(artigo).queryAllByRole('button')) expect(botao).toHaveTextContent(/Reprogramar|, abrir detalhes$/);
     }
   });
 
@@ -281,7 +285,7 @@ describe('TelaPainel', () => {
     renderizar(apiSimulada(), eu);
     await quadro();
     expect(screen.queryAllByRole('button', { name: /^Reprogramar/ })).toHaveLength(quantidade);
-    expect(within(cartaoDe('Manual do SGI')).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(cartaoDe('Manual do SGI')).queryByRole('button', { name: /Reprogramar/ })).not.toBeInTheDocument();
   });
 
   it('diálogo valida, envia { novoPrazo, justificativa, versao } e atualiza o cartão sem recarregar', async () => {
@@ -450,12 +454,152 @@ describe('TelaPainel', () => {
   it('setas ↓ e → movem o foco entre cartões e colunas', async () => {
     const usuario = renderizar(apiSimulada());
     await quadro();
-    cartaoDe('Procedimento de auditoria').focus();
+    // F4: o alvo do foco e das setas é o botão do título (o <article> deixou de ser focável).
+    botaoDe('Procedimento de auditoria').focus();
     await usuario.keyboard('{ArrowDown}');
-    expect(cartaoDe('Instrução de solda')).toHaveFocus();
+    expect(botaoDe('Instrução de solda')).toHaveFocus();
     await usuario.keyboard('{ArrowRight}');
-    expect(cartaoDe('Inspeção de andaimes')).toHaveFocus();
+    expect(botaoDe('Inspeção de andaimes')).toHaveFocus();
     await usuario.keyboard('{ArrowLeft}');
-    expect(cartaoDe('Procedimento de auditoria')).toHaveFocus();
+    expect(botaoDe('Procedimento de auditoria')).toHaveFocus();
+    expect(cartaoDe('Procedimento de auditoria')).not.toHaveAttribute('tabindex');
+  });
+});
+
+/** Endereço atual, para conferir o parâmetro ?documento= (contrato F4, 5.1). */
+function SondaEndereco() {
+  const local = useLocation();
+  return <p data-testid="endereco">{`${local.pathname}${local.search}`}</p>;
+}
+
+function detalheDe(c: CartaoPainel) {
+  return { documento: documentoDe(c), arquivos: [], eventos: [], hoje: HOJE };
+}
+
+function renderizarComRotas(api: Api, entrada = '/painel', eu: Pessoa = QUALIDADE) {
+  const usuario = userEvent.setup();
+  render(
+    <ContextoApi.Provider value={api}>
+      <ContextoSessao.Provider value={{ eu, sair: () => undefined }}>
+        <MemoryRouter initialEntries={[entrada]}>
+          <ProvedorToast>
+            <Routes>
+              <Route
+                path="/painel"
+                element={
+                  <>
+                    <TelaPainel />
+                    <SondaEndereco />
+                  </>
+                }
+              />
+              <Route path="/documentos/:id" element={<RedirecionarDocumento />} />
+            </Routes>
+          </ProvedorToast>
+        </MemoryRouter>
+      </ContextoSessao.Provider>
+    </ContextoApi.Provider>,
+  );
+  return usuario;
+}
+
+function apiComDetalhes(sobrescrever: Partial<Api> = {}): Api {
+  return apiSimulada({
+    documento: vi.fn(async (id: string) => {
+      const c = [...CARTOES, ...CANCELADOS].find((x) => x.id === id);
+      if (!c) throw new ErroApi(404, 'nao_encontrado');
+      return detalheDe(c);
+    }),
+    ...sobrescrever,
+  });
+}
+
+const endereco = () => screen.getByTestId('endereco').textContent;
+
+describe('TelaPainel: detalhes (F4)', () => {
+  it('clique no corpo do cartão abre os detalhes e grava ?documento= na URL; fechar limpa e devolve o foco ao título', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api);
+    await quadro();
+    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByText('Recebido em 01/09/2026'));
+    const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
+    expect(api.documento).toHaveBeenCalledWith('DOC-1');
+    expect(endereco()).toBe('/painel?documento=DOC-1');
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => expect(endereco()).toBe('/painel'));
+    expect(botaoDe('Procedimento de auditoria')).toHaveFocus();
+  });
+
+  it.each([['{Enter}'], [' ']])('tecla %s no título abre os detalhes', async (tecla) => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api);
+    await quadro();
+    botaoDe('Instrução de solda').focus();
+    await usuario.keyboard(tecla);
+    expect(await screen.findByRole('dialog', { name: 'Instrução de solda' })).toBeInTheDocument();
+    expect(endereco()).toBe('/painel?documento=DOC-2');
+  });
+
+  it('clique em Reprogramar não abre os detalhes', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api);
+    await quadro();
+    await usuario.click(within(cartaoDe('Procedimento de auditoria')).getByRole('button', { name: /Reprogramar/ }));
+    expect(await screen.findByRole('dialog', { name: 'Reprogramar prazo' })).toBeInTheDocument();
+    expect(api.documento).not.toHaveBeenCalled();
+    expect(endereco()).toBe('/painel');
+  });
+
+  it('botão do título: nome = título + ", abrir detalhes"; descrição com código, status e prazo', async () => {
+    renderizarComRotas(apiComDetalhes());
+    await quadro();
+    const botao = botaoDe('Procedimento de auditoria');
+    expect(botao).toHaveAccessibleDescription(/COD-DOC-1\s*Rev\. 0\s*Recebido\s*Prazo: 19\/10\/2026/);
+  });
+
+  it('?documento= na URL abre os detalhes ao carregar; fechar remove o parâmetro e leva o foco ao título da tela', async () => {
+    const usuario = renderizarComRotas(apiComDetalhes(), '/painel?documento=DOC-4');
+    const dialogo = await screen.findByRole('dialog', { name: 'Controle de informação' });
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar detalhes' }));
+    await waitFor(() => expect(endereco()).toBe('/painel'));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Painel' })).toHaveFocus());
+  });
+
+  it('/documentos/:id redireciona para /painel?documento=:id', async () => {
+    renderizarComRotas(apiComDetalhes(), '/documentos/DOC-3');
+    expect(await screen.findByRole('dialog', { name: 'Inspeção de andaimes' })).toBeInTheDocument();
+    expect(endereco()).toBe('/painel?documento=DOC-3');
+  });
+
+  it('documento inexistente na URL: 404 dentro do modal', async () => {
+    renderizarComRotas(apiComDetalhes(), '/painel?documento=DOC-999');
+    expect(await screen.findByRole('dialog', { name: 'Documento não encontrado' })).toBeInTheDocument();
+  });
+
+  it('cartão da janela de cancelados abre os detalhes por cima (modal sobre modal)', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api);
+    await quadro();
+    await usuario.click(screen.getByRole('button', { name: 'Cancelados (2)' }));
+    const janela = await screen.findByRole('dialog', { name: /Documentos cancelados/ });
+    await usuario.click(await within(janela).findByRole('button', { name: 'Ata de reunião, abrir detalhes' }));
+    const detalhes = await screen.findByRole('dialog', { name: 'Ata de reunião' });
+    expect(api.documento).toHaveBeenCalledWith('DOC-7');
+    await usuario.click(within(detalhes).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => expect(within(janela).getByRole('button', { name: 'Ata de reunião, abrir detalhes' })).toHaveFocus());
+    expect(screen.getByRole('dialog', { name: /Documentos cancelados/ })).toBeInTheDocument();
+  });
+
+  it('reprogramar dentro dos detalhes atualiza o cartão do quadro', async () => {
+    const api = apiComDetalhes();
+    const usuario = renderizarComRotas(api, '/painel?documento=DOC-1');
+    await quadro();
+    const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-11-30');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Pedido formal da área.');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(within(cartaoDe('Procedimento de auditoria')).getByText('Prazo: 30/11/2026')).toBeInTheDocument());
   });
 });

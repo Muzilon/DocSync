@@ -11,8 +11,10 @@ import {
   filtrarCartoes,
   somarDias,
   type Area,
+  type ArquivoDocumento,
   type CartaoPainel,
   type Documento,
+  type EventoHistorico,
   type Perfil,
   type Pessoa,
   type TipoDocumento,
@@ -27,6 +29,7 @@ import '../../src/estilos/base.css';
 import { ContextoApi, type Api } from '../../src/api/cliente.ts';
 import { ErroApi } from '../../src/api/erros.ts';
 import { podeCadastrarDocumento } from '../../src/permissoes.ts';
+import { RedirecionarDocumento } from '../../src/App.tsx';
 import { TelaNovoDocumento } from '../../src/telas/TelaNovoDocumento.tsx';
 import { ContextoSessao } from '../../src/autenticacao/Sessao.tsx';
 import { Casca } from '../../src/telas/Casca.tsx';
@@ -38,6 +41,7 @@ import { aplicarTema, temaSalvo } from '../../src/tema.ts';
 const parametros = new URLSearchParams(location.search);
 // ?perfil=Leitor|Solicitante muda o perfil simulado; ?envio=falha faz o 1º envio falhar (sem conexão).
 // Painel: ?painel=vazio|erro|carregando; ?reprog=conflito faz a 1ª reprogramação dar 409 conflito_versao.
+// Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?visualizacao=erro.
 const perfil = (parametros.get('perfil') ?? 'Administrador') as Perfil;
 const eu: Pessoa = { id: 'p1', nome: 'Ana Exemplo', email: 'ana@exemplo.test', perfil, area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
 const pessoas: Pessoa[] = [
@@ -104,6 +108,125 @@ function documentoDoCartao(c: CartaoPainel): Documento {
 }
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Detalhes (F4). ?detalhes=erro|404|carregando força os estados; ?visualizacao=erro faz o visualizador falhar.
+const modoDetalhes = parametros.get('detalhes');
+const modoVisualizacao = parametros.get('visualizacao');
+let sequenciaEvento = 0;
+function evento(
+  idDocumento: string, tipoAcao: EventoHistorico['tipoAcao'], status: Documento['status'], statusAnterior: Documento['status'] | null,
+  dataHora: string, autorNome: string, extra: Partial<EventoHistorico> = {},
+): EventoHistorico {
+  sequenciaEvento += 1;
+  return {
+    id: `HIST-${sequenciaEvento}`, idDocumento, codigo: null, tipoAcao, status, statusAnterior, dataHora, destino: null, responsavel: null,
+    autorId: 'p1', autorNome, detalhes: [], observacao: null, ...extra,
+  };
+}
+function arquivo(n: number, papel: ArquivoDocumento['papel'], nomeOriginal: string, tamanho: number): ArquivoDocumento {
+  return { id: `ARQ-${n}`, papel, nomeOriginal, tamanho, criadoEm: '2026-09-01T12:00:00Z' };
+}
+const OBSERVACAO_LONGA =
+  'Documento enviado para a revisão anual do SGI.\nConferir as referências normativas (ISO 9001:2015, 7.5) e a tabela de retenção de registros.\n\nA área pediu prioridade porque a auditoria externa está marcada para novembro.';
+/** Eventos por documento, em ordem de gravação (a tela inverte). O DOC-P6 tem todos os tipos. */
+const eventosPorDocumento = new Map<string, EventoHistorico[]>();
+eventosPorDocumento.set('DOC-P6', [
+  evento('DOC-P6', 'CRIACAO', 'Recebido', null, '2026-09-01T12:00:00Z', 'Ana Exemplo', {
+    detalhes: [{ campo: 'dataRevisao', antes: null, depois: '2026-10-01' }], observacao: 'Documento enviado para a revisão anual do SGI.',
+  }),
+  evento('DOC-P6', 'STATUS', 'Em revisão da qualidade', 'Recebido', '2026-09-02T13:30:00Z', 'Bruno Teste', { destino: 'Qualidade', responsavel: 'Bruno Teste' }),
+  evento('DOC-P6', 'STATUS', 'Devolvido para correção', 'Em revisão da qualidade', '2026-09-05T17:10:00Z', 'Bruno Teste', {
+    observacao: 'Faltam as referências normativas na seção 4.',
+  }),
+  evento('DOC-P6', 'ANEXO', 'Devolvido para correção', null, '2026-09-08T11:00:00Z', 'Ana Exemplo', {
+    detalhes: [
+      { campo: 'arquivo', antes: null, depois: 'Checklist de revisão.xlsx' },
+      { campo: 'arquivo', antes: null, depois: 'Evidência fotográfica.png' },
+    ],
+  }),
+  evento('DOC-P6', 'EDICAO', 'Devolvido para correção', null, '2026-09-08T11:05:00Z', 'Ana Exemplo', {
+    detalhes: [
+      { campo: 'titulo', antes: 'Controle de documentos', depois: 'Controle de informação documentada' },
+      { campo: 'disciplina', antes: null, depois: 'Corporativo' },
+      { campo: 'dataRecebimento', antes: '2026-08-30', depois: '2026-09-01' },
+    ],
+  }),
+  evento('DOC-P6', 'STATUS', 'Em revisão da qualidade', 'Devolvido para correção', '2026-09-09T14:00:00Z', 'Bruno Teste'),
+  evento('DOC-P6', 'REPROGRAMACAO', 'Em revisão da qualidade', null, '2026-09-10T15:00:00Z', 'Ana Exemplo', {
+    detalhes: [{ campo: 'dataRevisao', antes: '2026-10-01', depois: '2026-10-05' }],
+    observacao: 'A área pediu mais prazo para incluir as referências normativas.',
+  }),
+  evento('DOC-P6', 'STATUS', 'Devolvido para correção', 'Em revisão da qualidade', '2026-09-15T18:20:00Z', 'Bruno Teste', {
+    observacao: 'A tabela de retenção ainda está incompleta.',
+  }),
+  evento('DOC-P6', 'REPROGRAMACAO', 'Devolvido para correção', null, '2026-09-16T12:45:00Z', 'Ana Exemplo', {
+    detalhes: [{ campo: 'dataRevisao', antes: '2026-10-05', depois: '2026-10-09' }],
+    observacao: 'Nova devolução: prazo ajustado para a correção da tabela.',
+  }),
+]);
+eventosPorDocumento.set('DOC-P9', [
+  evento('DOC-P9', 'CRIACAO', 'Recebido', null, '2026-09-03T12:00:00Z', 'Carla Fictícia', { detalhes: [{ campo: 'dataRevisao', antes: null, depois: '2026-10-03' }] }),
+  evento('DOC-P9', 'STATUS', 'Em revisão da qualidade', 'Recebido', '2026-09-04T12:00:00Z', 'Bruno Teste'),
+  evento('DOC-P9', 'CANCELAMENTO', 'Cancelado', 'Em revisão da qualidade', '2026-09-06T12:00:00Z', 'Bruno Teste', {
+    observacao: 'A ata foi substituída pela ata consolidada do trimestre.',
+  }),
+]);
+const arquivosPorDocumento = new Map<string, ArquivoDocumento[]>([
+  ['DOC-P6', [
+    arquivo(1, 'principal', 'PR-QUA-0007 Controle de informação documentada.pdf', 250_880),
+    arquivo(2, 'anexo', 'Anexo A - Fluxograma.pdf', 98_304),
+    arquivo(3, 'anexo', 'Checklist de revisão.xlsx', 15_360),
+    arquivo(4, 'anexo', 'Evidência fotográfica.png', 1_572_864),
+  ]],
+]);
+const extrasDocumento: Record<string, Partial<Documento>> = {
+  'DOC-P6': { disciplina: 'Corporativo', observacao: OBSERVACAO_LONGA, criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-16T12:45:00Z' },
+};
+function detalheDe(c: CartaoPainel) {
+  const documento = { ...documentoDoCartao(c), ...extrasDocumento[c.id] };
+  const eventos = eventosPorDocumento.get(c.id) ?? [
+    evento(c.id, 'CRIACAO', 'Recebido', null, c.criadoEm, c.remetente, { detalhes: [{ campo: 'dataRevisao', antes: null, depois: c.dataRevisao }] }),
+  ];
+  eventosPorDocumento.set(c.id, eventos);
+  const arquivos = arquivosPorDocumento.get(c.id) ?? [arquivo(100 + Number(c.id.replace(/\D/g, '')), 'principal', `${c.codigo ?? 'Documento sem código'}.pdf`, 340_000)];
+  return { documento, arquivos, eventos, hoje: HOJE };
+}
+
+/** PDF mínimo de 2 páginas com a marca "CÓPIA NÃO CONTROLADA" em diagonal no fundo (como o servidor entrega). */
+function pdfComMarca(titulo: string): ArrayBuffer {
+  const semAcento = titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[()\\]/g, '');
+  const pagina = (n: number) =>
+    `q /GS1 gs 0.55 g BT /F1 54 Tf 0.7071 0.7071 -0.7071 0.7071 120 190 Tm (C\\323PIA N\\303O CONTROLADA) Tj ET Q\n` +
+    `BT /F1 20 Tf 72 740 Td (${semAcento}) Tj ET\nBT /F1 12 Tf 72 700 Td (Pagina ${n} de 2 - conteudo ficticio para a vitrine de testes.) Tj ET\n`;
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources 7 0 R /Contents 5 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources 7 0 R /Contents 6 0 R >>',
+    `<< /Length ${pagina(1).length} >>\nstream\n${pagina(1)}endstream`,
+    `<< /Length ${pagina(2).length} >>\nstream\n${pagina(2)}endstream`,
+    '<< /Font << /F1 8 0 R >> /ExtGState << /GS1 << /ca 0.4 >> >> >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+  ];
+  let texto = '%PDF-1.4\n';
+  const posicoes: number[] = [];
+  objetos.forEach((o, i) => {
+    posicoes.push(texto.length);
+    texto += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = texto.length;
+  texto += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n`;
+  for (const p of posicoes) texto += `${String(p).padStart(10, '0')} 00000 n \n`;
+  texto += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(texto).buffer as ArrayBuffer;
+}
+function acharArquivo(id: string, arquivoId: string): { cartao: CartaoPainel; arquivo: ArquivoDocumento } {
+  const c = cartoes.find((x) => x.id === id);
+  if (!c) throw new ErroApi(404, 'nao_encontrado');
+  const achado = detalheDe(c).arquivos.find((a) => a.id === arquivoId);
+  if (!achado) throw new ErroApi(404, 'nao_encontrado');
+  return { cartao: c, arquivo: achado };
+}
+
 const api: Api = {
   eu: async () => eu,
   pessoas: async () => pessoas,
@@ -113,9 +236,31 @@ const api: Api = {
   tiposDocumento: async () => tipos,
   documentosRecentes: async () => recentes,
   documento: async (id) => {
-    const achado = recentes.find((d) => d.id === id);
-    if (!achado) throw new ErroApi(404, 'desconhecido');
-    return { documento: achado, eventos: [] };
+    if (modoDetalhes === 'carregando') await new Promise(() => undefined);
+    await esperar(150);
+    if (modoDetalhes === 'erro') throw new ErroApi(0, 'sem_conexao');
+    if (modoDetalhes === '404') throw new ErroApi(404, 'nao_encontrado');
+    const c = cartoes.find((x) => x.id === id);
+    // Como a API: o Solicitante não vê documento de outra área (404, como se não existisse).
+    if (c && !(perfil === 'Solicitante' && c.areaId !== eu.areaId)) return detalheDe(c);
+    const recente = recentes.find((d) => d.id === id);
+    if (!recente) throw new ErroApi(404, 'nao_encontrado');
+    return { documento: recente, arquivos: [], eventos: [], hoje: HOJE };
+  },
+  baixarArquivo: async (id, arquivoId) => {
+    await esperar(400);
+    const { cartao: c, arquivo: a } = acharArquivo(id, arquivoId);
+    const pdf = a.nomeOriginal.toLowerCase().endsWith('.pdf');
+    // Como o servidor (decisão 0013): PDF com marca; os demais com o prefixo no nome.
+    return pdf
+      ? { blob: new Blob([pdfComMarca(c.titulo)], { type: 'application/pdf' }), nomeArquivo: a.nomeOriginal }
+      : { blob: new Blob(['conteudo ficticio'], { type: 'application/octet-stream' }), nomeArquivo: `COPIA-NAO-CONTROLADA_${a.nomeOriginal}` };
+  },
+  visualizarArquivo: async (id, arquivoId) => {
+    await esperar(200);
+    if (modoVisualizacao === 'erro') throw new ErroApi(409, 'arquivo_indisponivel');
+    const { cartao: c } = acharArquivo(id, arquivoId);
+    return pdfComMarca(c.titulo);
   },
   painel: async (consulta = {}) => {
     if (modoPainel === 'carregando') await new Promise(() => undefined);
@@ -145,14 +290,12 @@ const api: Api = {
     if (dados.versao !== atual.versao) throw new ErroApi(409, 'conflito_versao', {}, documentoDoCartao(atual));
     const novo = { ...atual, dataRevisao: dados.novoPrazo, versao: atual.versao + 1, reprogramado: true, qtdReprogramacoes: atual.qtdReprogramacoes + 1 };
     cartoes = cartoes.map((c) => (c.id === id ? novo : c));
-    return {
-      documento: documentoDoCartao(novo),
-      evento: {
-        id: 'HIST-1', idDocumento: id, codigo: novo.codigo, tipoAcao: 'REPROGRAMACAO', status: novo.status, statusAnterior: null,
-        dataHora: '2026-09-29T12:00:00Z', destino: null, responsavel: null, autorId: eu.id, autorNome: eu.nome,
-        detalhes: [{ campo: 'dataRevisao', antes: atual.dataRevisao, depois: dados.novoPrazo }], observacao: dados.justificativa,
-      },
-    };
+    const registrado = evento(id, 'REPROGRAMACAO', novo.status, null, '2026-09-29T12:00:00Z', eu.nome, {
+      codigo: novo.codigo, detalhes: [{ campo: 'dataRevisao', antes: atual.dataRevisao, depois: dados.novoPrazo }], observacao: dados.justificativa,
+    });
+    // A linha do tempo dos detalhes ganha o evento (como a API grava em eventos_historico).
+    eventosPorDocumento.set(id, [...(detalheDe(atual).eventos), registrado]);
+    return { documento: { ...documentoDoCartao(novo), ...extrasDocumento[id], dataModificacao: '2026-09-29T12:00:00Z' }, evento: registrado };
   },
   criarDocumento: async (d, principal, anexos) => {
     await new Promise((r) => setTimeout(r, 300));
@@ -182,6 +325,7 @@ createRoot(document.getElementById('raiz')!).render(
               <Route index element={<TelaInicio />} />
               <Route path="painel" element={<TelaPainel />} />
               <Route path="pessoas" element={<TelaPessoas />} />
+              <Route path="documentos/:id" element={<RedirecionarDocumento />} />
               <Route
                 path="documentos/novo"
                 element={podeCadastrarDocumento(eu) ? <TelaNovoDocumento /> : <Navigate to="/" replace />}

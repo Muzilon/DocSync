@@ -14,6 +14,7 @@ export type CodigoErro =
   | 'nao_encontrado'
   | 'conflito_versao'
   | 'acao_nao_permitida'
+  | 'arquivo_indisponivel'
   | 'sem_conexao'
   | 'desconhecido';
 
@@ -30,6 +31,7 @@ const MENSAGENS: Record<CodigoErro, string> = {
   nao_encontrado: 'Documento não encontrado. Ele pode ter sido removido ou você não tem acesso a ele.',
   conflito_versao: 'Alguém alterou este documento enquanto você o via. Confira o prazo atual e tente de novo.',
   acao_nao_permitida: 'Este documento não aceita esta ação no status atual (aprovado ou cancelado).',
+  arquivo_indisponivel: 'Este arquivo não está disponível no momento. Avise o administrador do DocSync.',
   sem_conexao: 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
   desconhecido: 'Ocorreu um erro inesperado. Tente novamente.',
 };

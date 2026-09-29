@@ -15,6 +15,8 @@ interface Props {
   /** Contagem do botão (qtdCancelados), usada no título até a lista chegar; null = sem contagem (título sem número). */
   quantidadeInicial: number | null;
   aoFechar: () => void;
+  /** Abre os detalhes sobre esta janela (modal sobre modal, contrato F4, 5.1). */
+  aoAbrirDetalhes?: (cartao: CartaoPainel) => void;
 }
 
 type Estado =
@@ -25,9 +27,9 @@ type Estado =
 /**
  * Janela de cancelados (contrato F3, seção 5; documento 03, 9.2, como no sistema antigo).
  * Faz a própria chamada (GET /painel?cancelados=true), mostra só a fase Cancelado com a busca
- * e a área em vigor. Cartões iguais aos do quadro, sem Reprogramar e sem reativar (F5).
+ * e a área em vigor. Cartões iguais aos do quadro, sem Reprogramar e sem reativar (F5); abrem os detalhes (F4).
  */
-export function JanelaCancelados({ aberto, filtro, quantidadeInicial, aoFechar }: Props) {
+export function JanelaCancelados({ aberto, filtro, quantidadeInicial, aoFechar, aoAbrirDetalhes }: Props) {
   const api = useApi();
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
   const [tentativa, setTentativa] = useState(0);
@@ -75,7 +77,7 @@ export function JanelaCancelados({ aberto, filtro, quantidadeInicial, aoFechar }
       ) : (
         <ul className={estilos.lista} aria-label="Documentos cancelados">
           {estado.cartoes.map((c) => (
-            <CartaoDocumento key={c.id} cartao={c} hoje={estado.hoje} podeReprogramar={false} />
+            <CartaoDocumento key={c.id} cartao={c} hoje={estado.hoje} podeReprogramar={false} aoAbrir={aoAbrirDetalhes} />
           ))}
         </ul>
       )}

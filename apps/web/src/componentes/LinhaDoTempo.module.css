@@ -1,0 +1,232 @@
+/* Linha do tempo (contrato F4, 5.2; documento 04, 6.2, com as cores da decisão 0009). */
+.lista {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evento {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--linha-tempo-ponto) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+/* Linha vertical contínua entre os pontos. */
+.evento::before {
+  content: '';
+  position: absolute;
+  top: var(--linha-tempo-ponto);
+  bottom: 0;
+  left: calc((var(--linha-tempo-ponto) - var(--linha-tempo-linha)) / 2);
+  width: var(--linha-tempo-linha);
+  background: var(--border-subtle);
+}
+
+.evento:last-child {
+  padding-bottom: 0;
+}
+
+.evento:last-child::before {
+  display: none;
+}
+
+.ponto {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--linha-tempo-ponto);
+  height: var(--linha-tempo-ponto);
+  border-radius: var(--radius-circle);
+  background: var(--cor-marca);
+  color: var(--cor-texto-sobre-marca);
+}
+
+/* O mais recente: anel pulsando (parado com prefers-reduced-motion). */
+.recente .ponto {
+  background: var(--bg-card);
+  border: var(--borda-destaque) solid var(--cor-marca);
+  box-shadow: 0 0 0 var(--space-1) var(--cor-marca-anel);
+  animation: pulsar 2s ease-in-out infinite;
+}
+
+@keyframes pulsar {
+  50% {
+    box-shadow: 0 0 0 var(--space-2) var(--cor-marca-anel);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recente .ponto {
+    animation: none;
+  }
+}
+
+.corpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.cabecalhoEvento {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.tipo {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--bg-hover);
+  color: var(--text-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+}
+
+.autor {
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.data {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.resumo {
+  font-size: var(--fs-body-sm);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.expandir {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--space-7);
+  padding: 0 var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--cor-link);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.expandir:hover {
+  background: var(--bg-hover);
+}
+
+.expandir:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+.expandir svg {
+  transition: transform var(--duracao-curta);
+}
+
+.giro {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expandir svg {
+    transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .expandir {
+    min-height: var(--alvo-toque);
+  }
+}
+
+.detalhes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.detalhes[hidden] {
+  display: none;
+}
+
+.diferencas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: var(--marcador-largura) solid var(--border-input);
+  list-style: none;
+  font-size: var(--fs-caption);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.rotulo {
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+}
+
+.observacao {
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--marcador-largura) solid var(--cor-marca);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--bg-subtle);
+  font-size: var(--fs-caption);
+}
+
+.textoLivre {
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+
+.pares dt {
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+}
+
+.pares dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.vazio {
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+}

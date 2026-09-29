@@ -32,6 +32,8 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     alterarPessoa: vi.fn(),
     tiposDocumento: vi.fn(),
     criarDocumento: vi.fn(),
+    baixarArquivo: vi.fn(),
+    visualizarArquivo: vi.fn(),
     documentosRecentes: vi.fn(),
     documento: vi.fn(),
     painel: vi.fn(),

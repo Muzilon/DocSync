@@ -1,0 +1,364 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ArquivoDocumento, DetalheDocumento, Documento, EventoHistorico, Pessoa } from '@docsync/compartilhado';
+import { ContextoApi, nomeDoCabecalho, type Api } from '../api/cliente.ts';
+import { ErroApi } from '../api/erros.ts';
+import { ContextoSessao } from '../autenticacao/Sessao.tsx';
+import { formatarDataHora } from '../formatacao.ts';
+import { DetalhesDocumento, ehIdDocumento } from './DetalhesDocumento.tsx';
+import { NIVEIS_ZOOM, proximoZoom } from './VisualizadorPdf.tsx';
+
+// O pdfjs não roda no jsdom: o visualizador é testado com um PDF simulado de 2 páginas.
+vi.mock('../pdf/pdfjs.ts', () => ({
+  abrirPdf: vi.fn(async () => ({
+    numPages: 2,
+    loadingTask: { destroy: vi.fn(async () => undefined) },
+    getPage: vi.fn(async (n: number) => ({
+      numero: n,
+      getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
+      render: () => ({ promise: Promise.resolve() }),
+    })),
+  })),
+  textoDaPagina: vi.fn(async (pagina: { numero: number }) => `Texto fictício da página ${pagina.numero}`),
+}));
+
+// Dados fictícios (CLAUDE.md, seção 4).
+const HOJE = '2026-09-29';
+const QUALIDADE: Pessoa = { id: 'USR-1', nome: 'Bruna Teste', email: 'bruna@exemplo.test', perfil: 'Qualidade', area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
+const LEITOR: Pessoa = { ...QUALIDADE, id: 'USR-3', perfil: 'Leitor' };
+const SOLICITANTE_OUTRA_AREA: Pessoa = { ...QUALIDADE, id: 'USR-2', perfil: 'Solicitante', area: 'Engenharia', areaId: 'a1' };
+
+const DOCUMENTO: Documento = {
+  id: 'DOC-1', codigo: 'PR-QUA-0007', titulo: 'Controle de informação documentada', status: 'Devolvido para correção',
+  tipoDocumentoId: 'TIPO-1', tipoDocumento: 'PR - Procedimento', revisao: 2, dataRecebimento: '2026-09-01', dataRevisao: '2026-10-09',
+  reprogramado: true, qtdReprogramacoes: 1, remetente: 'Ana Exemplo', areaId: 'a2', area: 'Qualidade', disciplina: null,
+  observacao: 'Linha um.\nLinha dois <b>sem HTML</b>.', nomePasta: 'x', nomeArquivoPrincipal: 'x.pdf', qtdAnexos: 2,
+  idDocumentoOrigem: null, versao: 4, criadoPor: 'USR-9', criadoEm: '2026-09-01T12:00:00Z', dataModificacao: '2026-09-10T15:00:00Z',
+};
+
+const ARQUIVOS: ArquivoDocumento[] = [
+  { id: 'ARQ-1', papel: 'principal', nomeOriginal: 'Procedimento.pdf', tamanho: 250_880, criadoEm: '2026-09-01T12:00:00Z' },
+  { id: 'ARQ-2', papel: 'anexo', nomeOriginal: 'Checklist.xlsx', tamanho: 1536, criadoEm: '2026-09-01T12:00:00Z' },
+  { id: 'ARQ-3', papel: 'anexo', nomeOriginal: 'Foto.png', tamanho: 1_572_864, criadoEm: '2026-09-01T12:00:00Z' },
+];
+
+function evento(n: number, extra: Partial<EventoHistorico> = {}): EventoHistorico {
+  return {
+    id: `HIST-${n}`, idDocumento: 'DOC-1', codigo: 'PR-QUA-0007', tipoAcao: 'STATUS', status: 'Em revisão da qualidade',
+    statusAnterior: 'Recebido', dataHora: `2026-09-${String(n).padStart(2, '0')}T12:00:00Z`, destino: null, responsavel: null,
+    autorId: 'USR-9', autorNome: `Pessoa ${n}`, detalhes: [], observacao: null, ...extra,
+  };
+}
+
+const EVENTOS: EventoHistorico[] = [
+  evento(1, {
+    tipoAcao: 'CRIACAO', status: 'Recebido', statusAnterior: null, autorNome: 'Ana Exemplo',
+    detalhes: [{ campo: 'dataRevisao', antes: null, depois: '2026-10-01' }], observacao: 'Observação do cadastro',
+  }),
+  evento(2, { autorNome: 'Bruno Teste', destino: 'Qualidade', responsavel: 'Bruno Teste' }),
+  evento(3, {
+    tipoAcao: 'REPROGRAMACAO', status: 'Em revisão da qualidade', statusAnterior: null, autorNome: 'Carla Teste',
+    detalhes: [{ campo: 'dataRevisao', antes: '2026-10-01', depois: '2026-10-09' }], observacao: 'A área pediu mais prazo.',
+  }),
+  evento(4, { status: 'Devolvido para correção', statusAnterior: 'Em revisão da qualidade', autorNome: 'Bruno Teste' }),
+];
+
+function detalhe(mudancas: Partial<DetalheDocumento> = {}): DetalheDocumento {
+  return { documento: DOCUMENTO, arquivos: ARQUIVOS, eventos: EVENTOS, hoje: HOJE, ...mudancas };
+}
+
+function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
+  return {
+    eu: vi.fn(), pessoas: vi.fn(), areas: vi.fn(), criarPessoa: vi.fn(), alterarPessoa: vi.fn(), tiposDocumento: vi.fn(),
+    criarDocumento: vi.fn(), documentosRecentes: vi.fn(), painel: vi.fn(),
+    documento: vi.fn().mockResolvedValue(detalhe()),
+    baixarArquivo: vi.fn(async (_id: string, _arq: string, nome: string) => ({ blob: new Blob(['x']), nomeArquivo: `servidor-${nome}` })),
+    visualizarArquivo: vi.fn(async () => new ArrayBuffer(8)),
+    reprogramarPrazo: vi.fn(async (_id, dados) => ({
+      documento: { ...DOCUMENTO, dataRevisao: dados.novoPrazo, versao: 5, qtdReprogramacoes: 2 },
+      evento: evento(9),
+    })),
+    ...sobrescrever,
+  };
+}
+
+function renderizar(api: Api, { eu = QUALIDADE, id = 'DOC-1', aoFechar = vi.fn(), aoAtualizarDocumento = vi.fn() } = {}) {
+  const usuario = userEvent.setup();
+  render(
+    <ContextoApi.Provider value={api}>
+      <ContextoSessao.Provider value={{ eu, sair: () => undefined }}>
+        <DetalhesDocumento documentoId={id} aoFechar={aoFechar} aoAtualizarDocumento={aoAtualizarDocumento} />
+      </ContextoSessao.Provider>
+    </ContextoApi.Provider>,
+  );
+  return { usuario, aoFechar, aoAtualizarDocumento };
+}
+
+const modal = () => screen.findByRole('dialog', { name: 'Controle de informação documentada' });
+const secao = (nome: string) => screen.getByRole('region', { name: nome });
+
+describe('funções puras dos detalhes', () => {
+  it('ehIdDocumento aceita só DOC-…', () => {
+    expect(ehIdDocumento('DOC-0f2c1a4e-1111-4222-8333-444455556666')).toBe(true);
+    expect(ehIdDocumento('ARQ-1')).toBe(false);
+    expect(ehIdDocumento('DOC-../x')).toBe(false);
+    expect(ehIdDocumento(null)).toBe(false);
+  });
+
+  it('nomeDoCabecalho: filename* decodificado, senão filename, senão a reserva; nunca barra', () => {
+    expect(nomeDoCabecalho(`attachment; filename="Relat_rio.pdf"; filename*=UTF-8''Relat%C3%B3rio%20final.pdf`, 'r.pdf')).toBe('Relatório final.pdf');
+    expect(nomeDoCabecalho('attachment; filename="Ata.pdf"', 'r.pdf')).toBe('Ata.pdf');
+    expect(nomeDoCabecalho(null, 'reserva.pdf')).toBe('reserva.pdf');
+    expect(nomeDoCabecalho(`attachment; filename*=UTF-8''..%2F..%2Fx.pdf`, 'r.pdf')).toBe('.._.._x.pdf');
+  });
+
+  it('formatarDataHora usa o fuso de São Paulo', () => {
+    expect(formatarDataHora('2026-09-29T02:30:00Z')).toBe('28/09/2026, 23:30');
+    expect(formatarDataHora(null)).toBe('—');
+    expect(formatarDataHora('lixo')).toBe('—');
+  });
+
+  it('proximoZoom anda pelos níveis a partir de qualquer escala', () => {
+    expect(proximoZoom(1, 1)).toBe(1.25);
+    expect(proximoZoom(1, -1)).toBe(0.75);
+    expect(proximoZoom(0.33, 1)).toBe(0.5);
+    expect(proximoZoom(NIVEIS_ZOOM[0], -1)).toBe(NIVEIS_ZOOM[0]);
+  });
+});
+
+describe('DetalhesDocumento', () => {
+  let criarUrl: ReturnType<typeof vi.fn>;
+  let clique: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    criarUrl = vi.fn(() => 'blob:simulado');
+    Object.assign(URL, { createObjectURL: criarUrl, revokeObjectURL: vi.fn() });
+    clique = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  });
+  afterEach(() => clique.mockRestore());
+
+  it('carregando: esqueleto com aria-busy, sem número nem data falsa', () => {
+    renderizar(apiSimulada({ documento: vi.fn(() => new Promise<DetalheDocumento>(() => undefined)) }));
+    const dialogo = screen.getByRole('dialog', { name: 'Detalhes do documento', hidden: true });
+    expect(within(dialogo).getByText('Carregando detalhes…')).toBeInTheDocument();
+    expect(dialogo.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(dialogo).not.toHaveTextContent(/\d{2}\/\d{2}\/\d{4}/);
+  });
+
+  it('cabeçalho, Dados (rótulos, "—" para nulos, observação como texto) e ✕ com foco inicial', async () => {
+    renderizar(apiSimulada());
+    const dialogo = await modal();
+    expect(within(dialogo).getByRole('button', { name: 'Fechar detalhes' })).toHaveFocus();
+    expect(within(dialogo).getByText('PR-QUA-0007')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Rev. 2')).toBeInTheDocument();
+    expect(within(dialogo).getByText('DOC-1')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Prazo: 09/10/2026')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Devolvido 1 vez')).toBeInTheDocument();
+    const dados = secao('Dados');
+    const valor = (rotulo: string) => within(dados).getByText(rotulo).nextElementSibling;
+    expect(valor('Tipo de documento')).toHaveTextContent('PR - Procedimento');
+    expect(valor('Disciplina')).toHaveTextContent('—');
+    expect(valor('Data de recebimento')).toHaveTextContent('01/09/2026');
+    expect(valor('Prazo (data de revisão)')).toHaveTextContent('09/10/2026');
+    expect(valor('Cadastrado em')).toHaveTextContent('01/09/2026, 09:00');
+    expect(valor('Observações complementares')).toHaveTextContent('Linha dois <b>sem HTML</b>.');
+    expect(dados.querySelector('b')).toBeNull();
+    expect(within(dados).queryByText('Revisão de')).not.toBeInTheDocument();
+    // Nada decorativo: sem Editar, Histórico completo, ações de status, Anexar.
+    expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar|Atualizar Etapa|Cancelar/ })).not.toBeInTheDocument();
+  });
+
+  it('Arquivos: principal primeiro, tamanho, Visualizar só em PDF e Baixar com o nome devolvido pelo servidor', async () => {
+    const api = apiSimulada();
+    const { usuario } = renderizar(api);
+    await modal();
+    const itens = within(secao('Arquivos')).getAllByRole('listitem');
+    expect(itens[0]).toHaveTextContent('Procedimento.pdf');
+    expect(itens[0]).toHaveTextContent('Principal');
+    expect(itens[0]).toHaveTextContent('245 KB');
+    expect(itens[2]).toHaveTextContent('1,5 MB');
+    expect(screen.getAllByRole('button', { name: /^Visualizar/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' })).toBeInTheDocument();
+
+    await usuario.click(screen.getByRole('button', { name: 'Baixar Checklist.xlsx' }));
+    await waitFor(() => expect(api.baixarArquivo).toHaveBeenCalledWith('DOC-1', 'ARQ-2', 'Checklist.xlsx'));
+    await waitFor(() => expect(clique).toHaveBeenCalled());
+    const link = clique.mock.contexts[0] as HTMLAnchorElement;
+    expect(link.download).toBe('servidor-Checklist.xlsx');
+    expect(link.href).toBe('blob:simulado');
+    expect(link.isConnected).toBe(false);
+  });
+
+  it('Baixar: enquanto baixa mostra "Baixando…"; erro arquivo_indisponivel aparece dentro do modal', async () => {
+    let falhar: (e: unknown) => void = () => undefined;
+    const api = apiSimulada({ baixarArquivo: vi.fn(() => new Promise<never>((_r, rej) => (falhar = rej))) });
+    const { usuario } = renderizar(api);
+    await modal();
+    await usuario.click(screen.getByRole('button', { name: 'Baixar Procedimento.pdf' }));
+    expect(await screen.findByRole('button', { name: 'Baixando… Procedimento.pdf' })).toBeDisabled();
+    falhar(new ErroApi(404, 'arquivo_indisponivel'));
+    expect(await within(secao('Arquivos')).findByRole('alert')).toHaveTextContent('Este arquivo não está disponível no momento');
+  });
+
+  it.each([
+    ['Leitor', true, LEITOR],
+    ['Solicitante de outra área', false, SOLICITANTE_OUTRA_AREA],
+  ])('%s: botões Baixar/Visualizar visíveis = %s', async (_nome, visiveis, eu) => {
+    renderizar(apiSimulada(), { eu });
+    await modal();
+    expect(screen.queryAllByRole('button', { name: /^Baixar/ })).toHaveLength(visiveis ? 3 : 0);
+    expect(within(secao('Arquivos')).getByText('Procedimento.pdf', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('lista vazia: "Nenhum arquivo anexado"', async () => {
+    renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(detalhe({ arquivos: [] })) }));
+    await modal();
+    expect(within(secao('Arquivos')).getByText('Nenhum arquivo anexado')).toBeInTheDocument();
+  });
+
+  it('Linha do tempo: mais recente primeiro, autor e data; expandir mostra diferenças, justificativa, destino e responsável', async () => {
+    const { usuario } = renderizar(apiSimulada());
+    await modal();
+    const linha = secao('Linha do tempo');
+    const itens = within(linha).getAllByRole('listitem').filter((li) => li.parentElement?.tagName === 'OL');
+    expect(itens).toHaveLength(4);
+    expect(itens[0]).toHaveTextContent('Mudança de status');
+    expect(itens[0]).toHaveTextContent('De Em revisão da qualidade para Devolvido para correção');
+    expect(itens[3]).toHaveTextContent('Cadastro');
+    expect(itens[3]).toHaveTextContent('Ana Exemplo');
+    expect(within(itens[3]!).getByText('01/09/2026, 09:00')).toHaveAttribute('dateTime', '2026-09-01T12:00:00Z');
+    // Sem detalhes a expandir: sem botão.
+    expect(within(itens[0]!).queryByRole('button')).not.toBeInTheDocument();
+
+    const cadastro = within(itens[3]!).getByRole('button', { name: /Detalhes/ });
+    expect(cadastro).toHaveAttribute('aria-expanded', 'false');
+    await usuario.click(cadastro);
+    expect(cadastro).toHaveAttribute('aria-expanded', 'true');
+    expect(itens[3]).toHaveTextContent(/Prazo: — →\s*para 01\/10\/2026/);
+    expect(itens[3]).toHaveTextContent('Observação do cadastro');
+
+    const reprogramacao = itens[1]!;
+    expect(reprogramacao).toHaveTextContent('Prazo de 01/10/2026 para 09/10/2026');
+    await usuario.click(within(reprogramacao).getByRole('button', { name: /Detalhes/ }));
+    expect(within(reprogramacao).getByText('Justificativa')).toBeInTheDocument();
+    expect(reprogramacao).toHaveTextContent('A área pediu mais prazo.');
+
+    await usuario.click(within(itens[2]!).getByRole('button', { name: /Detalhes/ }));
+    expect(within(itens[2]!).getByText('Destino').nextElementSibling).toHaveTextContent('Qualidade');
+    expect(within(itens[2]!).getByText('Responsável').nextElementSibling).toHaveTextContent('Bruno Teste');
+  });
+
+  it('Linha do tempo com 50 eventos: todos aparecem, em ordem inversa', async () => {
+    const muitos = Array.from({ length: 50 }, (_, i) => evento(i + 1, { dataHora: `2026-09-01T${String(i % 24).padStart(2, '0')}:00:00Z`, autorNome: `Pessoa ${i + 1}` }));
+    renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(detalhe({ eventos: muitos })) }));
+    await modal();
+    const itens = within(secao('Linha do tempo')).getAllByRole('listitem').filter((li) => li.parentElement?.tagName === 'OL');
+    expect(itens).toHaveLength(50);
+    expect(itens[0]).toHaveTextContent('Pessoa 50');
+    expect(itens[49]).toHaveTextContent('Pessoa 1');
+  });
+
+  it('erro de rede: "Tentar novamente" recarrega', async () => {
+    const documento = vi.fn().mockRejectedValueOnce(new ErroApi(0, 'sem_conexao')).mockResolvedValue(detalhe());
+    const { usuario } = renderizar(apiSimulada({ documento }));
+    await usuario.click(await screen.findByRole('button', { name: 'Tentar novamente' }));
+    expect(await modal()).toBeInTheDocument();
+    expect(documento).toHaveBeenCalledTimes(2);
+  });
+
+  it('404: "Documento não encontrado" sem repetir; id inválido nem chama a API', async () => {
+    renderizar(apiSimulada({ documento: vi.fn().mockRejectedValue(new ErroApi(404, 'nao_encontrado')) }));
+    const dialogo = await screen.findByRole('dialog', { name: 'Documento não encontrado' });
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Ele pode ter sido removido ou você não tem acesso a ele.');
+    expect(within(dialogo).queryByRole('button', { name: 'Tentar novamente' })).not.toBeInTheDocument();
+  });
+
+  it('id que não é DOC-… não chama a API', async () => {
+    const api = apiSimulada();
+    renderizar(api, { id: 'qualquer-coisa' });
+    expect(await screen.findByRole('dialog', { name: 'Documento não encontrado' })).toBeInTheDocument();
+    expect(api.documento).not.toHaveBeenCalled();
+  });
+
+  it('403 sem_permissao: mensagem de api/erros.ts', async () => {
+    renderizar(apiSimulada({ documento: vi.fn().mockRejectedValue(new ErroApi(403, 'sem_permissao')) }));
+    expect(await screen.findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
+  });
+
+  it('Fechar e ✕ chamam aoFechar', async () => {
+    const { usuario, aoFechar } = renderizar(apiSimulada());
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar' }));
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar detalhes' }));
+    expect(aoFechar).toHaveBeenCalledTimes(2);
+  });
+
+  it('Reprogramar dentro do modal: envia com a versão do documento, atualiza o cartão e recarrega os detalhes', async () => {
+    const api = apiSimulada();
+    const { usuario, aoAtualizarDocumento } = renderizar(api);
+    const dialogo = await modal();
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Reprogramar' }));
+    const reprog = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(reprog).getByLabelText(/Novo prazo/), '2026-10-20');
+    await usuario.type(within(reprog).getByLabelText(/Justificativa/), 'Mais prazo pedido pela área.');
+    await usuario.click(within(reprog).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() =>
+      expect(api.reprogramarPrazo).toHaveBeenCalledWith('DOC-1', { novoPrazo: '2026-10-20', justificativa: 'Mais prazo pedido pela área.', versao: 4 }),
+    );
+    await waitFor(() => expect(aoAtualizarDocumento).toHaveBeenCalledWith(expect.objectContaining({ dataRevisao: '2026-10-20' })));
+    await waitFor(() => expect(api.documento).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Prazo reprogramado para 20/10/2026.')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Leitor', LEITOR],
+    ['Solicitante', SOLICITANTE_OUTRA_AREA],
+  ])('%s não vê Reprogramar no modal', async (_nome, eu) => {
+    renderizar(apiSimulada(), { eu });
+    await modal();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+  });
+
+  it('Aprovado não mostra Reprogramar', async () => {
+    renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(detalhe({ documento: { ...DOCUMENTO, status: 'Aprovado' } })) }));
+    await modal();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+  });
+
+  it('Visualizar: abre o visualizador com páginas, navegação, zoom e texto para o leitor de tela', async () => {
+    const api = apiSimulada();
+    const { usuario } = renderizar(api);
+    await modal();
+    await usuario.click(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' }));
+    const visualizador = await screen.findByRole('dialog', { name: 'Procedimento.pdf' });
+    expect(api.visualizarArquivo).toHaveBeenCalledWith('DOC-1', 'ARQ-1');
+    expect(within(visualizador).getByRole('button', { name: 'Fechar visualizador' })).toHaveFocus();
+    expect(await within(visualizador).findByText('Página 1 de 2')).toBeInTheDocument();
+    expect(await within(visualizador).findByText('Texto da página: Texto fictício da página 1')).toBeInTheDocument();
+    expect(within(visualizador).getByRole('button', { name: /Anterior/ })).toBeDisabled();
+    await usuario.click(within(visualizador).getByRole('button', { name: /Próxima/ }));
+    expect(await within(visualizador).findByText('Página 2 de 2')).toBeInTheDocument();
+    expect(await within(visualizador).findByText('Texto da página: Texto fictício da página 2')).toBeInTheDocument();
+    expect(within(visualizador).getByRole('button', { name: /Próxima/ })).toBeDisabled();
+    // jsdom não tem largura: "ajustar à largura" cai no mínimo (200px / 600px = 33%).
+    expect(within(visualizador).getByText('33%')).toBeInTheDocument();
+    await usuario.click(within(visualizador).getByRole('button', { name: 'Aumentar zoom' }));
+    expect(await within(visualizador).findByText('50%')).toBeInTheDocument();
+    expect(within(visualizador).getByRole('button', { name: 'Ajustar à largura' })).toHaveAttribute('aria-pressed', 'false');
+    // Sem abrir em nova aba (decisão 0013).
+    expect(within(visualizador).queryByRole('link')).not.toBeInTheDocument();
+    await usuario.click(within(visualizador).getByRole('button', { name: 'Fechar visualizador' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Procedimento.pdf' })).not.toBeInTheDocument());
+  });
+
+  it('Visualizar com erro (409 arquivo_indisponivel): mensagem e "Tentar novamente"', async () => {
+    const api = apiSimulada({ visualizarArquivo: vi.fn().mockRejectedValue(new ErroApi(409, 'arquivo_indisponivel')) });
+    const { usuario } = renderizar(api);
+    await modal();
+    await usuario.click(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' }));
+    const visualizador = await screen.findByRole('dialog', { name: 'Procedimento.pdf' });
+    expect(await within(visualizador).findByText(/Este arquivo não está disponível no momento/)).toBeInTheDocument();
+    await usuario.click(within(visualizador).getByRole('button', { name: 'Tentar novamente' }));
+    expect(api.visualizarArquivo).toHaveBeenCalledTimes(2);
+  });
+});

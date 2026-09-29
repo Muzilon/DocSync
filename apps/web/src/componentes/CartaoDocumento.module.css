@@ -21,9 +21,46 @@
   box-shadow: var(--shadow-hover);
 }
 
-.cartao:focus-visible {
+.abrivel {
+  cursor: pointer;
+}
+
+/* Foco no botão do título: o anel envolve o cartão inteiro (o botão é o alvo do teclado). */
+.cartao:has(.botaoTitulo:focus-visible) {
   outline: var(--foco-largura) solid var(--cor-foco);
   outline-offset: var(--foco-afastamento);
+}
+
+.botaoTitulo {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.botaoTitulo:hover {
+  text-decoration: underline;
+}
+
+/* Sem suporte a :has(), o anel fica no próprio botão. */
+.botaoTitulo:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+@supports selector(:has(*)) {
+  .botaoTitulo:focus-visible {
+    outline: none;
+  }
+}
+
+.envoltorio {
+  display: inline-flex;
 }
 
 /* Marcador lateral com a cor da fase (decorativo: o badge diz o status em texto). */
