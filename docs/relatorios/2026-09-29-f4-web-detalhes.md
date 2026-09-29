@@ -85,3 +85,5 @@ Não mexi em `packages/compartilhado` nem em `apps/api`. O `pdfjs-dist` entrou e
 
 - **Necessária:** atualizar o contrato da F4 e a decisão 0013 com a retirada do visualizador e da marca d'água, e decidir o que fazer com a rota `/visualizacao` e a marca que já estão na API.
 - **Tomada, dentro do contrato:** abrir e fechar os detalhes usam `replace` na URL, então o histórico do navegador não ganha uma entrada por modal.
+
+> Nota (2026-09-29): a rota `/visualizacao` e a marca d'água citadas acima já foram removidas da API pela decisão 0014.

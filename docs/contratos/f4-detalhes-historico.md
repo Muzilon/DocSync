@@ -1,12 +1,12 @@
 # Contrato da fatia F4 — Detalhes + histórico
 
 - **Data:** 2026-09-29
-- **Status:** Aprovado pelo Eric em 2026-09-29, com as mudanças da seção 9 (decisão 0013). Status anterior: Proposto; aguarda respostas do Eric à seção 8 antes do código
+- **Status:** Aprovado pelo Eric em 2026-09-29. **Ordem de precedência: seção 11 > seção 10 (decisão 0014) > seção 9 > seções 1–8.** As partes sobre visualizador, marca d'água e "sem migração" estão superadas (a F4 tem a migração 0004, registro de acesso).
 - **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F4), documento 02 (seções 1.2, 4.3 e 7.3), documento 03 (seção 9.6, "Histórico Completo", P-07, P-08, P-09), documento 04 (seções 5.3 e 6, com as cores da decisão [0009](../decisoes/0009-identidade-visual-vigen.md)), decisões [0002](../decisoes/0002-fonte-da-verdade.md), [0003](../decisoes/0003-ambiente-local.md), [0004](../decisoes/0004-revisoes-e-reativacao.md), [0007](../decisoes/0007-usuarios-e-perfis.md), [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md) e [0012](../decisoes/0012-recebimento-automatico-e-metas-de-ciclo.md); contrato da [F3](f3-painel-kanban.md) (formato e regras já em vigor).
 
 Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compartilhado`) e a parte interface (`apps/web`). Tudo o que a interface consome está tipado em `packages/compartilhado`; nenhuma das duas partes inventa campo fora daqui. Mudança neste contrato durante a F4 é feita aqui primeiro, depois no código.
 
-A F4 **não tem migração**: nenhuma tabela nem coluna muda. Ela lê o que a F2 e a F3 já gravam (`documentos`, `eventos_historico`, `arquivos_documento`) e abre o primeiro caminho de leitura dos arquivos.
+(Superado: a F4 ganhou a migração 0004, registro de acesso a arquivos.) Texto original: a F4 **não tem migração**: nenhuma tabela nem coluna muda. Ela lê o que a F2 e a F3 já gravam (`documentos`, `eventos_historico`, `arquivos_documento`) e abre o primeiro caminho de leitura dos arquivos.
 
 ## 1. Escopo
 
@@ -296,3 +296,11 @@ A vitrine (`apps/web/e2e/vitrine/`) ganha um documento com 6+ eventos de todos o
 ## 10. Correção do Eric (2026-09-29) — prevalece sobre a seção 9
 
 Decisão [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md): **sem visualizador e sem marca d'água**; PDF e demais formatos só com "Baixar". `baixarArquivo`: Administrador, Qualidade e Solicitante da área; Leitor não. Registro imutável de cada download mantido. Nome do principal baixado: `[código]-[título]_[revisão]=[versão].[ext]` (sem código: `SEM-CODIGO-...`; versão = 1 até a F7); anexos com o nome original. Versões de arquivo com justificativa: F7. Office Online: fatia do SharePoint.
+
+## 11. Ajustes de implementação (registrados após o QA, 2026-09-29)
+
+1. Erro de download e sucesso da reprogramação feita no modal aparecem **dentro do modal** (alerta e status anunciado), não em toast: com o modal aberto, o fundo fica inerte e o toast não seria anunciado.
+2. "Revisa o documento" mostra o `DOC-uuid` de origem (o `Documento` não traz o código da origem); a forma final vem na F8. Hoje nenhum documento tem origem. *(Aguarda o Eric.)*
+3. Ícone de imagem: `FileImage` (lucide), no lugar de `Image`.
+4. Nome do principal baixado limitado a 200 caracteres (corte só no título, preservando código, revisão, versão e extensão) e espaços repetidos unidos em um: limite prático do Windows. *(Aguarda o Eric.)*
+5. HEAD desligado nas rotas de leitura e download (não pode gerar registro de acesso).

@@ -4,6 +4,13 @@
 - **Status:** Aprovada pelo Eric
 - **Substitui:** a decisão [0013](0013-visualizador-marca-dagua-e-registro-de-acesso.md), exceto o registro de acesso (item 3 abaixo). O Eric esclareceu que a marca d'água e o visualizador eram do **repositório de documentos do Vigen**, não da tramitação.
 
+## Contexto
+Na aprovação do contrato da F4 o Eric pediu marca d'água, visualizador e registro de acesso (decisão 0013). Em seguida esclareceu que marca d'água e visualizador eram do repositório de documentos do Vigen e definiu como a tramitação trata os arquivos: download para quem trabalha no documento, nome padronizado e versões.
+
+## Opções
+1. Manter a 0013 (marca e visualizador na tramitação): descartada pelo Eric.
+2. Download direto com nome padronizado, registro de acesso e versões na F7: escolhida.
+
 ## Decisão
 1. **Sem marca d'água e sem visualizador de PDF** na tramitação. O PDF é baixado direto.
 2. **Quem baixa (ação `baixarArquivo`):** Administrador, Qualidade e Solicitante (só documentos da sua área). Leitor **não** baixa.
