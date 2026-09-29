@@ -50,7 +50,7 @@ import { aplicarTema, temaSalvo } from '../../src/tema.ts';
 
 const parametros = new URLSearchParams(location.search);
 // ?perfil=Leitor|Solicitante muda o perfil simulado; ?envio=falha faz o 1º envio falhar (sem conexão).
-// Painel: ?painel=vazio|erro|carregando; ?reprog=conflito faz a 1ª reprogramação dar 409 conflito_versao.
+// Painel: ?painel=vazio|erro|carregando|muitos (muitos = 40 cartões a mais em Recebido, para a rolagem por coluna); ?reprog=conflito faz a 1ª reprogramação dar 409 conflito_versao.
 // Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?download=erro.
 // Status (F5): ?status=conflito faz a 1ª etapa dar 409 conflito_versao; ?responsaveis=erro faz a lista falhar
 // uma vez; ?desfazer=conflito faz o "Desfazer" dar 409.
@@ -116,7 +116,11 @@ let cartoes: CartaoPainel[] = modoPainel === 'vazio' ? [] : [
   cartao(1, 'PR-QUA-0010', 'Procedimento de auditoria interna', 'Recebido', qualidade, 20),
   cartao(2, null, 'Instrução de solda em campo', 'Recebido', engenharia, 3),
   cartao(3, null, 'Plano de emergência importado', 'Recebido', suprimentos, null),
-  cartao(4, 'IT-ENG-0042', 'Inspeção de andaimes', 'Em revisão da qualidade', engenharia, -2, { reprogramado: true, qtdReprogramacoes: 1, dataInicioRevisao: somarDias(HOJE, -4), ...resp('p2') }),
+  cartao(4, 'IT-ENG-0042', 'Inspeção de andaimes', 'Em revisão da qualidade', engenharia, -2, {
+    // Coerente com a regra (0011/0015): recebido há 40 dias, prazo original (recebimento + 30) venceu
+    // há 10 dias, reprogramado depois de vencido para 2 dias atrás, que também já passou.
+    dataRecebimento: somarDias(HOJE, -40), reprogramado: true, qtdReprogramacoes: 1, dataInicioRevisao: somarDias(HOJE, -38), ...resp('p2'),
+  }),
   cartao(5, 'PR-SUP-0003', 'Compras emergenciais', 'Em revisão junto à área', suprimentos, 0, { dataInicioRevisao: somarDias(HOJE, -12), ...resp('p1') }),
   cartao(6, 'PR-QUA-0007', 'Controle de informação documentada', 'Devolvido para correção', qualidade, 10, {
     qtdDevolucoes: 2, reprogramado: true, qtdReprogramacoes: 2, dataRecebimento: '2026-09-01', dataInicioRevisao: '2026-09-02', ...resp('p5'),
@@ -132,6 +136,9 @@ let cartoes: CartaoPainel[] = modoPainel === 'vazio' ? [] : [
   cartao(9, 'AT-COM-0001', 'Ata da reunião de análise crítica', 'Cancelado', comercial, 4, { statusAntesDoCancelamento: 'Em revisão da qualidade', ...resp('p2') }),
   cartao(10, null, 'Formulário antigo de entrega de EPI', 'Cancelado', suprimentos, null),
 ];
+if (modoPainel === 'muitos') {
+  for (let n = 101; n <= 140; n += 1) cartoes.push(cartao(n, null, `Documento de volume ${n - 100}`, 'Recebido', qualidade, 20));
+}
 function documentoDoCartao(c: CartaoPainel): Documento {
   return {
     ...documento(0, c.codigo, c.titulo, c.status, areas.find((a) => a.id === c.areaId)!),
@@ -195,6 +202,18 @@ eventosPorDocumento.set('DOC-P6', [
   evento('DOC-P6', 'REPROGRAMACAO', 'Devolvido para correção', null, '2026-09-16T12:45:00Z', 'Ana Exemplo', {
     detalhes: [{ campo: 'dataRevisao', antes: '2026-10-05', depois: '2026-10-09' }],
     observacao: 'Nova devolução: prazo ajustado para a correção da tabela.',
+  }),
+]);
+eventosPorDocumento.set('DOC-P4', [
+  evento('DOC-P4', 'CRIACAO', 'Recebido', null, `${somarDias(HOJE, -40)}T12:00:00Z`, 'Ana Exemplo', {
+    detalhes: [{ campo: 'dataRevisao', antes: null, depois: somarDias(HOJE, -10) }],
+  }),
+  evento('DOC-P4', 'STATUS', 'Em revisão da qualidade', 'Recebido', `${somarDias(HOJE, -38)}T13:00:00Z`, 'Bruno Teste', {
+    responsavel: 'Bruno Teste', responsavelId: 'p2',
+  }),
+  evento('DOC-P4', 'REPROGRAMACAO', 'Em revisão da qualidade', null, `${somarDias(HOJE, -9)}T14:00:00Z`, 'Bruno Teste', {
+    detalhes: [{ campo: 'dataRevisao', antes: somarDias(HOJE, -10), depois: somarDias(HOJE, -2) }],
+    observacao: 'A área de Engenharia pediu mais uma semana para anexar os laudos.',
   }),
 ]);
 eventosPorDocumento.set('DOC-P9', [

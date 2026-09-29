@@ -253,3 +253,30 @@ test.describe('toque emulado em 768px', () => {
     }
   });
 });
+
+// Decisão 0015 item 4 (Planner): com muitos cartões, só a coluna rola na vertical; a página não.
+for (const largura of [768, 1440]) {
+  test(`rolagem por coluna em ${largura}px: a página não rola na vertical por causa do quadro`, async ({ page }) => {
+    await abrir(page, { largura, extra: '&painel=muitos' });
+    const quadro = page.getByRole('region', { name: 'Quadro de tramitação' });
+    await expect(quadro).not.toHaveAttribute('aria-busy', 'true');
+    await expect(quadro.getByRole('article', { name: 'Documento de volume 40' })).toBeAttached();
+    const medidas = await page.evaluate(() => {
+      const pagina = document.scrollingElement!;
+      const quadro = document.querySelector('[aria-label="Quadro de tramitação"]')!;
+      const listas = Array.from(quadro.querySelectorAll('ul, ol')).filter((l) => l.scrollHeight > l.clientHeight);
+      return {
+        rolagemPagina: pagina.scrollHeight - pagina.clientHeight,
+        rolagemVerticalQuadro: quadro.scrollHeight - quadro.clientHeight,
+        colunasRolando: listas.length,
+        fundoQuadro: quadro.getBoundingClientRect().bottom,
+        alturaJanela: window.innerHeight,
+      };
+    });
+    expect(medidas.rolagemPagina).toBe(0);
+    expect(medidas.rolagemVerticalQuadro).toBeLessThanOrEqual(0);
+    expect(medidas.colunasRolando).toBeGreaterThanOrEqual(1);
+    expect(medidas.fundoQuadro).toBeLessThanOrEqual(medidas.alturaJanela);
+    await semRolagemHorizontal(page);
+  });
+}

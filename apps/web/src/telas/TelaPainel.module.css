@@ -1,5 +1,17 @@
 /* Tela Painel (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
 
+/* Tela de altura cheia (decisão 0015 item 4): cabeçalho, KPIs e filtros no topo; o quadro fica com o resto. */
+.tela {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tela > * {
+  flex-shrink: 0;
+}
+
 /* Quatro KPIs (P-12, P-13): rótulo, valor e subtítulo coerentes. 4 → 2 → 1 colunas, só CSS. */
 .kpis {
   display: grid;
@@ -118,11 +130,19 @@
  * Quadro: 5 colunas com largura mínima (--kanban-coluna-min). Quando não cabem (tablet e telas
  * estreitas), o quadro rola na horizontal POR DENTRO; a página nunca rola (decisão 0005).
  */
+.tela > .quadro {
+  flex-shrink: 1;
+}
+
 .quadro {
   /* Ancestral posicionado: textos "visualmente-oculto" (absolute) ficam presos ao recorte do quadro. */
   position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(var(--kanban-coluna-min), 1fr));
+  /* Uma linha com a altura do quadro: a coluna usa max-height: 100% e rola por dentro. */
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: var(--kanban-coluna-altura-min);
   align-items: start;
   gap: var(--space-2);
   width: 100%;

@@ -41,6 +41,7 @@
   font-size: var(--fs-body-sm);
   font-weight: var(--fw-bold);
   color: var(--text-strong);
+  flex-shrink: 0;
 }
 
 .rotulo {
@@ -83,10 +84,6 @@
   font-weight: var(--fw-semibold);
   color: var(--text-secondary);
   text-align: center;
-}
-
-.titulo {
-  flex-shrink: 0;
 }
 
 /*

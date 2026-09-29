@@ -338,7 +338,7 @@ export function TelaPainel() {
   const podeCadastrar = podeCadastrarDocumento(eu);
 
   return (
-    <>
+    <div className={estilos.tela} data-altura-cheia="">
       <header className={pagina.cabecalho}>
         <div className={pagina.cabecalhoTexto}>
           <h1 ref={titulo} className={pagina.titulo} tabIndex={-1}>
@@ -467,7 +467,7 @@ export function TelaPainel() {
         aoReativar={documentoReativado}
       />
 
-    </>
+    </div>
   );
 }
 

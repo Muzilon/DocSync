@@ -74,3 +74,19 @@ Nenhum tipo novo foi criado fora de `packages/compartilhado`; não houve diverg�
 ## Decisões tomadas ou necessárias
 
 - Nenhuma decisão grande. As diferenças 1 a 3 acima e a proposta de rodapé enxuto ficam para o Eric aprovar ou recusar (registro no contrato ou numa decisão, se aprovadas).
+
+## Correções pós-QA (2026-09-29)
+
+Feitas pelo `agente-visao-minimalista`, só em `apps/web`, depois da revisão do `agente-qa-revisao` e das aprovações do Eric (contrato F5, seção 13).
+
+1. **Rodapé enxuto dos detalhes (13.1):** `MAXIMO_ACOES_RAPIDAS = 1` e `acoesRapidas` devolve só a ação principal. Rodapé final: principal, "Atualizar etapa…", "Cancelar documento", "Reprogramar" (só vencido), "Reativar" (cancelado) e "Fechar". As outras transições ficam só dentro de "Atualizar etapa…". O botão destrutivo passou a se chamar **"Cancelar documento"** para não ser confundido com fechar. A proposta de visão minimalista acima fica superada por este item.
+2. **Rolagem como no Planner (0015, item 4):** a tela do Painel marca a raiz com `data-altura-cheia`; `Casca.module.css` (`.conteudo:has(> [data-altura-cheia])`) deixa o conteúdo com `height: 100dvh` em flex column; `TelaPainel.module.css` (`.tela`) mantém cabeçalho, KPIs e filtros no topo, e o quadro (`flex: 1 1 0; min-height: var(--kanban-coluna-altura-min)`; uma linha `minmax(0, 1fr)`) fica com o resto da altura. `--kanban-coluna-altura-max` virou `100%`, então cada coluna vai no máximo até o fim do quadro e rola por dentro. A rolagem horizontal interna do quadro continua. Outras telas não mudam.
+3. **B3:** o seletor `.titulo` de `ColunaKanban.module.css` foi unificado. **B4:** `DOC-P4` da vitrine ficou coerente: recebido há 40 dias, prazo original em −10 dias, reprogramado em −9 dias (já vencido) para −2 dias, com eventos CRIACAO, STATUS e REPROGRAMACAO próprios.
+
+Arquivos: `apps/web/src/componentes/DetalhesDocumento.tsx` e `.test.tsx`, `apps/web/src/telas/TelaPainel.tsx`, `TelaPainel.module.css`, `TelaPainel.test.tsx`, `Casca.module.css`, `apps/web/src/componentes/ColunaKanban.module.css`, `apps/web/src/estilos/tokens.css`, `apps/web/e2e/painel.spec.ts` (teste novo "rolagem por coluna em 768px/1440px": com `?painel=muitos` (40 cartões a mais), `document.scrollingElement` não rola na vertical, o quadro também não, pelo menos uma coluna rola e o quadro termina dentro da janela), `status.spec.ts`, `capturas.spec.ts`, `vitrine/vitrine.tsx` (modo `?painel=muitos` e DOC-P4). Capturas `painel-planner-*` e `detalhes-acoes-*` refeitas em `docs/relatorios/capturas/`.
+
+Validação: `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e` e `npm run segredos` (resultados abaixo). O e2e rodou com uma config local ignorada pelo Git (`pw.local.config.ts`, Chromium de `/opt/pw-browsers`), apagada no fim.
+
+Limite conhecido: em janelas muito baixas (menos de ~650px de altura em 768px de largura), o quadro para em `--kanban-coluna-altura-min` (240px) e a página passa a rolar, de propósito, para as colunas não ficarem ilegíveis.
+
+Resultados das correções pós-QA (conferidos pelo Claude principal): typecheck, build e segredos verdes; `npm test` 490/490 em duas rodadas seguidas; e2e 101 aprovados. Um teste de tela ("Cancelar exige motivo...") falhou em duas rodadas do agente com a máquina carregada e passou nas rodadas seguintes: acompanhar como possível instabilidade.

@@ -11,13 +11,13 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
-| **F5 Mudança de status** | **Servidor e interface entregues; QA aprovado com ressalvas; correções pós-QA (rodapé enxuto, rolagem do quadro) em andamento; depois validação do Eric** | `ed3d59d`…`1f9da60` |
+| **F5 Mudança de status** | **Servidor e interface entregues; QA aprovado com ressalvas; correções pós-QA feitas; aguardando validação do Eric** | `ed3d59d`…`1f9da60` |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
 ## F5: o que falta
 
-1. Correções pós-QA terminando (rodapé enxuto aprovado, quadro com a altura da janela, pequenos ajustes). Depois, o Eric roda o roteiro abaixo.
+1. Correções pós-QA feitas (rodapé enxuto, quadro com a altura da janela, "Cancelar documento"). O Eric roda o roteiro abaixo.
 2. Se ele disser "F5 validada": marcar no plano, CHANGELOG e seguir para a F6.
 
 Relatórios: `relatorios/2026-09-29-f5-*.md` (API, web, QA). Pendências: F9 (chave de idempotência por evento); regra "só adia" sem efeito prático depois da 0015.

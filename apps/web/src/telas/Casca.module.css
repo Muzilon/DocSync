@@ -208,6 +208,17 @@
   padding: var(--space-7) var(--space-10) var(--space-15);
 }
 
+/*
+ * Telas de altura cheia (Painel, decisão 0015 item 4): o conteúdo ocupa exatamente a janela e a
+ * tela distribui a altura por flex (min-height: 0 até o quadro); só as colunas rolam na vertical.
+ */
+.conteudo:has(> [data-altura-cheia]) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: var(--space-6);
+}
+
 /* 04, 4.3: abaixo de 860px, 76px e só ícones. Texto oculto só visualmente. */
 @media (max-width: 860px) {
   .barra {
