@@ -1,0 +1,34 @@
+{
+  "name": "docsync",
+  "private": true,
+  "type": "module",
+  "description": "DocSync — SaaS interno do SGI do Grupo Monto",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c auto \"npm run dev -w @docsync/api\" \"npm run dev -w @docsync/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "segredos": "secretlint \"**/*\"",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@secretlint/secretlint-rule-pattern": "^13.0.6",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.6",
+    "@types/node": "^26.6.3",
+    "concurrently": "^10.0.5",
+    "husky": "^9.1.7",
+    "secretlint": "^13.0.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

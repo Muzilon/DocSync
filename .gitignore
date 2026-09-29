@@ -1,0 +1,32 @@
+# Dependências e builds
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Ambiente e segredos: NUNCA versionar
+.env
+.env.*
+!.env.example
+*.local.*
+*.pem
+*.key
+*.pfx
+
+# Dados locais (banco, arquivos enviados, rascunhos de teste)
+dados-locais/
+armazenamento-local/
+
+# Testes de tela
+playwright-report/
+test-results/
+
+# Sistema e editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Configurações locais do Claude Code
+.claude/settings.local.json

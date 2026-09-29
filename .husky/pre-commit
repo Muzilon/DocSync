@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Verificação de segredos nos arquivos preparados para o commit (CLAUDE.md, seção 4).
+arquivos=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -n "$arquivos" ]; then
+  echo "$arquivos" | tr '\n' '\0' | xargs -0 npx --no-install secretlint --maskSecrets || {
+    echo ""
+    echo "Commit bloqueado: possível segredo encontrado. Mova o valor para o .env (não versionado)."
+    exit 1
+  }
+fi

@@ -1,0 +1,87 @@
+# CLAUDE.md — Regras do projeto DocSync
+
+DocSync é o SaaS interno do SGI (Qualidade, Meio Ambiente, Segurança e Saúde Ocupacional) do Grupo Monto. É a reconstrução, do zero, do antigo DocFlow (tramitação de documentos). O código é novo; as regras de negócio e as lições das tentativas anteriores estão em [docs/especificacao/](docs/especificacao/) e devem ser respeitadas.
+
+Idioma: tudo em português do Brasil (código de domínio, textos da interface, commits, documentação).
+
+> **Mantenha este arquivo atualizado.** Sempre que uma regra, tecnologia ou convenção mudar, atualize o CLAUDE.md na mesma entrega. Um CLAUDE.md desatualizado é defeito.
+
+---
+
+## 1. Papéis
+
+| Papel | Quem | O que faz |
+|---|---|---|
+| Dono do produto | **Eric** | **Decide.** Prioridades, aprovação de decisões grandes (stack, modelo de dados, fonte da verdade, apagar ou mover arquivos em massa) e validação de cada entrega. |
+| Codificação e UX/UI | **Claude** | Implementa telas, componentes, regras e dados, seguindo o design system ([04](docs/especificacao/04-design-system.md)). Coordena os subagentes. |
+| Ideias e automações | **Antigravity** | Apoio para novas ideias e automações. Não implementa. |
+
+O Claude **não toma decisões grandes sozinho**: propõe por escrito, o Eric aprova, a decisão é registrada e só então o código muda.
+
+## 2. Delegação por módulo
+
+O Claude principal não implementa tudo numa resposta só. Cada módulo ou tarefa vai para um subagente de [.claude/agents/](.claude/agents/), com o modelo escolhido pela complexidade:
+
+| Modelo | Uso |
+|---|---|
+| **Fable** | Arquitetura e lógica complexa: modelo de dados, sincronização, permissões, regras de transição. |
+| **Opus** | Implementação e UI: telas, componentes, estilos, testes de tela. |
+| **Haiku** | Pesquisa: documentação de bibliotecas, APIs da Microsoft, levantamentos rápidos. |
+
+**Toda tarefa delegada termina com um relatório em Markdown**, salvo em `docs/relatorios/AAAA-MM-DD-<fatia>-<assunto>.md` (modelo em [docs/relatorios/_modelo.md](docs/relatorios/_modelo.md)), com: o que foi feito, arquivos alterados, o que ficou pendente e como validar.
+
+Ao fim de cada fatia, o `agente-qa-revisao` revisa antes de a entrega ir para o Eric.
+
+## 3. Regra mais importante: fatias pequenas, nunca substituir tudo de uma vez
+
+- Trabalhar em **fatias pequenas e verificáveis**: uma tela ou um fluxo por vez, cada fatia funcionando de ponta a ponta (tela, regra, dados, permissão) e **validada pelo Eric antes da próxima**.
+- **Nunca** fazer reescrita total. Nunca substituir tudo de uma vez.
+- A versão nova de qualquer coisa **convive com a antiga até ser validada**. Remover a antiga é um **passo separado, aprovado pelo Eric** e registrado.
+- **Nada decorativo apresentado como pronto**: menu sem destino, botão sem ação, valor fixo no lugar de dado real. Um link só aparece quando o destino existe.
+- Motivo: uma migração anterior substituiu tudo de uma vez, apagou uma versão que funcionava e entregou um protótipo incompleto ([01, seção 3.2](docs/especificacao/01-visao-produto-e-licoes-aprendidas.md)).
+
+O plano de fatias da Fundação está em [docs/plano-fundacao.md](docs/plano-fundacao.md).
+
+## 4. Segredos: fora do código desde o primeiro commit
+
+- Webhooks, URLs assinadas, senhas, tokens, client secrets, cadeias de conexão e demais segredos **nunca** entram em arquivo versionado, nem provisoriamente, nem em teste, nem em documentação.
+- Segredos ficam em **variáveis de ambiente** (arquivo `.env` local, não versionado) ou num cofre, e **só no servidor** (`apps/api`). O navegador nunca recebe segredo. Variáveis `VITE_*` são públicas por definição: só identificadores não sensíveis (ex.: client ID e tenant ID do Entra).
+- O `.gitignore` cobre `.env`, `.env.*` e `*.local.*`. O [.env.example](.env.example) é versionado **só com placeholders** (`<...>`).
+- **Verificação automática de segredos**: `secretlint` no pre-commit (husky) e `gitleaks` no CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)). Nunca pular o hook (`--no-verify`).
+- Usuários e dados de teste usam valores fictícios, gerados por script ou em arquivos locais fora do Git.
+- Os endereços e senhas do repositório antigo (`tramitacao_de_documentos`) são considerados **vazados**: nada dele é copiado.
+
+## 5. CHANGELOG
+
+[CHANGELOG.md](CHANGELOG.md) desde o primeiro commit: **uma linha por mudança relevante, na data em que aconteceu**, com link para a decisão ou o relatório. Vale para qualquer agente.
+
+## 6. Registro de decisões
+
+Toda decisão de arquitetura, tecnologia, modelo de dados ou escopo vira um arquivo em [docs/decisoes/](docs/decisoes/) (`NNNN-titulo.md`: data, status, contexto, opções, decisão, consequências) **antes** do código correspondente. Diferença intencional em relação à especificação é registrada como decisão; diferença não registrada é defeito.
+
+## 7. Stack e convenções (decisão [0001](docs/decisoes/0001-stack.md))
+
+- Monorepo com npm workspaces: `apps/web` (React + TypeScript + Vite), `apps/api` (Node + TypeScript + Fastify), `packages/compartilhado` (tipos e regras usados pelos dois).
+- Estilos: variáveis CSS (tokens do documento 04) + CSS Modules. **Sem Tailwind.** Todo valor visual sai de um token.
+- Banco: PostgreSQL (fonte da verdade, decisão [0002](docs/decisoes/0002-fonte-da-verdade.md)). Identidade: Microsoft Entra ID. Arquivos: armazenamento local atrás de uma interface, até o SharePoint ser liberado ([0003](docs/decisoes/0003-ambiente-local.md)).
+- Testes: Vitest (regras e API), Playwright + axe (telas e acessibilidade, a partir da F1).
+- Node 24. Comandos na raiz: `npm run dev`, `npm run build`, `npm test`, `npm run typecheck`, `npm run segredos`.
+- Telas: computador e tablet (a partir de 768px), sem rolagem horizontal da página ([0005](docs/decisoes/0005-telas-computador-tablet.md)). Barra lateral estática, só CSS ([04, seção 4](docs/especificacao/04-design-system.md)).
+
+## 8. Regras de negócio que não podem regredir
+
+Resumo; a fonte é a especificação.
+
+- **R1–R6** do [documento 01](docs/especificacao/01-visao-produto-e-licoes-aprendidas.md): sem segredos, autenticação e autorização no servidor, dados exibidos com segurança, ID estável (`DOC-uuid`, `HIST-uuid`), gravação idempotente e histórico acumulativo, nada apagado antes de validado.
+- Nenhuma ação localiza documento por posição, código ou título.
+- Autor de evento sempre da identidade autenticada.
+- Defeitos **P-01 a P-19** do [documento 03](docs/especificacao/03-guia-de-preenchimento-e-fluxos.md) não se repetem.
+- Revisões: documento novo vinculado ao de origem; código único por código + revisão; Aprovado é final ([0004](docs/decisoes/0004-revisoes-e-reativacao.md)).
+- Reativação: volta ao status anterior ao cancelamento ([0004](docs/decisoes/0004-revisoes-e-reativacao.md)).
+- Áreas: lista mantida, exibida sempre em ordem alfabética pt-BR ([0006](docs/decisoes/0006-nome-e-areas.md)).
+
+## 9. Git
+
+- Commits pequenos, mensagem em português, um assunto por commit.
+- Commit e push só quando o Eric pedir ou aprovar a fatia.
+- Nada de apagar ou mover arquivos em massa sem aprovação registrada.
