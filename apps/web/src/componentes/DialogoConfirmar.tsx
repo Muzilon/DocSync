@@ -12,6 +12,8 @@ interface Props {
   rotuloConfirmar: string;
   /** Texto do botão enquanto envia ("Aprovando…"). */
   rotuloEnviando: string;
+  /** Texto do botão que fecha sem fazer nada (padrão "Voltar"; ex.: "Continuar editando"). */
+  rotuloVoltar?: string;
   variante?: 'primario' | 'perigo';
   icone?: ReactNode;
   aoFechar: () => void;
@@ -31,6 +33,7 @@ export function DialogoConfirmar({
   children,
   rotuloConfirmar,
   rotuloEnviando,
+  rotuloVoltar = 'Voltar',
   variante = 'primario',
   icone,
   aoFechar,
@@ -68,7 +71,7 @@ export function DialogoConfirmar({
       acoes={
         <>
           <Botao onClick={aoFechar} disabled={enviando}>
-            Voltar
+            {rotuloVoltar}
           </Botao>
           <Botao variante={variante} carregando={enviando} icone={icone} onClick={() => void confirmar()}>
             {enviando ? rotuloEnviando : rotuloConfirmar}

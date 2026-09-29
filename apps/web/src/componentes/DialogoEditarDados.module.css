@@ -1,0 +1,110 @@
+/* Diálogo "Editar dados" (contrato F6, 5.2): grade do cadastro (04, 7.1), cores da decisão 0009. */
+.apoio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.codigo {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.semCodigo {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.revisao {
+  color: var(--text-secondary);
+}
+
+.nota {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/* 2 colunas a partir de 640px, 1 abaixo (igual ao cadastro). */
+.formulario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .formulario {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aviso,
+.erro,
+.resumoErros {
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  border: var(--borda-fina) solid var(--cor-alerta-ponto);
+  border-left-width: var(--borda-destaque);
+  border-radius: var(--radius-sm);
+  background: var(--cor-alerta-fundo);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.erro,
+.resumoErros {
+  border-color: var(--cor-erro-ponto);
+  background: var(--cor-erro-fundo);
+}
+
+.erro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.aviso p + p,
+.aviso ul + p {
+  margin-top: var(--space-2);
+}
+
+.avisoTitulo {
+  font-weight: var(--fw-bold);
+}
+
+.aviso ul,
+.resumoErros ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.resumoErros a {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.obrigatorios {
+  grid-column: 1 / -1;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  width: 100%;
+}

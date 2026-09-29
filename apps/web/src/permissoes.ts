@@ -1,6 +1,7 @@
 import {
   acoesDeStatus,
   pode,
+  podeEditarAgora,
   podeReprogramarAgora,
   podeSerCancelado,
   type AcaoStatus,
@@ -55,4 +56,13 @@ export function podeCancelar(eu: Pessoa, documento: Pick<Documento, 'status' | '
 /** Mostra "Reativar"? Só em Cancelado e só para quem pode reativar (Administrador/Qualidade). */
 export function podeReativar(eu: Pessoa, documento: Pick<Documento, 'status' | 'areaId'>): boolean {
   return documento.status === 'Cancelado' && pode(eu, 'reativarDocumento', { areaId: documento.areaId });
+}
+
+/**
+ * Mostra "Editar dados" nos detalhes (contrato F6, 5.1)? Documento em tramitação
+ * (`podeEditarAgora`: nem Aprovado nem Cancelado) E `pode(eu, 'editarDados', { areaId, status })`
+ * (Solicitante só em devolvido da sua área; Leitor nunca). A API decide de verdade.
+ */
+export function podeEditar(eu: Pessoa, documento: Pick<Documento, 'status' | 'areaId'>): boolean {
+  return podeEditarAgora(documento) && pode(eu, 'editarDados', { areaId: documento.areaId, status: documento.status });
 }

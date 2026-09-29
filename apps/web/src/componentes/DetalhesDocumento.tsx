@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ArrowRightLeft, Ban, CalendarPlus, CircleCheckBig, RotateCcw } from 'lucide-react';
+import { ArrowRightLeft, Ban, CalendarPlus, CircleCheckBig, Pencil, RotateCcw } from 'lucide-react';
 import {
   avaliarMetas,
   contarDevolucoes,
@@ -19,13 +19,14 @@ import { useApi } from '../api/cliente.ts';
 import { ErroApi, mensagemDeErro } from '../api/erros.ts';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import { formatarData, formatarDataHora, plural } from '../formatacao.ts';
-import { acoesDeStatusPara, podeBaixarArquivo, podeCancelar, podeReativar, podeReprogramar } from '../permissoes.ts';
+import { acoesDeStatusPara, podeBaixarArquivo, podeCancelar, podeEditar, podeReativar, podeReprogramar } from '../permissoes.ts';
 import { BadgeStatus } from './BadgeStatus.tsx';
 import { Botao } from './Botao.tsx';
 import { Dialogo } from './Dialogo.tsx';
 import { DialogoAtualizarEtapa } from './DialogoAtualizarEtapa.tsx';
 import { DialogoCancelar } from './DialogoCancelar.tsx';
 import { DialogoConfirmar } from './DialogoConfirmar.tsx';
+import { DialogoEditarDados } from './DialogoEditarDados.tsx';
 import { DialogoReprogramar } from './DialogoReprogramar.tsx';
 import { ErroCarregamento } from './Estados.tsx';
 import { EtiquetaPrazo, EtiquetaReprogramado } from './EtiquetaPrazo.tsx';
@@ -68,6 +69,7 @@ type Empilhado =
   | { tipo: 'etapa'; chave: number; aberto: boolean; para: StatusDocumento | null }
   | { tipo: 'aprovar'; chave: number; aberto: boolean; para: StatusDocumento }
   | { tipo: 'cancelar'; chave: number; aberto: boolean }
+  | { tipo: 'editar'; chave: number; aberto: boolean }
   | { tipo: 'reativar'; chave: number; aberto: boolean; volta: StatusDocumento };
 
 interface Props {
@@ -88,8 +90,9 @@ interface Props {
  * Modal de detalhes do documento (contrato F4, 5.2; contrato F5, 6.2): Dados, Metas do ciclo,
  * Arquivos (Baixar) e Linha do tempo única. Faz o próprio GET /documentos/:id, então abre também
  * cancelados e documentos escondidos pela busca. É o ÚNICO lugar das ações (decisão 0015): etapas
- * de status (`acoesDeStatus`), Cancelar, Reativar e Reprogramar (só com prazo vencido); cada botão
- * só aparece quando a regra permite (a API decide de verdade). Nada editável aqui (F6).
+ * de status (`acoesDeStatus`), Editar dados (F6), Cancelar, Reativar e Reprogramar (só com prazo
+ * vencido); cada botão só aparece quando a regra permite (a API decide de verdade). Os dados em si
+ * só mudam pelo diálogo empilhado "Editar dados".
  */
 export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento, aoMudarStatus, aoCancelar, aoReativar }: Props) {
   const api = useApi();
@@ -161,6 +164,7 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
   const rapidas = acoesRapidas(acoes);
   const mostraCancelar = documento !== null && podeCancelar(eu, documento);
   const mostraReativar = documento !== null && podeReativar(eu, documento);
+  const mostraEditar = documento !== null && podeEditar(eu, documento);
 
   function atualizado(novo: Documento) {
     aoAtualizarDocumento?.(novo);
@@ -232,6 +236,11 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
             {acoes.length > 0 && (
               <Botao icone={<ArrowRightLeft size={16} aria-hidden="true" />} onClick={() => abrir('etapa')}>
                 Atualizar etapa…
+              </Botao>
+            )}
+            {mostraEditar && (
+              <Botao icone={<Pencil size={16} aria-hidden="true" />} onClick={() => abrir('editar')}>
+                Editar dados
               </Botao>
             )}
             {mostraCancelar && (
@@ -368,6 +377,23 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
           </p>
           <p>A aprovação é final e encerra a tramitação.</p>
         </DialogoConfirmar>
+      )}
+
+      {empilhado?.tipo === 'editar' && detalhe && (
+        <DialogoEditarDados
+          key={empilhado.chave}
+          documento={detalhe.documento}
+          eu={eu}
+          aberto={empilhado.aberto}
+          aoFechar={fecharEmpilhado}
+          aoConflito={atualizado}
+          aoSalvar={(resultado, rotulos) => {
+            fecharEmpilhado();
+            // Contrato F6, 5.3: aviso dentro do modal; o Painel troca o cartão; a linha do tempo ganha o EDICAO.
+            setAviso(rotulos.length > 0 ? `Dados atualizados: ${rotulos.join(', ')}.` : 'Nenhuma alteração para salvar.');
+            atualizado(resultado.documento);
+          }}
+        />
       )}
 
       {empilhado?.tipo === 'cancelar' && detalhe && (

@@ -4,6 +4,7 @@ import type {
   Area,
   DetalheDocumento,
   Documento,
+  EdicaoDocumento,
   NovaPessoa,
   NovaReativacao,
   NovaReprogramacao,
@@ -13,6 +14,7 @@ import type {
   Pessoa,
   PessoaResumo,
   RespostaPainel,
+  ResultadoEdicao,
   ResultadoReprogramacao,
   ResultadoTransicao,
   TipoDocumento,
@@ -20,7 +22,7 @@ import type {
 import { ErroApi, codigoConhecido } from './erros.ts';
 
 // Contrato das rotas vem do pacote compartilhado (fonte única com a API).
-export type { AlteracaoPessoa, NovaPessoa, NovaReativacao, NovaReprogramacao, NovaTransicao, NovoCancelamento, NovoDocumento };
+export type { AlteracaoPessoa, EdicaoDocumento, NovaPessoa, NovaReativacao, NovaReprogramacao, NovaTransicao, NovoCancelamento, NovoDocumento };
 
 /** Parâmetros de GET /painel (contrato F3, seção 4.1). Só os informados vão na query. */
 export interface ConsultaPainel {
@@ -104,6 +106,11 @@ export interface Api {
   reativarDocumento(id: string, dados: NovaReativacao): Promise<ResultadoTransicao>;
   /** GET /responsaveis (contrato F5, 3.5): pessoas elegíveis, em ordem pt-BR, sem e-mail. */
   responsaveis(): Promise<PessoaResumo[]>;
+  /**
+   * PUT /documentos/:id/dados (contrato F6, 4): os 8 campos, sempre completos, mais a versão vista.
+   * 201 com o evento EDICAO; 200 com `evento: null` quando nada mudou; 409 conflito_versao traz o documento atual.
+   */
+  editarDados(id: string, dados: EdicaoDocumento): Promise<ResultadoEdicao>;
 }
 
 /** Cliente HTTP real: prefixo /api (o proxy do Vite o remove) e token Bearer em toda chamada. */
@@ -193,6 +200,7 @@ export function criarApi(obterToken: () => Promise<string>): Api {
     reativarDocumento: (id, dados) =>
       chamar<ResultadoTransicao>('POST', `/documentos/${encodeURIComponent(id)}/reativacoes`, dados),
     responsaveis: () => chamar<PessoaResumo[]>('GET', '/responsaveis'),
+    editarDados: (id, dados) => chamar<ResultadoEdicao>('PUT', `/documentos/${encodeURIComponent(id)}/dados`, dados),
   };
 }
 

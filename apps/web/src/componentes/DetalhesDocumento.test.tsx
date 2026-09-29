@@ -77,6 +77,7 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
       evento: evento(9),
     })),
     responsaveis: vi.fn().mockResolvedValue(RESPONSAVEIS),
+    editarDados: vi.fn(),
     mudarStatus: vi.fn(async (_id, dados) => resultado({ status: dados.para, responsavelId: dados.responsavelId, versao: 5 })),
     cancelarDocumento: vi.fn(async () => resultado({ status: 'Cancelado', versao: 5 }, 'CANCELAMENTO')),
     reativarDocumento: vi.fn(async () => resultado({ status: 'Devolvido para correção', versao: 6 })),
@@ -195,8 +196,8 @@ describe('DetalhesDocumento', () => {
     expect(valor('Observações complementares')).toHaveTextContent('Linha dois <b>sem HTML</b>.');
     expect(dados.querySelector('b')).toBeNull();
     expect(within(dados).queryByText('Revisão de')).not.toBeInTheDocument();
-    // Nada decorativo: sem Editar, Histórico completo, Anexar (F6, F7).
-    expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar/ })).not.toBeInTheDocument();
+    // Nada decorativo: sem Histórico completo nem Anexar (F7). "Editar dados" (F6) tem teste próprio.
+    expect(within(dialogo).queryByRole('button', { name: /Histórico completo|Anexar/ })).not.toBeInTheDocument();
   });
 
   it('Arquivos: principal primeiro, tamanho e Baixar com o nome devolvido pelo servidor (sem Visualizar)', async () => {
@@ -407,10 +408,10 @@ describe('funções puras do rodapé (F5)', () => {
 });
 
 describe('DetalhesDocumento: ações de status (F5)', () => {
-  it('Qualidade em Recebido: só a principal "Iniciar revisão", Atualizar etapa…, Cancelar documento e Fechar', async () => {
+  it('Qualidade em Recebido: só a principal "Iniciar revisão", Atualizar etapa…, Editar dados, Cancelar documento e Fechar', async () => {
     renderizar(apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) }));
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Cancelar documento', 'Fechar']);
+    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Editar dados', 'Cancelar documento', 'Fechar']);
     expect(within(dialogo).getByRole('button', { name: 'Iniciar revisão' })).toHaveClass('primario');
     // Nenhum botão desabilitado "de enfeite".
     for (const botao of within(dialogo).getAllByRole('button')) expect(botao).toBeEnabled();
@@ -426,10 +427,10 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
     expect(rodape(dialogo)).toEqual(['Fechar']);
   });
 
-  it('Solicitante da área em Devolvido: só "Reenviar à Qualidade" (principal) e Atualizar etapa…; sem Cancelar', async () => {
+  it('Solicitante da área em Devolvido: só "Reenviar à Qualidade" (principal), Atualizar etapa… e Editar dados; sem Cancelar', async () => {
     renderizar(apiSimulada(), { eu: SOLICITANTE_DA_AREA });
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Reenviar à Qualidade', 'Atualizar etapa…', 'Fechar']);
+    expect(rodape(dialogo)).toEqual(['Reenviar à Qualidade', 'Atualizar etapa…', 'Editar dados', 'Fechar']);
   });
 
   it('Cancelado: Reativar (Administrador), sem etapas nem Cancelar; Leitor não vê Reativar', async () => {

@@ -102,6 +102,7 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
       return { documento, evento: {} as never };
     }),
     responsaveis: vi.fn().mockResolvedValue([]),
+    editarDados: vi.fn(),
     mudarStatus: vi.fn(async (id: string, dados) => {
       const atual = [...CARTOES, ...CANCELADOS].find((c) => c.id === id)!;
       return { documento: documentoDe(atual, { status: dados.para, responsavelId: dados.responsavelId, versao: atual.versao + 1 }), evento: {} as never };

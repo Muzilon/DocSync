@@ -48,7 +48,7 @@ for (const tema of TEMAS) {
       await abrir(page, { tema, largura, rota: '/painel?documento=DOC-P1' });
       const dialogo = page.getByRole('dialog', { name: 'Procedimento de auditoria interna' });
       await expect(dialogo.getByRole('button', { name: 'Iniciar revisão' })).toBeVisible();
-      expect(await rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Cancelar documento', 'Fechar']);
+      expect(await rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Editar dados', 'Cancelar documento', 'Fechar']);
       await expect(dialogo.getByRole('region', { name: 'Metas do ciclo' })).toContainText('Estourada');
       await semRolagemHorizontal(page);
       const caixa = await dialogo.boundingBox();
@@ -179,7 +179,7 @@ test('janela de cancelados: Reativar nos detalhes por cima nomeia o status de vo
 
 for (const [perfil, doc, titulo, esperado] of [
   ['Leitor', 'DOC-P6', 'Controle de informação documentada', ['Fechar']],
-  ['Solicitante', 'DOC-P6', 'Controle de informação documentada', ['Reenviar à Qualidade', 'Atualizar etapa…', 'Fechar']],
+  ['Solicitante', 'DOC-P6', 'Controle de informação documentada', ['Reenviar à Qualidade', 'Atualizar etapa…', 'Editar dados', 'Fechar']],
   ['Qualidade', 'DOC-P8', 'Manual do Sistema de Gestão Integrada', ['Fechar']],
 ] as const) {
   test(`${perfil} em ${doc}: rodapé ${esperado.join(', ')}; axe`, async ({ page }) => {
