@@ -325,4 +325,36 @@ describe('nomeDownloadPrincipal (decisão 0014, item 4)', () => {
     const exato = 'x'.repeat(300);
     expect(nomeDownloadPrincipal({ codigo: null, titulo: exato, revisao: 0 }, 'a.pdf')).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
   });
+
+  it('corte por code points em fronteira de grafema: emoji ou acento composto no limite nunca é partido', () => {
+    // 'SEM-CODIGO-' (11) + '_0=1.pdf' (8) = 19; sobram 181 code points para o título.
+    const titulo = `${'a'.repeat(180)}😀${'b'.repeat(50)}`;
+    const nome = nomeDownloadPrincipal({ codigo: null, titulo, revisao: 0 }, 'a.pdf');
+    expect(Array.from(nome)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome).toContain('😀_0=1.pdf');
+    expect(nome).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/); // sem par substituto solto
+    // Emoji que não cabe inteiro (só sobra 1 code point) fica de fora, em vez de sair pela metade.
+    const apertado = `${'a'.repeat(181)}😀${'b'.repeat(50)}`;
+    const nome2 = nomeDownloadPrincipal({ codigo: null, titulo: apertado, revisao: 0 }, 'a.pdf');
+    expect(nome2).toBe(`SEM-CODIGO-${'a'.repeat(181)}_0=1.pdf`);
+    // Acento decomposto (e + U+0301) no limite: os dois code points ficam juntos ou saem juntos.
+    const composto = `${'a'.repeat(179)}e\u0301${'b'.repeat(50)}`;
+    const nome3 = nomeDownloadPrincipal({ codigo: null, titulo: composto, revisao: 0 }, 'a.pdf');
+    expect(Array.from(nome3)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome3).toContain('e\u0301_0=1.pdf');
+    const compostoApertado = `${'a'.repeat(180)}e\u0301${'b'.repeat(50)}`;
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: compostoApertado, revisao: 0 }, 'a.pdf')).toBe(
+      `SEM-CODIGO-${'a'.repeat(180)}_0=1.pdf`,
+    );
+  });
+
+  it('código longo demais: o nome nunca passa de 200 code points', () => {
+    const codigoLongo = 'C'.repeat(250);
+    const nome = nomeDownloadPrincipal({ codigo: codigoLongo, titulo: 'Título', revisao: 1 }, 'a.pdf');
+    expect(Array.from(nome)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome.startsWith('CCCC')).toBe(true);
+    const quaseLimite = 'C'.repeat(195);
+    const nome2 = nomeDownloadPrincipal({ codigo: quaseLimite, titulo: 'Título longo', revisao: 1 }, 'a.pdf');
+    expect(Array.from(nome2).length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+  });
 });

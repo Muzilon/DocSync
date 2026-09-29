@@ -29,7 +29,7 @@
 }
 
 .texto {
-  flex: 1 1 12rem;
+  flex: 1 1 var(--arquivo-texto-base);
   min-width: 0;
 }
 

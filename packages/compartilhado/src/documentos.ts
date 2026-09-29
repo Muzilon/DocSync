@@ -395,9 +395,36 @@ export function nomeDownloadPrincipal(
   const extensao = extensaoArquivo(nomeArquivo);
   const sufixo = `_${documento.revisao}=${versao}${extensao ? `.${extensao}` : ''}`;
   const prefixo = `${codigo}-`;
-  const espaco = TAMANHO_MAXIMO_NOME_DOWNLOAD - prefixo.length - sufixo.length;
-  const tituloCabe = titulo.length > espaco ? titulo.slice(0, Math.max(espaco, 1)).replace(/[\s.]+$/g, '') || 'Documento' : titulo;
-  return `${prefixo}${tituloCabe}${sufixo}`;
+  // Limite contado em code points; o corte cai só em fronteira de caractere visível
+  // (grafema): emoji, bandeira ou acento decomposto nunca é partido ao meio.
+  const espaco = TAMANHO_MAXIMO_NOME_DOWNLOAD - contarCodePoints(prefixo) - contarCodePoints(sufixo);
+  const tituloCabe = cortarEmGrafemas(titulo, Math.max(espaco, 1)).replace(/[\s.]+$/g, '') || 'Documento';
+  const nome = `${prefixo}${tituloCabe}${sufixo}`;
+  // Garantia final: código longo demais não pode estourar o limite mesmo com o título mínimo.
+  return contarCodePoints(nome) > TAMANHO_MAXIMO_NOME_DOWNLOAD ? cortarEmGrafemas(nome, TAMANHO_MAXIMO_NOME_DOWNLOAD) : nome;
+}
+
+function contarCodePoints(texto: string): number {
+  return Array.from(texto).length;
+}
+
+const segmentadorGrafemas = new Intl.Segmenter('pt-BR', { granularity: 'grapheme' });
+
+/**
+ * Corta o texto para caber em `maximo` code points, só em fronteira de grafema.
+ * Um grafema que não cabe inteiro fica de fora (nunca sai meio caractere).
+ */
+function cortarEmGrafemas(texto: string, maximo: number): string {
+  if (contarCodePoints(texto) <= maximo) return texto;
+  let usado = 0;
+  let saida = '';
+  for (const { segment } of segmentadorGrafemas.segment(texto)) {
+    const tamanho = contarCodePoints(segment);
+    if (usado + tamanho > maximo) break;
+    saida += segment;
+    usado += tamanho;
+  }
+  return saida;
 }
 
 const UNIDADES_TAMANHO = ['B', 'KB', 'MB', 'GB'] as const;

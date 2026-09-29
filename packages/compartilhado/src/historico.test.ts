@@ -44,6 +44,7 @@ describe('descreverEvento — um caso por tipo (contrato F4, 3.3)', () => {
     expect(d.statusAnterior).toBeNull();
     expect(d.diferencas).toEqual([{ campo: 'dataRevisao', rotulo: 'Prazo', antes: '—', depois: '29/10/2026' }]);
     expect(d.observacao).toBe('Cadastro inicial');
+    expect(d.rotuloObservacao).toBe('Observação');
     expect(d.temDetalhes).toBe(true);
   });
 
@@ -59,6 +60,7 @@ describe('descreverEvento — um caso por tipo (contrato F4, 3.3)', () => {
     expect(d.resumo).toBe('Prazo de 10/10/2026 para 20/10/2026');
     expect(d.diferencas[0]).toMatchObject({ rotulo: 'Prazo', antes: '10/10/2026', depois: '20/10/2026' });
     expect(d.observacao).toBe('Aguardando retorno do fornecedor.');
+    expect(d.rotuloObservacao).toBe('Justificativa');
     expect(d.temDetalhes).toBe(true);
   });
 

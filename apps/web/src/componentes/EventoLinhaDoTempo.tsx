@@ -72,7 +72,7 @@ export function EventoLinhaDoTempo({ evento, maisRecente }: Props) {
               )}
               {descricao.observacao && (
                 <div className={estilos.observacao}>
-                  <p className={estilos.rotulo}>{evento.tipoAcao === 'REPROGRAMACAO' ? 'Justificativa' : 'Observação'}</p>
+                  <p className={estilos.rotulo}>{descricao.rotuloObservacao}</p>
                   <p className={estilos.textoLivre}>{descricao.observacao}</p>
                 </div>
               )}

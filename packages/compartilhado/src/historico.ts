@@ -63,6 +63,8 @@ export interface DescricaoEvento {
   diferencas: DiferencaExibida[];
   /** observacao aparada, ou null. Em REPROGRAMACAO é a justificativa. */
   observacao: string | null;
+  /** Rótulo do campo `observacao` na tela: 'Justificativa' em REPROGRAMACAO, 'Observação' nos demais. */
+  rotuloObservacao: string;
   destino: string | null;
   responsavel: string | null;
   /** Há algo a expandir (diferencas, observacao, destino ou responsavel). */
@@ -130,6 +132,7 @@ export function descreverEvento(evento: EventoHistorico): DescricaoEvento {
     statusAnterior,
     diferencas,
     observacao,
+    rotuloObservacao: evento.tipoAcao === 'REPROGRAMACAO' ? 'Justificativa' : 'Observação',
     destino,
     responsavel,
     temDetalhes: diferencas.length > 0 || observacao !== null || destino !== null || responsavel !== null,

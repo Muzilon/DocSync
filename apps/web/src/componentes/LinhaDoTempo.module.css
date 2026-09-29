@@ -52,7 +52,7 @@
   background: var(--bg-card);
   border: var(--borda-destaque) solid var(--cor-marca);
   box-shadow: 0 0 0 var(--space-1) var(--cor-marca-anel);
-  animation: pulsar 2s ease-in-out infinite;
+  animation: pulsar var(--duracao-pulso) ease-in-out infinite;
 }
 
 @keyframes pulsar {

@@ -92,3 +92,18 @@ A decisão [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md) substi
 **Validação:** `npm run typecheck`, `npm test` (19 arquivos, 359 testes), `npm run build` e `npm run segredos` limpos. Manual: baixar o principal de um documento com código `PR-QUA-0010`, título `Procedimento de auditoria interna`, revisão 1 → `PR-QUA-0010-Procedimento de auditoria interna_1=1.pdf`, conteúdo idêntico ao enviado; anexo baixa com o nome original; com Leitor, sem botão Baixar e API 403.
 
 **Pendências herdadas:** ver "O que ficou pendente" acima, exceto os itens da marca d'água (encerrados). Versionamento de arquivos (versão > 1 no nome) é da F7.
+
+## Correções pós-QA (2026-09-29)
+
+Defeitos apontados pela revisão de QA da F4, corrigidos sem mudança de regra de negócio:
+
+- **M1 (HEAD gravava acesso falso):** o Fastify cria um HEAD automático para cada GET, e um `HEAD /documentos/:id/arquivos/:arquivoId` executava a rota inteira (lia o arquivo e gravava um registro DOWNLOAD). As rotas `GET /documentos/:id` e `GET /documentos/:id/arquivos/:arquivoId` agora são registradas com `exposeHeadRoute: false` (`apps/api/src/rotas/documentos.ts`). Teste novo em `apps/api/src/arquivos.test.ts`: HEAD nas duas rotas → não 200, sem `Content-Disposition` e nenhum registro em `registros_acesso_arquivos`; o GET seguinte continua registrando. `apoio-testes.ts` aceita `HEAD` em `chamar`.
+- **L4 (`nomeDownloadPrincipal`):** o corte do título passou a contar **code points** (`Array.from`) e a cair só em **fronteira de grafema** (`Intl.Segmenter`, pt-BR): emoji, bandeira ou acento decomposto (`e` + U+0301) nunca sai pela metade; o que não cabe inteiro fica de fora. Garantia final: o nome completo é cortado para 200 code points mesmo com código longo demais (antes, um código de 250 caracteres estourava o limite). Testes novos em `packages/compartilhado/src/documentos.test.ts` (emoji no limite, emoji que não cabe, acento decomposto nas duas situações, código de 250 e de 195 caracteres).
+- **L5 (tela interpretava `tipoAcao`):** `descreverEvento` (`packages/compartilhado/src/historico.ts`) devolve `rotuloObservacao` ('Justificativa' em REPROGRAMACAO, 'Observação' nos demais); `EventoLinhaDoTempo.tsx` usa só esse campo e não olha mais `evento.tipoAcao`. Testes em `historico.test.ts` (CRIACAO → 'Observação', REPROGRAMACAO → 'Justificativa').
+- **L6 (valores fora de token):** tokens novos em `apps/web/src/estilos/tokens.css`: `--duracao-pulso: 2s` (anel do evento mais recente em `LinhaDoTempo.module.css`) e `--arquivo-texto-base: 12rem` (`flex-basis` do bloco de nome em `ListaArquivos.module.css`).
+
+**Arquivos alterados:** `apps/api/src/rotas/documentos.ts`, `apps/api/src/apoio-testes.ts`, `apps/api/src/arquivos.test.ts`, `packages/compartilhado/src/documentos.ts`, `packages/compartilhado/src/documentos.test.ts`, `packages/compartilhado/src/historico.ts`, `packages/compartilhado/src/historico.test.ts`, `apps/web/src/componentes/EventoLinhaDoTempo.tsx`, `apps/web/src/componentes/LinhaDoTempo.module.css`, `apps/web/src/componentes/ListaArquivos.module.css`, `apps/web/src/estilos/tokens.css`.
+
+**Validação:** `npm run typecheck`, `npm test` (19 arquivos, 362 testes), `npm run build` e `npm run segredos` limpos. Manual: `curl -I` (HEAD) com token no download responde 404 e `SELECT count(*) FROM registros_acesso_arquivos` não muda; o GET continua baixando e registrando.
+
+**Pendente:** nada desta rodada. Sem commit (aguarda o Eric).

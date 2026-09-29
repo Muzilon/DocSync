@@ -162,6 +162,8 @@
   --detalhes-coluna-direita-min: 320px;
   --linha-tempo-ponto: 22px;
   --linha-tempo-linha: 2px;
+  /* Lista de arquivos (F4): largura base do bloco de nome antes de quebrar linha. */
+  --arquivo-texto-base: 12rem;
   --dialogo-altura-max: 85vh;
   --campo-altura: 40px;
   --borda-fina: 1px;
@@ -214,6 +216,7 @@
   --duracao-media: 0.25s;
   --duracao-spinner: 0.8s;
   --duracao-spinner-reduzido: 1.5s;
+  --duracao-pulso: 2s;
 }
 
 /* Tema escuro: fundos petróleo profundos, textos claros da mesma família. */

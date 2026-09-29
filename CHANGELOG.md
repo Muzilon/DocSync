@@ -17,6 +17,7 @@ Uma linha por mudança relevante, na data em que aconteceu, com link para a deci
 
 ## 2026-09-29
 
+- F4 (pós-QA): HEAD desligado em `GET /documentos/:id` e no download (não grava mais acesso falso, M1); `nomeDownloadPrincipal` corta por code points em fronteira de grafema e garante 200 no total (L4); `descreverEvento` devolve `rotuloObservacao` e a tela deixa de interpretar `tipoAcao` (L5); tokens `--duracao-pulso` e `--arquivo-texto-base` (L6). Relatório: [docs/relatorios/2026-09-29-f4-api-detalhes-arquivos.md](docs/relatorios/2026-09-29-f4-api-detalhes-arquivos.md) (seção "Correções pós-QA").
 - F3 (interface, pós-QA): janela de cancelados sem número no título enquanto não há contagem e sem a lista antiga ao reabrir (B4); vazio "Nenhum documento em tramitação" quando só há cancelados (B5); cartões reordenados pela chave do servidor depois de reprogramar (B6); botão Cancelados com 44px em toque e e2e de toque em 768px (B10). Relatório: [docs/relatorios/2026-09-29-f3-web-painel.md](docs/relatorios/2026-09-29-f3-web-painel.md) (seção "Correções pós-QA").
 - F3 (API, pós-QA): `POST /documentos/:id/reprogramacoes` responde `409 conflito_versao` antes da regra "só adia" (B1) e aplica o esquema fechado antes da detecção de reenvio (B2); ordem de decisão registrada no contrato (3.3). Relatório: [docs/relatorios/2026-09-29-f3-api-painel-reprogramacao.md](docs/relatorios/2026-09-29-f3-api-painel-reprogramacao.md) (seção "Correções pós-QA").
 - F1 validada pelo Eric com o login real (locatário de teste): login Microsoft, pessoas e perfis, casca com visual Vigen.
