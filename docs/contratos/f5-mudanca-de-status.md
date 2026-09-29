@@ -1,7 +1,7 @@
 # Contrato da fatia F5 — Mudança de status
 
 - **Data:** 2026-09-29
-- **Status:** Proposto; aguarda respostas do Eric (seção 10) antes de qualquer código.
+- **Status:** Aprovado pelo Eric em 2026-09-29 com as respostas da seção 11 (prevalece). Status anterior: Proposto; aguarda respostas do Eric (seção 10) antes de qualquer código.
 - **Base:** [plano-fundacao.md](../plano-fundacao.md) (linha F5), documento 02 (seções 3.1, 3.2, 4.3 e 7.3), documento 03 (seções 9.4, 9.6, 10.1, 10.2, 10.4; P-03, P-12, P-14, P-17), documento 04 (seções 5.3, 6.2, 8.4, com as cores da decisão [0009](../decisoes/0009-identidade-visual-vigen.md)), decisões [0002](../decisoes/0002-fonte-da-verdade.md), [0004](../decisoes/0004-revisoes-e-reativacao.md), [0007](../decisoes/0007-usuarios-e-perfis.md), [0011](../decisoes/0011-prazo-automatico-e-reprogramacao.md), [0012](../decisoes/0012-recebimento-automatico-e-metas-de-ciclo.md) e [0014](../decisoes/0014-download-nome-e-versoes-de-arquivo.md); contratos da [F3](f3-painel-kanban.md) e da [F4](f4-detalhes-historico.md) (formato, ordem de decisão, idempotência e concorrência já em vigor).
 
 Este arquivo é o combinado entre a parte servidor (`apps/api`, `packages/compartilhado`) e a parte interface (`apps/web`). Tudo o que a interface consome está tipado em `packages/compartilhado`; nenhuma das duas partes inventa campo fora daqui. Mudança neste contrato durante a F5 é feita aqui primeiro, depois no código.
@@ -507,3 +507,12 @@ Sem dados a preencher: documentos existentes ficam com `responsavel_id NULL` (o 
 4. **Motivo do cancelamento obrigatório** (10 a 500 caracteres, como a justificativa da reprogramação)? O antigo só pedia confirmação. **Proposta:** sim; é o que dá sentido a abrir um cancelado pelos detalhes (resposta 8 da F4).
 5. **Cartão: uma ação principal + Reprogramar; Cancelar e o resto só no modal.** **Proposta:** sim, para o cartão continuar enxuto e o botão destrutivo ficar a um passo de distância. Alternativa: sem ação de status no cartão (tudo no modal).
 6. **Onde ficam as metas de 14/40 dias.** **Proposta:** quarto KPI "Aprovados no mês" com "N dentro da meta de 40 dias" e seção "Metas do ciclo" no modal; nada no cartão. Alternativas prontas na 5.4.
+
+## 11. Respostas do Eric (2026-09-29) — prevalecem sobre as seções anteriores
+
+1. Atalhos mantidos, só Qualidade e Administrador, Aprovar sempre com confirmação.
+2. Responsável = pessoa cadastrada; obrigatório em revisão, devolvido e aprovação; Aprovado limpa.
+3. Solicitante: reenvia devolvido e aprova pela área; nunca Aprovado, nunca cancela/reativa.
+4. Motivo do cancelamento obrigatório (10–500).
+5. **Cartão sem nenhum botão, no estilo do Planner** (decisão [0015](../decisoes/0015-cartao-estilo-planner.md)): etiquetas no topo, título, área, rodapé com prazo (neutro, laranja vencendo, vermelho vencido) e responsável (iniciais). Todas as ações só no modal de detalhes. Colunas com rolagem vertical própria. **Reprogramar só aparece (e a API só aceita) com prazo vencido** (409 `acao_nao_permitida` caso contrário). A seção 6 fica ajustada a isso: nada de ação principal no cartão.
+6. Metas: quarto KPI "Aprovados no mês" com "N dentro da meta de 40 dias" e seção "Metas do ciclo" no modal; nada no cartão.

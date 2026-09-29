@@ -11,7 +11,7 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
 | F4 Detalhes + histórico | Validada pelo Eric em 2026-09-29 | `8cd5ee7`…`a2ffd8a` |
-| **F5 Mudança de status** | **Em andamento: contrato** | — |
+| **F5 Mudança de status** | **Em andamento: contrato aprovado, implementação** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
