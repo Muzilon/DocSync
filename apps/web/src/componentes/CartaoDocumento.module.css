@@ -170,3 +170,13 @@
   padding-top: var(--space-1);
   border-top: var(--borda-fina) solid var(--border-soft);
 }
+
+/* Tela de toque: o título (que abre os detalhes) também tem alvo de 44px (decisão 0005). */
+@media (pointer: coarse) {
+  .botaoTitulo {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--alvo-toque);
+  }
+}

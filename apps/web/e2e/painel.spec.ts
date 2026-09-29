@@ -139,17 +139,24 @@ for (const tema of TEMAS) {
   });
 }
 
-test('Tab alcança filtros, cartões e o botão Reprogramar', async ({ page }) => {
+test('Tab alcança filtros, o título de cada cartão e o botão Reprogramar', async ({ page }) => {
   await abrir(page);
   await expect(page.getByRole('article').first()).toBeVisible();
   await page.getByRole('searchbox', { name: /Buscar/ }).focus();
   const visitados: string[] = [];
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press('Tab');
-    visitados.push(await page.evaluate(() => (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName ?? '')));
+    visitados.push(
+      await page.evaluate(() =>
+        document.activeElement?.hasAttribute('data-cartao-id')
+          ? 'CARTAO'
+          : (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName ?? ''),
+      ),
+    );
   }
   expect(visitados).toContain('SELECT');
-  expect(visitados).toContain('ARTICLE');
+  // F4: o alvo do foco no cartão é o botão do título (abre os detalhes).
+  expect(visitados).toContain('CARTAO');
   expect(visitados.some((v) => v.startsWith('Reprogramar prazo de'))).toBe(true);
 });
 
