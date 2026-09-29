@@ -9,7 +9,7 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F0 Configuração inicial | Validada | `cb3eab4` |
 | F1 Login Microsoft, casca, pessoas e perfis, visual Vigen | Validada | `a8a8d7a`, `9617d33` |
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
-| **F3 Painel Kanban** | **Próxima; aguarda respostas do Eric sobre a decisão 0011** | — |
+| **F3 Painel Kanban** | **Em andamento: contrato** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
@@ -39,7 +39,6 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 
 ## Perguntas em aberto com o Eric
 
-- Pontos a confirmar da decisão 0011 (reprogramação do prazo).
 - Qual cor nova para Devolvido ou Cancelado (proposta no início da F3).
 - Contas de teste: aguardam o Eric rodar o script.
 

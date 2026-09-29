@@ -27,3 +27,4 @@ Uma linha por mudança relevante, na data em que aconteceu, com link para a deci
 - Decisão [0009](docs/decisoes/0009-identidade-visual-vigen.md) atualizada: tema escuro aprovado; cores de Devolvido e Cancelado serão trocadas (proposta na F3).
 - Decisão [0011](docs/decisoes/0011-prazo-automatico-e-reprogramacao.md): prazo automático de 30 dias após o cadastro, com reprogramação por botão e justificativa obrigatória; detalhes a configurar.
 - Script `scripts/entra/criar-contas-teste.ps1`: cria as contas fictícias de teste (Qualidade, Solicitante, Leitor) no locatário Entra de teste, com senha aleatória exibida só no terminal (decisão [0008](docs/decisoes/0008-locatario-entra-de-teste.md)).
+- Decisão [0011](docs/decisoes/0011-prazo-automatico-e-reprogramacao.md) completada: etiqueta "Reprogramado" no cartão, dias corridos, reprogramam Qualidade e Administrador, documentos já cadastrados recebem cadastro + 30 dias.

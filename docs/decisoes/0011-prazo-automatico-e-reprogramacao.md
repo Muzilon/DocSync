@@ -16,11 +16,11 @@ O documento 03 previa a "Data de Revisão (Prazo)" preenchida à mão. A decisã
 3. Documentos importados da base antiga (F12) mantêm o prazo que tinham.
 4. Os detalhes (quem pode reprogramar, limites, dias corridos ou úteis, onde fica "Reprogramado") serão definidos aos poucos; cada ajuste que mude regra vira atualização desta decisão ou decisão nova, antes do código.
 
-## Pontos a confirmar com o Eric
-- "Coluna Reprogramado": é uma **coluna do Kanban** (uma sexta coluna ao lado das 5 fases) ou uma **coluna/etiqueta de dado** (o documento continua na sua fase e mostra "Reprogramado")?
-- Dias corridos (proposta) ou dias úteis?
-- Quem pode reprogramar: Qualidade e Administrador (proposta)?
-- Documentos já cadastrados na F2 (sem prazo) recebem prazo = cadastro + 30 dias (proposta)?
+## Pontos confirmados pelo Eric (2026-09-29)
+- "Reprogramado" é uma **etiqueta no cartão do Kanban**; o documento continua na sua fase.
+- Prazo em **dias corridos**.
+- Reprogramam: **Qualidade e Administrador**.
+- Documentos já cadastrados sem prazo recebem **data do cadastro + 30 dias** (migração nova).
 
 ## Consequências
 - O cadastro (F2, já validado) passa a gravar o prazo calculado: mudança pequena no servidor, feita no início da F3, com migração nova (nunca editar a 0002).
