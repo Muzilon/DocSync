@@ -3,12 +3,15 @@ import {
   FASE_DO_STATUS,
   STATUS_DOCUMENTO,
   ordenarAlfabetico,
+  type ArquivoDocumento,
   type CartaoPainel,
   type Documento,
   type EventoHistorico,
   type NovoDocumento,
+  type RegistroAcessoArquivo,
   type StatusDocumento,
   type TipoAcaoHistorico,
+  type TipoAcessoArquivo,
   type TipoDocumento,
 } from '@docsync/compartilhado';
 import type { PapelArquivo } from '../armazenamento/arquivos.ts';
@@ -319,25 +322,117 @@ export async function inserirArquivos(db: Executor, idDocumento: string, arquivo
   }
 }
 
-export async function listarArquivos(db: Executor, idDocumento: string): Promise<RegistroArquivo[]> {
-  const { rows } = await db.query<{
-    papel: PapelArquivo;
-    nome_original: string;
-    nome_armazenado: string;
-    tamanho: number;
-    tipo_mime: string;
-  }>(
-    `SELECT papel, nome_original, nome_armazenado, tamanho::integer AS tamanho, tipo_mime
-     FROM arquivos_documento WHERE id_documento = $1
-     ORDER BY papel DESC, nome_armazenado`,
-    [idDocumento],
-  );
-  return rows.map((l) => ({
+/** Arquivo como está no banco: metadados públicos + o caminho relativo no armazenamento. */
+export interface ArquivoGravado extends ArquivoDocumento {
+  idDocumento: string;
+  nomeArmazenado: string;
+}
+
+interface LinhaArquivo {
+  id: string;
+  id_documento: string;
+  papel: PapelArquivo;
+  nome_original: string;
+  nome_armazenado: string;
+  tamanho: number;
+  criado_em: Date | string;
+}
+
+const SELECT_ARQUIVO = `
+  SELECT id, id_documento, papel, nome_original, nome_armazenado, tamanho::integer AS tamanho, criado_em
+  FROM arquivos_documento`;
+
+function paraArquivo(l: LinhaArquivo): ArquivoGravado {
+  return {
+    id: l.id,
+    idDocumento: l.id_documento,
     papel: l.papel,
     nomeOriginal: l.nome_original,
     nomeArmazenado: l.nome_armazenado,
     tamanho: l.tamanho,
-    tipoMime: l.tipo_mime,
+    criadoEm: iso(l.criado_em),
+  };
+}
+
+/** Só os campos do contrato (sem `nomeArmazenado`, sem `tipoMime`, sem `idDocumento`). */
+export function paraArquivoDocumento(a: ArquivoGravado): ArquivoDocumento {
+  return { id: a.id, papel: a.papel, nomeOriginal: a.nomeOriginal, tamanho: a.tamanho, criadoEm: a.criadoEm };
+}
+
+/** Arquivos do documento: principal primeiro, depois anexos em ordem alfabética pt-BR do nome original. */
+export async function listarArquivos(db: Executor, idDocumento: string): Promise<ArquivoGravado[]> {
+  const { rows } = await db.query<LinhaArquivo>(`${SELECT_ARQUIVO} WHERE id_documento = $1`, [idDocumento]);
+  const arquivos = rows.map(paraArquivo);
+  const principais = arquivos.filter((a) => a.papel === 'principal');
+  const anexos = ordenarAlfabetico(
+    arquivos.filter((a) => a.papel === 'anexo'),
+    (a) => a.nomeOriginal,
+  );
+  return [...principais, ...anexos];
+}
+
+/**
+ * Arquivo pelo ID, só se pertencer a ESTE documento (contrato F4, 4.2, passo 4):
+ * um `ARQ-uuid` de outro documento responde null, como se não existisse.
+ */
+export async function buscarArquivoDoDocumento(
+  db: Executor,
+  idDocumento: string,
+  idArquivo: string,
+): Promise<ArquivoGravado | null> {
+  const { rows } = await db.query<LinhaArquivo>(`${SELECT_ARQUIVO} WHERE id = $1 AND id_documento = $2`, [
+    idArquivo,
+    idDocumento,
+  ]);
+  return rows[0] ? paraArquivo(rows[0]) : null;
+}
+
+// --- Registro de acesso a arquivos (decisão 0013; imutável: só INSERT) -----------------
+
+export interface NovoRegistroAcesso {
+  idDocumento: string;
+  idArquivo: string;
+  tipo: TipoAcessoArquivo;
+  /** Sempre do token. */
+  autorId: string;
+  autorNome: string;
+}
+
+export async function registrarAcessoArquivo(db: Executor, r: NovoRegistroAcesso): Promise<string> {
+  const id = `ACS-${randomUUID()}`;
+  await db.query(
+    `INSERT INTO registros_acesso_arquivos (id, id_documento, id_arquivo, tipo, autor_id, autor_nome)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, r.idDocumento, r.idArquivo, r.tipo, r.autorId, r.autorNome],
+  );
+  return id;
+}
+
+interface LinhaAcesso {
+  id: string;
+  id_documento: string;
+  id_arquivo: string;
+  tipo: TipoAcessoArquivo;
+  autor_id: string;
+  autor_nome: string;
+  data_hora: Date | string;
+}
+
+/** Registros de acesso de um documento, em ordem de gravação (sem tela nesta fatia; usado em testes). */
+export async function listarAcessosArquivos(db: Executor, idDocumento: string): Promise<RegistroAcessoArquivo[]> {
+  const { rows } = await db.query<LinhaAcesso>(
+    `SELECT id, id_documento, id_arquivo, tipo, autor_id, autor_nome, data_hora
+       FROM registros_acesso_arquivos WHERE id_documento = $1 ORDER BY ordem`,
+    [idDocumento],
+  );
+  return rows.map((l) => ({
+    id: l.id,
+    idDocumento: l.id_documento,
+    idArquivo: l.id_arquivo,
+    tipo: l.tipo,
+    autorId: l.autor_id,
+    autorNome: l.autor_nome,
+    dataHora: iso(l.data_hora),
   }));
 }
 

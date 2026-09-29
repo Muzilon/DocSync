@@ -274,3 +274,14 @@ export function validarQueryPainel(query: unknown): Validado<FiltroPainelQuery> 
   if (Object.keys(campos).length > 0) return { ok: false, campos };
   return { ok: true, dados: { busca, areaId, cancelados } };
 }
+
+// ---------------------------------------------------------------------------
+// Rotas de leitura sem parâmetros (F4) — GET /documentos/:id e arquivos
+// ---------------------------------------------------------------------------
+
+/** Esquema fechado numa rota que não aceita query: qualquer parâmetro → erro por campo. */
+export function validarQueryVazia(query: unknown): Validado<Record<never, never>> {
+  const corpo = ehObjeto(query) ? query : {};
+  const campos = camposDesconhecidos(corpo, []);
+  return Object.keys(campos).length > 0 ? { ok: false, campos } : { ok: true, dados: {} };
+}

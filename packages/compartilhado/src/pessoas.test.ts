@@ -22,6 +22,8 @@ describe('pode — tabela de permissões (sem contexto)', () => {
     cadastrarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
     // Decisão 0011: reprogramam Qualidade e Administrador.
     reprogramarPrazo: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
+    // Contrato F4 (4.5): Leitor baixa; Solicitante só com contexto da sua área (bloco seguinte).
+    baixarArquivo: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: true },
   };
 
   for (const [acao, porPerfil] of Object.entries(tabela) as [Acao, Record<Perfil, boolean>][]) {
@@ -108,6 +110,16 @@ describe('pode — com contexto de área (documento 02, seção 7.3)', () => {
       expect(pode(pessoa(perfil), 'reprogramarPrazo', outraArea)).toBe(false);
       expect(pode(pessoa(perfil), 'reprogramarPrazo')).toBe(false);
     }
+  });
+
+  it('baixarArquivo: Solicitante só da sua área; Administrador, Qualidade e Leitor em qualquer área', () => {
+    for (const perfil of ['Administrador', 'Qualidade', 'Leitor'] as const) {
+      expect(pode(pessoa(perfil), 'baixarArquivo', suaArea)).toBe(true);
+      expect(pode(pessoa(perfil), 'baixarArquivo', outraArea)).toBe(true);
+    }
+    expect(pode(pessoa('Solicitante'), 'baixarArquivo', suaArea)).toBe(true);
+    expect(pode(pessoa('Solicitante'), 'baixarArquivo', outraArea)).toBe(false);
+    expect(pode(pessoa('Solicitante', { areaId: null, area: null }), 'baixarArquivo', suaArea)).toBe(false);
   });
 
   it('Administrador sem área continua podendo cadastrar e ver com contexto', () => {

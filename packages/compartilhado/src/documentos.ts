@@ -138,10 +138,28 @@ export interface EventoHistorico {
   observacao: string | null;
 }
 
-/** Resposta de GET /documentos/:id. Eventos em ordem de gravação. */
+/** Arquivo do documento (metadados; o conteúdo vem por GET /documentos/:id/arquivos/:arquivoId). */
+export interface ArquivoDocumento {
+  /** 'ARQ-uuid', gerado no cadastro e nunca reaproveitado. É a única forma de pedir o download. */
+  id: string;
+  papel: 'principal' | 'anexo';
+  /** Nome como veio de quem enviou (só exibição; o nome do download é sanitizado pelo servidor). */
+  nomeOriginal: string;
+  /** Bytes. */
+  tamanho: number;
+  /** ISO 8601 UTC. */
+  criadoEm: string;
+}
+
+/** Resposta de GET /documentos/:id (contrato F4, 2.1). */
 export interface DetalheDocumento {
   documento: Documento;
+  /** Principal primeiro, depois anexos em ordem alfabética pt-BR do nome. */
+  arquivos: ArquivoDocumento[];
+  /** Todos os eventos, em ordem de gravação (mais antigo primeiro). A tela inverte. */
   eventos: EventoHistorico[];
+  /** Dia de referência do servidor ('AAAA-MM-DD', fuso de São Paulo), para a etiqueta de prazo do modal. */
+  hoje: string;
 }
 
 /**
@@ -304,6 +322,78 @@ export function validarArquivo(nome: string, tamanhoBytes: number): string | nul
     return `O arquivo passa do limite de ${LIMITES_ARQUIVO.tamanhoMaximoMB} MB.`;
   }
   return null;
+}
+
+/**
+ * Tipo de conteúdo do download, decidido só pela extensão do nome armazenado
+ * (contrato F4, 4.3). Tabela fechada: toda extensão de `LIMITES_ARQUIVO.extensoes`
+ * tem tipo; fora dela, `application/octet-stream`. O `tipo_mime` declarado por quem
+ * enviou nunca é usado.
+ */
+export const TIPO_MIME_POR_EXTENSAO: Record<(typeof LIMITES_ARQUIVO.extensoes)[number], string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+};
+
+export const TIPO_MIME_GENERICO = 'application/octet-stream';
+
+/** Tipo de conteúdo pela extensão do nome (maiúsculas aceitas); genérico se fora da tabela. */
+export function tipoMimePorExtensao(nome: string): string {
+  const extensao = extensaoArquivo(nome);
+  return Object.hasOwn(TIPO_MIME_POR_EXTENSAO, extensao)
+    ? TIPO_MIME_POR_EXTENSAO[extensao as keyof typeof TIPO_MIME_POR_EXTENSAO]
+    : TIPO_MIME_GENERICO;
+}
+
+/** Só PDF tem visualizador e marca d'água (decisão 0013). */
+export function ehPdf(nome: string): boolean {
+  return extensaoArquivo(nome) === 'pdf';
+}
+
+/** Texto da marca d'água aplicada em cada página do PDF entregue (decisão 0013). */
+export const TEXTO_MARCA_DAGUA = 'CÓPIA NÃO CONTROLADA';
+
+/** Prefixo do nome de download de arquivos que não recebem marca d'água (decisão 0013, item 5). */
+export const PREFIXO_COPIA_NAO_CONTROLADA = 'COPIA-NAO-CONTROLADA_';
+
+const UNIDADES_TAMANHO = ['B', 'KB', 'MB', 'GB'] as const;
+const formatadorTamanho = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+/** Tamanho legível em pt-BR, base 1024: '0 B', '999 B', '1 KB', '1,5 MB', '20 MB'. */
+export function formatarTamanho(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  let valor = bytes;
+  let indice = 0;
+  while (valor >= 1024 && indice < UNIDADES_TAMANHO.length - 1) {
+    valor /= 1024;
+    indice++;
+  }
+  return `${formatadorTamanho.format(valor)} ${UNIDADES_TAMANHO[indice]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Registro de acesso a arquivos (decisão 0013): fora da linha do tempo, imutável
+// ---------------------------------------------------------------------------
+
+export type TipoAcessoArquivo = 'VISUALIZACAO' | 'DOWNLOAD';
+
+/** Registro imutável de quem acessou um arquivo ('ACS-uuid'). Sem tela nesta fatia. */
+export interface RegistroAcessoArquivo {
+  id: string;
+  idDocumento: string;
+  idArquivo: string;
+  tipo: TipoAcessoArquivo;
+  /** Sempre da identidade autenticada. */
+  autorId: string;
+  autorNome: string;
+  /** ISO 8601 UTC. */
+  dataHora: string;
 }
 
 /**

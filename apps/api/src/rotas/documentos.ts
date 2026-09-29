@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import type { Multipart } from '@fastify/multipart';
 import {
   LIMITES_ARQUIVO,
+  PREFIXO_COPIA_NAO_CONTROLADA,
   STATUS_INICIAL,
   calcularPrazoAutomatico,
+  ehPdf,
   filtrarCartoes,
   lerReprogramacao,
   pode,
@@ -20,6 +22,7 @@ import {
   type NovoDocumento,
   type RespostaPainel,
   type ResultadoReprogramacao,
+  type TipoAcessoArquivo,
 } from '@docsync/compartilhado';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
@@ -29,10 +32,13 @@ import {
   type ArquivoParaSalvar,
   type PapelArquivo,
 } from '../armazenamento/arquivos.ts';
+import { cabecalhosDownload } from '../armazenamento/download.ts';
+import { ErroMarcaDagua, aplicarMarcaDagua } from '../armazenamento/marca-dagua.ts';
 import { enviarErro } from '../autenticacao/plugin.ts';
 import type { Banco, Executor } from '../banco/conexao.ts';
 import {
   aplicarReprogramacao,
+  buscarArquivoDoDocumento,
   buscarDocumento,
   buscarDocumentoParaAtualizar,
   buscarEvento,
@@ -41,16 +47,19 @@ import {
   existeCodigoRevisao,
   inserirArquivos,
   inserirDocumento,
+  listarArquivos,
   listarCartoes,
   listarEventos,
   listarRecentes,
   listarTiposAtivos,
+  paraArquivoDocumento,
+  registrarAcessoArquivo,
   registrarEvento,
   ultimoEvento,
 } from '../banco/documentos.ts';
 import { buscarArea, buscarAreaAtiva, type Usuario } from '../banco/pessoas.ts';
 import { hojeNoFuso } from '../datas.ts';
-import { validarNovaReprogramacao, validarNovoDocumento, validarQueryPainel } from '../validacao.ts';
+import { validarNovaReprogramacao, validarNovoDocumento, validarQueryPainel, validarQueryVazia } from '../validacao.ts';
 
 const MB = 1024 * 1024;
 const LIMITE_ARQUIVO_BYTES = LIMITES_ARQUIVO.tamanhoMaximoMB * MB;
@@ -453,13 +462,118 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
 
   escopo.get<{ Params: { id: string } }>('/documentos/:id', async (requisicao, resposta) => {
     const eu = requisicao.usuario;
+    // Ordem de decisão do contrato F4 (2.2): permissão geral → existência/visibilidade →
+    // resposta. Esquema fechado também na query.
     if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
     const documento = await buscarDocumento(banco, requisicao.params.id);
     // Sem permissão para este documento = mesmo 404 de inexistente (não revela existência).
     if (!documento || !podeVer(eu, documento)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
-    const detalhe: DetalheDocumento = { documento, eventos: await listarEventos(banco, documento.id) };
+    const query = validarQueryVazia(requisicao.query);
+    if (!query.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: query.campos });
+    const detalhe: DetalheDocumento = {
+      documento,
+      arquivos: (await listarArquivos(banco, documento.id)).map(paraArquivoDocumento),
+      eventos: await listarEventos(banco, documento.id),
+      hoje: hojeNoFuso(),
+    };
     return detalhe;
   });
+
+  // --- Arquivos: download e visualização (F4, contrato seção 4 e 9; decisão 0013) --------
+
+  type ParamsArquivo = { Params: { id: string; arquivoId: string } };
+
+  /**
+   * Entrega um arquivo do documento (download ou visualização). Ordem de decisão do
+   * contrato (4.2): permissão geral → existência/visibilidade do documento → permissão
+   * da ação → arquivo pertence a ESTE documento → conteúdo no armazenamento → marca
+   * d'água (PDF) → registro de acesso → resposta. O original nunca é alterado.
+   */
+  async function entregarArquivo(
+    requisicao: FastifyRequest<ParamsArquivo>,
+    resposta: FastifyReply,
+    tipo: TipoAcessoArquivo,
+  ) {
+    const eu = requisicao.usuario;
+    const { id, arquivoId } = requisicao.params;
+    if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    const documento = await buscarDocumento(banco, id);
+    if (!documento || !podeVer(eu, documento)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
+    if (!pode(eu, 'baixarArquivo', { areaId: documento.areaId })) {
+      return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    }
+    const query = validarQueryVazia(requisicao.query);
+    if (!query.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: query.campos });
+
+    // O arquivoId sozinho nunca localiza nada: tem de pertencer a este documento.
+    const arquivo = await buscarArquivoDoDocumento(banco, documento.id, arquivoId);
+    if (!arquivo) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
+
+    const pdf = ehPdf(arquivo.nomeArmazenado);
+    if (tipo === 'VISUALIZACAO' && !pdf) {
+      return enviarErro(resposta, 409, {
+        codigo: 'acao_nao_permitida',
+        mensagem: 'Só arquivos PDF podem ser visualizados. Baixe o arquivo.',
+      });
+    }
+
+    let conteudo: Buffer | null;
+    try {
+      conteudo = await armazenamento.ler(documento.id, arquivo.nomeArmazenado);
+    } catch (erro) {
+      // Inclui nome armazenado inválido (nunca lê fora da pasta). Só IDs no log.
+      requisicao.log.error({ idDocumento: documento.id, idArquivo: arquivo.id }, 'falha do armazenamento na leitura');
+      return enviarErro(resposta, 500, { codigo: 'erro_interno' });
+    }
+    if (conteudo === null) {
+      requisicao.log.error({ idDocumento: documento.id, idArquivo: arquivo.id }, 'arquivo registrado sem conteúdo no armazenamento');
+      return enviarErro(resposta, 404, {
+        codigo: 'arquivo_indisponivel',
+        mensagem: 'Este arquivo não está disponível no momento. Avise o administrador do DocSync.',
+      });
+    }
+
+    // Decisão 0013: todo PDF sai com a marca; sem marca, não sai. Não PDF sai sem marca,
+    // com o prefixo no nome. O original no armazenamento não é tocado.
+    let entrega: Buffer;
+    if (pdf) {
+      try {
+        entrega = await aplicarMarcaDagua(conteudo);
+      } catch (erro) {
+        if (!(erro instanceof ErroMarcaDagua)) throw erro;
+        requisicao.log.warn({ idDocumento: documento.id, idArquivo: arquivo.id }, 'PDF não aceitou a marca d\u2019água');
+        return enviarErro(resposta, 409, {
+          codigo: 'arquivo_indisponivel',
+          mensagem: 'Este PDF não aceita a marca "CÓPIA NÃO CONTROLADA" (protegido ou danificado) e não pode ser entregue.',
+        });
+      }
+    } else {
+      entrega = conteudo;
+    }
+
+    // Registro imutável de acesso, com autor do token (decisão 0013, item 4).
+    await registrarAcessoArquivo(banco, {
+      idDocumento: documento.id,
+      idArquivo: arquivo.id,
+      tipo,
+      autorId: eu.id,
+      autorNome: eu.nome,
+    });
+
+    const cabecalhos = cabecalhosDownload(arquivo.nomeOriginal, arquivo.nomeArmazenado, entrega.length, {
+      disposicao: tipo === 'VISUALIZACAO' ? 'inline' : 'attachment',
+      prefixo: pdf ? '' : PREFIXO_COPIA_NAO_CONTROLADA,
+    });
+    return resposta.code(200).headers(cabecalhos).send(entrega);
+  }
+
+  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', (requisicao, resposta) =>
+    entregarArquivo(requisicao, resposta, 'DOWNLOAD'),
+  );
+
+  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId/visualizacao', (requisicao, resposta) =>
+    entregarArquivo(requisicao, resposta, 'VISUALIZACAO'),
+  );
 
   // --- Painel (F3, contrato seção 4) --------------------------------------------------
 

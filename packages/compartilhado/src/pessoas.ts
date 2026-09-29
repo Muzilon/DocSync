@@ -37,7 +37,7 @@ export interface Area {
  * A lista cresce a cada fatia (mudar status, exportar etc.), sempre com teste
  * na tabela de permissões.
  */
-export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento' | 'reprogramarPrazo';
+export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento' | 'reprogramarPrazo' | 'baixarArquivo';
 
 /**
  * Contexto do registro sobre o qual a ação é feita. Hoje só a área do documento:
@@ -61,6 +61,9 @@ const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   // Decisão 0011: reprogramam Qualidade e Administrador. O contexto de área é aceito
   // (regra uniforme), mas hoje não altera o resultado.
   reprogramarPrazo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
+  // Contrato F4 (4.5) e decisão 0013: hoje igual a verDocumentos, mas separada para
+  // poder ser apertada depois (ex.: Leitor sem download) sem mexer na visibilidade.
+  baixarArquivo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'sim' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -154,6 +157,11 @@ export type CodigoErroApi =
   | 'conflito_versao'
   /** 409: o estado do documento não aceita a ação (ex.: reprogramar prazo de Aprovado/Cancelado). */
   | 'acao_nao_permitida'
+  /**
+   * 404: o registro do arquivo existe, mas o conteúdo não está no armazenamento.
+   * 409: o PDF não aceita a marca d'água (senha, corrompido); nunca é entregue sem marca (decisão 0013).
+   */
+  | 'arquivo_indisponivel'
   | 'erro_interno';
 
 export interface ErroApi {

@@ -10,13 +10,13 @@ Atualizado em 2026-09-29. Leia este arquivo logo depois do CLAUDE.md ao começar
 | F1 Login Microsoft, casca, pessoas e perfis, visual Vigen | Validada | `a8a8d7a`, `9617d33` |
 | F2 Modelo de dados + cadastro de documento | Validada pelo Eric em 2026-09-29 | `5f2f437` |
 | F3 Painel Kanban | Validada pelo Eric em 2026-09-29 | `7e76160`…`1338442` |
-| **F4 Detalhes + histórico** | **Em andamento: contrato** | — |
+| **F4 Detalhes + histórico** | **Em andamento: contrato aprovado; parte servidor entregue ([relatório](relatorios/2026-09-29-f4-api-detalhes-arquivos.md)); parte interface em andamento** | — |
 
 Detalhes de cada fatia: [plano-fundacao.md](plano-fundacao.md) e os relatórios em [relatorios/](relatorios/).
 
 ## F4: em andamento
 
-Detalhes + histórico (plano-fundacao.md). Primeiro passo: contrato em `docs/contratos/f4-detalhes-historico.md`, aprovado pelo Eric antes do código.
+Detalhes + histórico (plano-fundacao.md). Contrato em `docs/contratos/f4-detalhes-historico.md` aprovado (seção 9 prevalece; decisão 0013). Parte servidor pronta: detalhe estendido, download e visualização com marca d'água, migração 0004 (registro de acesso). A confirmar com o Eric: a marca é desenhada por cima do conteúdo com opacidade 0,4 (não atrás), para continuar visível em páginas digitalizadas.
 
 ## Contas de teste no Entra
 
@@ -49,4 +49,4 @@ Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cor
 
 - Envio de arquivos fica todo em memória (até ~120 MB por requisição): trocar por streaming antes da produção.
 - Regra do último administrador usa `pg_advisory_xact_lock`: validar com PostgreSQL real antes da produção.
-- Sem rota de download de arquivos (F4) e sem verificação de conteúdo/antivírus.
+- Sem verificação de conteúdo/antivírus dos arquivos. Download e marca d'água ficam em memória (PDF até 20 MB): streaming antes da produção. Histórico sem paginação (rota `?apos=` quando a F12 importar centenas de eventos). Sem tela para `registros_acesso_arquivos` (fatia futura).

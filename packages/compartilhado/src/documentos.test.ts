@@ -8,14 +8,21 @@ import {
   STATUS_INICIAL,
   DIAS_PRAZO_PADRAO,
   LIMITES_JUSTIFICATIVA,
+  PREFIXO_COPIA_NAO_CONTROLADA,
+  TEXTO_MARCA_DAGUA,
+  TIPO_MIME_GENERICO,
+  TIPO_MIME_POR_EXTENSAO,
   calcularPrazoAutomatico,
   diferencaEmDias,
   ehDataSoDia,
+  ehPdf,
   extensaoArquivo,
+  formatarTamanho,
   lerReprogramacao,
   novoIdDocumento,
   sanitizarNomePasta,
   somarDias,
+  tipoMimePorExtensao,
   validarArquivo,
   validarConjuntoArquivos,
   validarJustificativa,
@@ -221,5 +228,50 @@ describe('lerReprogramacao', () => {
   it('null para outros tipos de evento ou sem detalhe de prazo', () => {
     expect(lerReprogramacao({ ...base, tipoAcao: 'EDICAO' })).toBeNull();
     expect(lerReprogramacao({ ...base, detalhes: [] })).toBeNull();
+  });
+});
+
+describe('formatarTamanho (contrato F4, 5.2) — pt-BR, base 1024', () => {
+  it.each([
+    [0, '0 B'],
+    [999, '999 B'],
+    [1024, '1 KB'],
+    [340 * 1024, '340 KB'],
+    [1.5 * 1024 * 1024, '1,5 MB'],
+    [20 * 1024 * 1024, '20 MB'],
+    [3 * 1024 * 1024 * 1024, '3 GB'],
+  ])('%d bytes → %s', (bytes, esperado) => {
+    expect(formatarTamanho(bytes)).toBe(esperado);
+  });
+
+  it('valor inválido vira travessão', () => {
+    expect(formatarTamanho(-1)).toBe('—');
+    expect(formatarTamanho(Number.NaN)).toBe('—');
+  });
+});
+
+describe('TIPO_MIME_POR_EXTENSAO e tipoMimePorExtensao (contrato F4, 4.3)', () => {
+  it('cobre toda extensão permitida em LIMITES_ARQUIVO', () => {
+    for (const extensao of LIMITES_ARQUIVO.extensoes) {
+      expect(TIPO_MIME_POR_EXTENSAO[extensao]).toMatch(/^[a-z]+\/[a-z0-9.+-]+$/);
+    }
+    expect(Object.keys(TIPO_MIME_POR_EXTENSAO).sort()).toEqual([...LIMITES_ARQUIVO.extensoes].sort());
+  });
+
+  it('decide pela extensão, aceitando maiúsculas; fora da tabela → genérico', () => {
+    expect(tipoMimePorExtensao('doc.PDF')).toBe('application/pdf');
+    expect(tipoMimePorExtensao('Anexos/foto.JPG')).toBe('image/jpeg');
+    expect(tipoMimePorExtensao('sem-extensao')).toBe(TIPO_MIME_GENERICO);
+    expect(tipoMimePorExtensao('pagina.html')).toBe(TIPO_MIME_GENERICO);
+    // Nomes de propriedades herdadas não viram tipo.
+    expect(tipoMimePorExtensao('x.constructor')).toBe(TIPO_MIME_GENERICO);
+  });
+
+  it('ehPdf e constantes da decisão 0013', () => {
+    expect(ehPdf('a.pdf')).toBe(true);
+    expect(ehPdf('a.PDF')).toBe(true);
+    expect(ehPdf('a.docx')).toBe(false);
+    expect(TEXTO_MARCA_DAGUA).toBe('CÓPIA NÃO CONTROLADA');
+    expect(PREFIXO_COPIA_NAO_CONTROLADA).toBe('COPIA-NAO-CONTROLADA_');
   });
 });
