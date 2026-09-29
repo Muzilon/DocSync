@@ -17,7 +17,7 @@ import { ErroApi } from '../api/erros.ts';
 import { ContextoSessao } from '../autenticacao/Sessao.tsx';
 import { ProvedorToast } from '../componentes/Toast.tsx';
 import { prazoMinimo } from '../componentes/DialogoReprogramar.tsx';
-import { TelaPainel } from './TelaPainel.tsx';
+import { TelaPainel, ordenarCartoesPainel } from './TelaPainel.tsx';
 
 // Dados fictícios (CLAUDE.md, seção 4). "Hoje" vem do servidor simulado.
 const HOJE = '2026-09-29';
@@ -123,6 +123,21 @@ describe('queryPainel', () => {
     expect(queryPainel()).toBe('');
     expect(queryPainel({ busca: '  ', areaId: null, cancelados: false })).toBe('');
     expect(queryPainel({ busca: 'solda', areaId: 'AREA-1', cancelados: true })).toBe('?busca=solda&areaId=AREA-1&cancelados=true');
+  });
+});
+
+describe('ordenarCartoesPainel (B6)', () => {
+  it('prazo crescente com nulos no fim, depois criadoEm, depois id (mesma chave do servidor)', () => {
+    const lista = [
+      cartao('DOC-b', 'Sem prazo', 'Recebido', null),
+      cartao('DOC-z', 'Prazo 5, criado antes', 'Recebido', 5, { criadoEm: '2026-08-01T10:00:00Z' }),
+      cartao('DOC-c', 'Prazo 5, criado depois, id c', 'Recebido', 5, { criadoEm: '2026-09-02T10:00:00Z' }),
+      cartao('DOC-a', 'Sem prazo, id a', 'Recebido', null),
+      cartao('DOC-y', 'Prazo 1', 'Recebido', 1),
+      cartao('DOC-B', 'Prazo 5, criado depois, id B', 'Recebido', 5, { criadoEm: '2026-09-02T10:00:00Z' }),
+    ];
+    expect(ordenarCartoesPainel(lista).map((c) => c.id)).toEqual(['DOC-y', 'DOC-z', 'DOC-B', 'DOC-c', 'DOC-a', 'DOC-b']);
+    expect(lista[0]!.id).toBe('DOC-b'); // não altera a lista original
   });
 });
 
@@ -331,6 +346,68 @@ describe('TelaPainel', () => {
     expect(await within(dialogo).findByText(/não aceita esta ação no status atual/)).toBeInTheDocument();
     await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
     expect(await within(dialogo).findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
+  });
+
+  it('B6: depois de reprogramar, o cartão muda de posição na coluna sem recarregar', async () => {
+    // Ordem do servidor: Instrução de solda (prazo em 3 dias) antes de Procedimento de auditoria (20 dias).
+    const [doc1, doc2, ...resto] = CARTOES;
+    const api = apiSimulada({ painel: vi.fn().mockResolvedValue(resposta([doc2!, doc1!, ...resto])) });
+    const usuario = renderizar(api);
+    await quadro();
+    const antes = within(coluna(/Recebido/)).getAllByRole('article');
+    expect(antes[0]).toBe(cartaoDe('Instrução de solda'));
+    expect(antes[1]).toBe(cartaoDe('Procedimento de auditoria'));
+    await usuario.click(within(cartaoDe('Instrução de solda')).getByRole('button', { name: /Reprogramar/ }));
+    const dialogo = await screen.findByRole('dialog', { name: 'Reprogramar prazo' });
+    await usuario.type(within(dialogo).getByLabelText(/Novo prazo/), '2026-11-05');
+    await usuario.type(within(dialogo).getByLabelText(/Justificativa/), 'aguardando a área de engenharia');
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
+    await screen.findByText('Prazo reprogramado para 05/11/2026');
+    const depois = within(coluna(/Recebido/)).getAllByRole('article');
+    expect(depois[0]).toBe(cartaoDe('Procedimento de auditoria'));
+    expect(depois[1]).toBe(cartaoDe('Instrução de solda'));
+    expect(depois).toHaveLength(2);
+    expect(api.painel).toHaveBeenCalledTimes(1);
+  });
+
+  it('B4: sem contagem, o título da janela não traz número; ao reabrir não mostra a lista antiga', async () => {
+    let resolverCancelados: ((r: RespostaPainel) => void) | null = null;
+    const painel = vi.fn((consulta?: { cancelados?: boolean }) =>
+      consulta?.cancelados
+        ? new Promise<RespostaPainel>((resolver) => {
+            resolverCancelados = resolver;
+          })
+        : Promise.resolve(resposta()),
+    );
+    const usuario = renderizar(apiSimulada({ painel: painel as unknown as Api['painel'] }));
+    await quadro();
+    // Busca que muda a contagem: enquanto o servidor não responde, a contagem fica a de antes;
+    // com erro na contagem, o botão e a janela ficam sem número.
+    painel.mockImplementationOnce(() => Promise.reject(new Error('falha')));
+    await usuario.type(screen.getByRole('searchbox', { name: /Buscar/ }), 'ata');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancelados' })).toBeInTheDocument(), { timeout: 2000 });
+    await usuario.click(screen.getByRole('button', { name: 'Cancelados' }));
+    const janela = await screen.findByRole('dialog', { name: 'Documentos cancelados' });
+    expect(within(janela).getByText('Carregando documentos cancelados…')).toBeInTheDocument();
+    expect(within(janela).queryByText(/\(0\)/)).not.toBeInTheDocument();
+    resolverCancelados!(resposta([...CARTOES, ...CANCELADOS]));
+    expect(await screen.findByRole('dialog', { name: 'Documentos cancelados (1)' })).toBeInTheDocument();
+    await usuario.click(within(janela).getByRole('button', { name: 'Fechar' }));
+
+    // Reabre: enquanto a nova resposta não chega, só "carregando", nunca a lista anterior.
+    await usuario.click(screen.getByRole('button', { name: 'Cancelados' }));
+    const reaberta = await screen.findByRole('dialog', { name: 'Documentos cancelados' });
+    expect(within(reaberta).getByText('Carregando documentos cancelados…')).toBeInTheDocument();
+    expect(within(reaberta).queryByRole('article')).not.toBeInTheDocument();
+    resolverCancelados!(resposta([...CARTOES, ...CANCELADOS]));
+    expect(await within(reaberta).findByRole('article', { name: 'Ata de reunião' })).toBeInTheDocument();
+  });
+
+  it('B5: só com cancelados, "Nenhum documento em tramitação" e o botão Cancelados continua', async () => {
+    renderizar(apiSimulada({ painel: vi.fn().mockResolvedValue(resposta([], 2)) }));
+    expect(await screen.findByText('Nenhum documento em tramitação')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum documento cadastrado ainda')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelados (2)' })).toBeEnabled();
   });
 
   it('vazio geral: mensagem e link para Novo documento (se puder cadastrar)', async () => {

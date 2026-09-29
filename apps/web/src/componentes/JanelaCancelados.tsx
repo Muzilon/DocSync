@@ -12,8 +12,8 @@ interface Props {
   aberto: boolean;
   /** Busca e área em vigor no Painel. */
   filtro: FiltroPainel;
-  /** Contagem do botão (qtdCancelados), usada no título até a lista chegar. */
-  quantidadeInicial: number;
+  /** Contagem do botão (qtdCancelados), usada no título até a lista chegar; null = sem contagem (título sem número). */
+  quantidadeInicial: number | null;
   aoFechar: () => void;
 }
 
@@ -33,7 +33,11 @@ export function JanelaCancelados({ aberto, filtro, quantidadeInicial, aoFechar }
   const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
-    if (!aberto) return;
+    if (!aberto) {
+      // Ao fechar, volta a "carregando": a reabertura nunca mostra a lista antiga (B4).
+      setEstado({ tipo: 'carregando' });
+      return;
+    }
     let ativo = true;
     setEstado({ tipo: 'carregando' });
     api
@@ -58,7 +62,7 @@ export function JanelaCancelados({ aberto, filtro, quantidadeInicial, aoFechar }
     <Dialogo
       aberto={aberto}
       larga
-      titulo={`Documentos cancelados (${quantidade})`}
+      titulo={quantidade === null ? 'Documentos cancelados' : `Documentos cancelados (${quantidade})`}
       aoFechar={aoFechar}
       acoes={<Botao onClick={aoFechar}>Fechar</Botao>}
     >

@@ -116,3 +116,16 @@ Nada foi alterado em `packages/compartilhado` nem em `apps/api`.
   - 44px nos botões em telas de toque;
   - chamada com espera para a contagem de cancelados com filtros;
   - texto oculto no lugar de `aria-label` nas etiquetas.
+
+## Correções pós-QA
+
+Defeitos do [relatório de QA](2026-09-29-f3-qa.md) corrigidos só em `apps/web`. Largura das colunas (M1) e texto de prazo do cartão (B3) **não** foram alterados: aguardam decisão do Eric.
+
+- **B4:** `JanelaCancelados` recebe `quantidadeInicial: number | null`; sem contagem o título é "Documentos cancelados", sem número (antes aparecia "(0)"). Ao fechar, o estado volta para "carregando", então a reabertura nunca mostra a lista anterior.
+- **B5:** sem documentos em tramitação mas com cancelados (`qtdCancelados > 0`), o vazio diz "Nenhum documento em tramitação" e o botão Cancelados continua disponível; "Nenhum documento cadastrado ainda" só quando não há nenhum.
+- **B6:** `ordenarCartoesPainel` (em `TelaPainel.tsx`) reordena os cartões depois da reprogramação (ou do 409 com estado atual) pela chave do servidor: prazo crescente com nulos no fim, `criadoEm`, `id` (comparação por unidade de código).
+- **B10:** e2e com toque emulado (`hasTouch: true`, `isMobile: false`, confere `pointer: coarse`) em 768px: todo botão visível do Painel (e o link "Novo documento") com altura ≥ 44px. O teste achou um defeito real: `.botaoCancelados` (40px) sobrescrevia a regra de toque do `Botao`; corrigido com `@media (pointer: coarse)` em `TelaPainel.module.css`.
+
+Arquivos: `apps/web/src/componentes/JanelaCancelados.tsx`, `apps/web/src/telas/TelaPainel.tsx`, `apps/web/src/telas/TelaPainel.module.css`, `apps/web/src/telas/TelaPainel.test.tsx` (testes de B4, B5, B6 e de `ordenarCartoesPainel`), `apps/web/e2e/painel.spec.ts` (B10), `CHANGELOG.md`.
+
+Validação: `npm run typecheck` ok; `npm test` 15 arquivos, 262 testes passando; `npm run build` ok; `npm run segredos` limpo; e2e 55 passando e 17 ignorados (capturas), com configuração temporária apontando para o Chromium de `/opt/pw-browsers` (apagada depois).

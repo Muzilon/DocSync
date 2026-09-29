@@ -158,3 +158,25 @@ test('Início tem "Abrir o painel" e o menu tem Painel logo abaixo de Início', 
   await page.getByRole('link', { name: 'Abrir o painel' }).click();
   await expect(page.getByRole('heading', { name: 'Painel', level: 1 })).toBeVisible();
 });
+
+// B10: em tela de toque (pointer: coarse) todo botão do Painel tem no mínimo 44px de altura (decisão 0005).
+test.describe('toque emulado em 768px', () => {
+  test.use({ hasTouch: true, isMobile: false });
+
+  test('botões do Painel com altura mínima de 44px', async ({ page }) => {
+    await abrir(page, { largura: 768 });
+    await expect(page.getByRole('region', { name: 'Quadro de tramitação' })).not.toHaveAttribute('aria-busy', 'true');
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    const alturas = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>('main button, main a[class*="botao"]'))
+        .filter((el) => el.getClientRects().length > 0)
+        .map((el) => ({ nome: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '', altura: el.getBoundingClientRect().height })),
+    );
+    expect(alturas.some((a) => a.nome.startsWith('Cancelados'))).toBe(true);
+    expect(alturas.some((a) => a.nome.startsWith('Reprogramar prazo de'))).toBe(true);
+    expect(alturas.some((a) => a.nome === 'Novo documento')).toBe(true);
+    for (const { nome, altura } of alturas) {
+      expect(altura, `altura de "${nome}"`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});

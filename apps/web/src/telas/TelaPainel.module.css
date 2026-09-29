@@ -73,6 +73,13 @@
   min-height: var(--campo-altura);
 }
 
+/* Toque: esta classe vem depois da regra de 44px do Botao; repete o alvo mínimo (B10). */
+@media (pointer: coarse) {
+  .botaoCancelados {
+    min-height: max(var(--campo-altura), var(--alvo-toque));
+  }
+}
+
 .encontrados {
   flex-basis: 100%;
   font-size: var(--fs-caption);

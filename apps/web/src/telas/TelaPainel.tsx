@@ -62,6 +62,28 @@ export function mesclarDocumento(cartao: CartaoPainel, documento: Documento): Ca
   };
 }
 
+/** Comparação por unidade de código (como o `ORDER BY d.id` do servidor, sem colação local). */
+function compararTexto(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Mesma ordem do `GET /painel` (contrato F3, seção 4): prazo crescente com nulos no fim,
+ * depois `criadoEm` crescente, depois `id`. Usada depois de reprogramar, sem recarregar (B6).
+ */
+export function ordenarCartoesPainel(cartoes: readonly CartaoPainel[]): CartaoPainel[] {
+  return [...cartoes].sort((a, b) => {
+    if (a.dataRevisao !== b.dataRevisao) {
+      if (a.dataRevisao === null) return 1;
+      if (b.dataRevisao === null) return -1;
+      return compararTexto(a.dataRevisao, b.dataRevisao);
+    }
+    const criado = Date.parse(a.criadoEm) - Date.parse(b.criadoEm);
+    if (criado !== 0 && !Number.isNaN(criado)) return criado;
+    return compararTexto(a.id, b.id);
+  });
+}
+
 /** Setas ↑ ↓ entre cartões da coluna e ← → entre colunas (desejável; Tab sozinho alcança tudo). */
 function navegarPorSetas(evento: KeyboardEvent<HTMLElement>) {
   if (evento.target !== evento.currentTarget) return; // teclas vindas do botão Reprogramar
@@ -191,7 +213,12 @@ export function TelaPainel() {
   const substituirCartao = useCallback((documento: Documento) => {
     setDados((atual) =>
       atual
-        ? { ...atual, cartoes: atual.cartoes.map((c) => (c.id === documento.id ? mesclarDocumento(c, documento) : c)) }
+        ? {
+            ...atual,
+            cartoes: ordenarCartoesPainel(
+              atual.cartoes.map((c) => (c.id === documento.id ? mesclarDocumento(c, documento) : c)),
+            ),
+          }
         : atual,
     );
   }, []);
@@ -274,7 +301,10 @@ export function TelaPainel() {
         <EsqueletoQuadro />
       ) : ativos.length === 0 ? (
         <div className={estilos.vazio}>
-          <p className={estilos.vazioTitulo}>Nenhum documento cadastrado ainda</p>
+          {/* Com cancelados (acessíveis pelo botão Cancelados), a base não está vazia (B5). */}
+          <p className={estilos.vazioTitulo}>
+            {dados.qtdCancelados > 0 ? 'Nenhum documento em tramitação' : 'Nenhum documento cadastrado ainda'}
+          </p>
           {podeCadastrar && (
             <Link to="/documentos/novo" className={`${estiloBotao.botao} ${estiloBotao.primario}`}>
               <FilePlus2 size={16} aria-hidden="true" />
@@ -314,7 +344,7 @@ export function TelaPainel() {
       <JanelaCancelados
         aberto={cancelados}
         filtro={filtro}
-        quantidadeInicial={qtdCancelados ?? 0}
+        quantidadeInicial={qtdCancelados}
         aoFechar={() => setCancelados(false)}
       />
 
