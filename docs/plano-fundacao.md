@@ -20,4 +20,6 @@ Cada fatia funciona de ponta a ponta (tela, regra, dados e permissão), é revis
 | F11 | Administração | Áreas e tipos (ordem alfabética), complemento da tela de pessoas. | Qualidade não acessa; área nova aparece no formulário. | `agente-arquitetura-dados`, `agente-ux-ui` | — |
 | F12 | Importação + validação paralela | Importador que preserva IDs e histórico; comparação tela por tela. Aposentar o antigo é passo separado. | Importar uma cópia e comparar. | `agente-integridade-sincronizacao`, `agente-qa-revisao` | — |
 
+Ideia registrada pelo Eric (2026-09-29), a definir antes de entrar na ordem: **painel próprio para quem só acompanha** (visualizador), diferente do Kanban de trabalho da Qualidade. Até lá, o Solicitante usa o Painel travado na sua área.
+
 Depois da Fundação: Indicadores → Validade → Minha fila → Notificações → Lista mestra → Treinamentos → NC → Portal → Busca → Auditoria.

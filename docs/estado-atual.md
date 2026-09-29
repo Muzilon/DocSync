@@ -40,6 +40,8 @@ Script [scripts/entra/criar-contas-teste.ps1](../scripts/entra/criar-contas-test
 ## Perguntas em aberto com o Eric
 
 - Contas de teste: aguardam o Eric rodar o script.
+- Painel do visualizador: quais perfis (Solicitante, Leitor ou ambos) e o que ele mostra.
+- Cartão do Kanban: "responsável atual" e outras informações entram conforme o Eric for decidindo (responsável depende da F5).
 
 Resolvidas em 2026-09-29: tema escuro aprovado; Devolvido e Cancelado terão cores diferentes; prazo = cadastro + 30 dias com reprogramação justificada (decisão 0011).
 
