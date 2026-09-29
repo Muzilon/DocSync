@@ -297,9 +297,9 @@ Nota de processo: sem créditos do Fable, a parte servidor da F6 é implementada
 
 ## 10. Ajustes durante a implementação (registrados após o QA, 2026-09-29)
 
-1. Mensagem única da revisão, na API e nas telas: "O número de revisão deve ser um inteiro de 0 a 999." (teto 999 também na tela). *(Aguarda o Eric.)*
-2. Conflito de versão: o que a pessoa digitou fica; os campos que ela não tocou passam ao valor atual do servidor, para o reenvio não desfazer a mudança da outra pessoa (decisão 0002). *(Aguarda o Eric.)*
-3. Dica em "N° de revisão": "Corrige o número deste documento; não cria uma revisão nova." *(Aguarda o Eric.)*
+1. Mensagem única da revisão, na API e nas telas: "O número de revisão deve ser um inteiro de 0 a 999." (teto 999 também na tela). Aprovado pelo Eric.
+2. Conflito de versão: o que a pessoa digitou fica; os campos que ela não tocou passam ao valor atual do servidor, para o reenvio não desfazer a mudança da outra pessoa (decisão 0002). Aprovado pelo Eric.
+3. Dica em "N° de revisão", texto do Eric: "Corrigir o número de revisão não cria uma nova revisão."
 4. `revisao` passou a ser obrigatória também no `POST /documentos` (antes, ausente virava 0); a tela sempre envia o campo.
 5. O perfil é conferido de novo dentro da transação.
-6. O rodapé do modal pode ter até 6 botões (Administrador/Qualidade com prazo vencido); em 768px quebra em duas linhas, sem rolagem horizontal.
+6. Rodapé do modal reduzido pelo Eric (decisão 0015, atualização): só "Atualizar etapa…", "Cancelar documento"/"Reativar" e "Reprogramar" (vencido ou vencendo); sem "Fechar" e sem ação principal separada; "Editar" no título da seção Dados.
