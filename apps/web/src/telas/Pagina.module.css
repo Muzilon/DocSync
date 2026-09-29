@@ -1,0 +1,53 @@
+/* Blocos comuns das telas internas. */
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-7);
+}
+
+.titulo {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: var(--ls-titulo);
+}
+
+.subtitulo {
+  color: var(--text-secondary);
+}
+
+.cartao {
+  background: var(--bg-card);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6);
+  min-width: 0;
+}
+
+.tituloCartao {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--space-4);
+}
+
+.dados {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.dados dt {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--text-secondary);
+}
+
+.dados dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}

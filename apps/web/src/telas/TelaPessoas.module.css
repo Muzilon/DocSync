@@ -1,0 +1,159 @@
+.grade {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.formulario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px var(--space-4);
+}
+
+.rodapeFormulario {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.resumoErros {
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  border-left: var(--borda-destaque) solid var(--cor-erro);
+  border-radius: var(--radius-sm);
+  background: var(--cor-erro-suave);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+}
+
+.resumoErros ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.resumoErros a {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.erroDialogo {
+  padding: var(--space-3) var(--space-4);
+  border-left: var(--borda-destaque) solid var(--cor-erro);
+  border-radius: var(--radius-sm);
+  background: var(--cor-erro-suave);
+  font-size: var(--fs-body-sm);
+}
+
+.barraLista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.barraLista h2 {
+  margin-bottom: 0;
+}
+
+.busca {
+  position: relative;
+  width: var(--busca-largura);
+  max-width: 100%;
+}
+
+.buscaIcone {
+  position: absolute;
+  left: var(--space-3);
+  bottom: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.busca input {
+  padding-left: var(--space-10);
+}
+
+.rolagemTabela {
+  overflow-x: auto;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body-sm);
+}
+
+.tabela th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--borda-fina) solid var(--border-subtle);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: var(--space-3);
+  border-bottom: var(--borda-fina) solid var(--border-soft);
+  vertical-align: middle;
+}
+
+.email {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--space-1) 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.ativo {
+  background: var(--status-aprovado-bg);
+  color: var(--status-aprovado-cor);
+}
+
+.inativo {
+  background: var(--status-recebido-bg);
+  color: var(--status-recebido-cor);
+}
+
+.semPerfil {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.vazio {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 980px) {
+  .busca {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .formulario {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,224 @@
+/*
+ * Tokens do design system do DocSync (documento 04, seções 2 e 3).
+ * ÚNICO lugar com valores visuais: componentes usam só var(--...).
+ * Tema escuro = troca de tokens em :root[data-tema='escuro'] (nenhuma regra paralela por componente).
+ * Cores: documento 04. O Figma (decisão 0005) não pôde ser lido na F1 (limite do plano do MCP);
+ * conferir divergências quando houver acesso (relatório 2026-09-28-f1-web-login-casca-pessoas).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* 2.1 Primitivas */
+  --cor-vinho: #b85057;
+  --cor-verde: #668d58;
+  --cor-chumbo: #404040;
+  --cor-ambar: #fbba6d;
+  --cor-pessego: #f69463;
+  --cor-pessego-claro: #fbb08a;
+  --cor-coral: #f1655d;
+  --cor-cinza: #808184;
+  --cor-branco: #ffffff;
+
+  /* 2.2 Suaves */
+  --cor-vinho-suave: rgba(184, 80, 87, 0.12);
+  --cor-verde-suave: rgba(102, 141, 88, 0.14);
+  --cor-chumbo-suave: rgba(64, 64, 64, 0.08);
+  --cor-ambar-suave: rgba(251, 186, 109, 0.2);
+  --cor-pessego-suave: rgba(246, 148, 99, 0.15);
+  --cor-pessego-borda: rgba(246, 148, 99, 0.35);
+  --cor-pessego-anel: rgba(246, 148, 99, 0.18);
+  --cor-coral-suave: rgba(241, 101, 93, 0.14);
+  --cor-cinza-suave: rgba(128, 129, 132, 0.12);
+  --cor-erro-anel: rgba(194, 58, 50, 0.18);
+
+  /* 2.3 Semânticos */
+  --cor-primaria: var(--cor-pessego);
+  --cor-primaria-suave: var(--cor-pessego-suave);
+  --cor-primaria-forte: #b4552a;
+  --cor-primaria-forte-hover: #a84f26;
+  --cor-texto-sobre-primaria: #ffffff;
+  --cor-foco: #b4552a;
+  --cor-erro: #c23a32;
+  --cor-erro-fundo-botao: #c23a32;
+  --cor-erro-fundo-botao-hover: #b2352e;
+  --cor-erro-suave: var(--cor-coral-suave);
+  --cor-sucesso: var(--cor-verde);
+  --cor-sucesso-suave: var(--cor-verde-suave);
+  --cor-sucesso-texto: #4b6b40;
+  --cor-sucesso-fundo-botao: #4b6b40;
+  --cor-alerta: var(--cor-ambar);
+  --cor-alerta-suave: var(--cor-ambar-suave);
+  --cor-perigo: var(--cor-coral);
+  --cor-perigo-suave: var(--cor-coral-suave);
+  /* Texto do item ativo da barra lateral (04, 4.4; decisão 0005): #A84F26 no claro. */
+  --cor-nav-ativo-texto: #a84f26;
+  --cor-nav-ativo-icone: var(--cor-pessego);
+
+  /* 2.4 Neutros */
+  --bg-page: #fbfbfb;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7f7f8;
+  --bg-elevated: #ffffff;
+  --bg-toast: var(--cor-chumbo);
+  --bg-overlay: rgba(64, 64, 64, 0.55);
+  --border-subtle: #e8eaed;
+  --border-soft: #f1f3f4;
+  --border-input: #d8dadc;
+  --text-primary: #404040;
+  --text-secondary: #6c6d70;
+  --text-muted: #707175;
+  --text-toast: #ffffff;
+
+  /* 2.5 Status (só os usados na F1 + conjunto completo para as próximas fatias) */
+  --status-recebido-borda: var(--cor-cinza);
+  --status-recebido-bg: var(--cor-cinza-suave);
+  --status-recebido-cor: #5f6064;
+  --status-revisao-borda: var(--cor-pessego);
+  --status-revisao-bg: var(--cor-pessego-suave);
+  --status-revisao-cor: #a84f26;
+  --status-devolvido-borda: var(--cor-vinho);
+  --status-devolvido-bg: var(--cor-vinho-suave);
+  --status-devolvido-cor: #983f46;
+  --status-aprovacao-borda: var(--cor-ambar);
+  --status-aprovacao-bg: var(--cor-ambar-suave);
+  --status-aprovacao-cor: #8a5a10;
+  --status-aprovado-borda: var(--cor-verde);
+  --status-aprovado-bg: var(--cor-verde-suave);
+  --status-aprovado-cor: #4b6b40;
+  --status-cancelado-borda: var(--cor-coral);
+  --status-cancelado-bg: var(--cor-coral-suave);
+  --status-cancelado-cor: #c23a32;
+
+  /* 3.1 Tipografia */
+  --font-primary: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --fs-display: 26px;
+  --fs-h1: 22px;
+  --fs-h2: 20px;
+  --fs-h3: 16px;
+  --fs-body: 14px;
+  --fs-body-sm: 13px;
+  --fs-nav: 13.5px;
+  --fs-caption: 12px;
+  --fs-micro: 11px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+  --lh-base: 1.5;
+  --ls-titulo: -0.02em;
+  --ls-caixa-alta: 0.05em;
+
+  /* 3.2 Espaçamento */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-15: 60px;
+
+  /* Medidas de layout */
+  --sidebar-largura: 236px;
+  --sidebar-largura-estreita: 76px;
+  --conteudo-max: 1680px;
+  --alvo-toque: 44px;
+  --botao-icone: 38px;
+  --avatar: 34px;
+  --icone-sm: 16px;
+  --icone-nav: 18px;
+  --icone-md: 20px;
+  --dialogo-largura: 440px;
+  --campo-altura: 44px;
+  --borda-fina: 1px;
+  --borda-campo: 1.5px;
+  --borda-destaque: 4px;
+  --cartao-autonomo-largura: 420px;
+  --busca-largura: 320px;
+  --toast-topo: 92px;
+  --nav-gap: 10px;
+  --nav-link-padding: 10px 14px;
+  --logo-padding: 20px 18px;
+  --foco-largura: 2px;
+  --foco-afastamento: 2px;
+  --anel-campo: 3px;
+
+  /* 3.3 Raios */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* 3.4 Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(64, 64, 64, 0.06);
+  --shadow-hover: 0 8px 24px rgba(64, 64, 64, 0.08);
+  --shadow-cta: 0 6px 16px rgba(246, 148, 99, 0.32);
+  --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 24px 60px rgba(64, 64, 64, 0.3);
+  --shadow-toast: 0 8px 20px rgba(0, 0, 0, 0.22);
+
+  /* Camadas */
+  --z-sidebar: 50;
+  --z-toast: 9999;
+  --z-dialogo: 10000;
+
+  /* Movimento */
+  --duracao-curta: 0.15s;
+  --duracao-media: 0.25s;
+  --duracao-spinner: 0.8s;
+  --duracao-spinner-reduzido: 1.5s;
+}
+
+:root[data-tema='escuro'] {
+  color-scheme: dark;
+
+  --cor-vinho-suave: rgba(184, 80, 87, 0.28);
+  --cor-verde-suave: rgba(102, 141, 88, 0.28);
+  --cor-chumbo-suave: rgba(255, 255, 255, 0.08);
+  --cor-ambar-suave: rgba(251, 186, 109, 0.28);
+  --cor-pessego-suave: rgba(246, 148, 99, 0.28);
+  --cor-coral-suave: rgba(241, 101, 93, 0.28);
+  --cor-cinza-suave: rgba(128, 129, 132, 0.28);
+
+  --cor-foco: #f69463;
+  --cor-erro: #fca5a5;
+  --cor-erro-anel: rgba(252, 165, 165, 0.18);
+  --cor-sucesso-texto: #86efac;
+  /* No escuro o item ativo mantém fundo pêssego 15% e texto #F69463 (04, 4.4). */
+  --cor-nav-ativo-texto: #f69463;
+
+  --bg-page: #111113;
+  --bg-card: #1c1c22;
+  --bg-subtle: #16161c;
+  --bg-elevated: #1f1f26;
+  --bg-toast: #24242e;
+  --border-subtle: #2e2e38;
+  --border-soft: #25252d;
+  --border-input: #373742;
+  --text-primary: #f3f4f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #8b8b94;
+
+  --status-recebido-cor: #d1d5db;
+  --status-revisao-cor: #fdba74;
+  --status-devolvido-cor: #f3a5aa;
+  --status-aprovacao-cor: #fbba6d;
+  --status-aprovado-cor: #86efac;
+  --status-cancelado-cor: #fca5a5;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.6);
+}

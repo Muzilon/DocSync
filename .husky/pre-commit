@@ -1,10 +1,35 @@
 #!/usr/bin/env sh
 # Verificação de segredos nos arquivos preparados para o commit (CLAUDE.md, seção 4).
+# Chama o secretlint direto pelo Node (sem npx), porque o GitHub Desktop roda os
+# hooks num ambiente sem bash, onde o npx não funciona.
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Commit bloqueado: a verificação de segredos não conseguiu rodar (Node não encontrado no PATH)."
+  exit 1
+fi
+
+secretlint="node_modules/secretlint/bin/secretlint.js"
+if [ ! -f "$secretlint" ]; then
+  echo "Commit bloqueado: a verificação de segredos não conseguiu rodar. Rode 'npm install' na pasta do DocSync."
+  exit 1
+fi
+
 arquivos=$(git diff --cached --name-only --diff-filter=ACMR)
-if [ -n "$arquivos" ]; then
-  echo "$arquivos" | tr '\n' '\0' | xargs -0 npx --no-install secretlint --maskSecrets || {
-    echo ""
-    echo "Commit bloqueado: possível segredo encontrado. Mova o valor para o .env (não versionado)."
-    exit 1
-  }
+[ -z "$arquivos" ] && exit 0
+
+# Um arquivo por linha (aceita nomes com espaço); sem xargs, para preservar o código de saída.
+IFS='
+'
+# shellcheck disable=SC2086
+node "$secretlint" --maskSecrets $arquivos
+resultado=$?
+
+if [ "$resultado" -eq 1 ]; then
+  echo ""
+  echo "Commit bloqueado: possível segredo encontrado nos arquivos acima. Mova o valor para o .env (não versionado)."
+  exit 1
+elif [ "$resultado" -ne 0 ]; then
+  echo ""
+  echo "Commit bloqueado: a verificação de segredos falhou ao rodar (código $resultado). Não é um segredo encontrado; avise o Claude."
+  exit 1
 fi

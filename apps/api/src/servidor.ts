@@ -1,12 +1,28 @@
 import { criarApp } from './app.ts';
+import { abrirBanco } from './banco/conexao.ts';
+import { lerConfiguracao } from './config.ts';
 
-const porta = Number(process.env.API_PORTA ?? 3001);
-const app = criarApp();
+const config = lerConfiguracao();
+const banco = await abrirBanco(config.bancoPasta);
+const app = criarApp({
+  banco,
+  autenticacao: config.autenticacao,
+  // Logs sem token: o cabeçalho Authorization é sempre ocultado.
+  logger: { level: 'info', redact: ['req.headers.authorization'] },
+});
+
+async function encerrar() {
+  await app.close();
+  await banco.close();
+  process.exit(0);
+}
+process.on('SIGINT', encerrar);
+process.on('SIGTERM', encerrar);
 
 try {
-  await app.listen({ port: porta, host: '127.0.0.1' });
-  console.log(`API do DocSync em http://127.0.0.1:${porta}`);
+  await app.listen({ port: config.porta, host: '127.0.0.1' });
 } catch (erro) {
-  console.error(erro);
+  app.log.error(erro);
+  await banco.close();
   process.exit(1);
 }

@@ -1,0 +1,65 @@
+.regiao {
+  position: fixed;
+  top: var(--toast-topo);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  max-width: calc(100% - var(--space-8));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--bg-toast);
+  color: var(--text-toast);
+  box-shadow: var(--shadow-toast);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  pointer-events: auto;
+  animation: entrar var(--duracao-media) ease-out;
+}
+
+.icone {
+  color: var(--cor-verde);
+  flex-shrink: 0;
+}
+
+.fechar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--alvo-toque);
+  height: var(--alvo-toque);
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--text-toast);
+  cursor: pointer;
+}
+
+.fechar:focus-visible {
+  outline-color: var(--cor-pessego-claro);
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-name: aparecer;
+  }
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+}

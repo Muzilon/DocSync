@@ -1,0 +1,70 @@
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rotulo {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--text-secondary);
+}
+
+.obrigatorio {
+  color: var(--cor-erro);
+  margin-left: var(--space-1);
+}
+
+.controle {
+  width: 100%;
+  min-height: var(--campo-altura);
+  padding: 0 var(--space-3);
+  border: var(--borda-fina) solid var(--border-input);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+}
+
+.controle:hover {
+  background-color: var(--bg-card);
+}
+
+.controle:focus-visible {
+  outline: none;
+  border-color: var(--cor-foco);
+  box-shadow: 0 0 0 var(--anel-campo) var(--cor-pessego-anel);
+}
+
+select.controle {
+  appearance: none;
+  padding-right: var(--space-10);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 21px) 50%, calc(100% - 16px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.comErro .controle {
+  border-color: var(--cor-erro);
+}
+
+.comErro .controle:focus-visible {
+  box-shadow: 0 0 0 var(--anel-campo) var(--cor-erro-anel);
+}
+
+.comErro .rotulo {
+  color: var(--cor-erro);
+}
+
+.mensagem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-caption);
+  color: var(--cor-erro);
+}

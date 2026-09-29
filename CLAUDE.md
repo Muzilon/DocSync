@@ -65,8 +65,15 @@ Toda decisão de arquitetura, tecnologia, modelo de dados ou escopo vira um arqu
 - Estilos: variáveis CSS (tokens do documento 04) + CSS Modules. **Sem Tailwind.** Todo valor visual sai de um token.
 - Banco: PostgreSQL (fonte da verdade, decisão [0002](docs/decisoes/0002-fonte-da-verdade.md)). Identidade: Microsoft Entra ID. Arquivos: armazenamento local atrás de uma interface, até o SharePoint ser liberado ([0003](docs/decisoes/0003-ambiente-local.md)).
 - Testes: Vitest (regras e API), Playwright + axe (telas e acessibilidade, a partir da F1).
-- Node 24. Comandos na raiz: `npm run dev`, `npm run build`, `npm test`, `npm run typecheck`, `npm run segredos`.
+- Node 24. Comandos na raiz: `npm run dev`, `npm run build`, `npm test` (só Vitest), `npm run test:e2e` (Playwright + axe; na primeira vez, `npx playwright install chromium` em `apps/web`), `npm run typecheck`, `npm run segredos`.
+- **Interface (F1):** tokens num único arquivo, [apps/web/src/estilos/tokens.css](apps/web/src/estilos/tokens.css) (tema escuro em `:root[data-tema='escuro']`, escolha guardada no navegador em `docsync.tema`). Componentes reutilizáveis em `apps/web/src/componentes/`, telas em `apps/web/src/telas/`. Ícones `lucide-react`; fonte Inter 400–800 via `@fontsource/inter`.
+- **Login no navegador:** MSAL (`@azure/msal-browser` + `@azure/msal-react`), por redirecionamento, cache em sessionStorage. Destino pós-login só via `destinoSeguro()` ([apps/web/src/autenticacao/redirecionamento.ts](apps/web/src/autenticacao/redirecionamento.ts)). Chamadas à API só pelo cliente de `apps/web/src/api/cliente.ts` (prefixo `/api`, token Bearer; mensagens de erro em pt-BR em `api/erros.ts`).
 - Telas: computador e tablet (a partir de 768px), sem rolagem horizontal da página ([0005](docs/decisoes/0005-telas-computador-tablet.md)). Barra lateral estática, só CSS ([04, seção 4](docs/especificacao/04-design-system.md)).
+- **Banco (PGlite, F1):** pasta em `BANCO_PASTA` (relativa à raiz do monorepo). Migrações em `apps/api/migracoes/NNNN_nome.sql`, SQL padrão do PostgreSQL, aplicadas em ordem na subida da API, cada uma numa transação, registradas na tabela `migracoes`. **Migração aplicada nunca é editada**: mudança nova = arquivo novo. Cada arquivo traz no topo o plano de volta. Auditoria é imutável (gatilho bloqueia UPDATE, DELETE e TRUNCATE).
+- **IDs:** `USR-uuid` (pessoas), `AREA-uuid` (áreas), `AUD-uuid` (auditoria), gerados na criação e nunca reaproveitados.
+- **API:** rotas sem prefixo (a interface chama `/api/...` e o proxy do Vite remove o `/api`); sem CORS. Todo endpoint, exceto `/saude`, valida o token do Entra (jose + JWKS do locatário) e lê a pessoa e o perfil do banco a cada requisição. Erros no formato `{ codigo, mensagem?, campos? }` (tipo `ErroApi` em `packages/compartilhado`). Esquema fechado: campo desconhecido → 400 `dados_invalidos`. Logs nunca incluem o token.
+- **Permissões:** função única `pode(pessoa, acao)` em `packages/compartilhado`; o tipo `Acao` cresce a cada fatia, sempre com linha nova na tabela de testes.
+- **Testes da API:** Vitest com `app.inject`, banco PGlite em memória (clonado de um modelo migrado) e JWKS local gerado no teste ([apps/api/src/apoio-testes.ts](apps/api/src/apoio-testes.ts)). Nenhum teste chama a internet.
 
 ## 8. Regras de negócio que não podem regredir
 

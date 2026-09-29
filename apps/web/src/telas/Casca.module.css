@@ -1,0 +1,198 @@
+/* Casca e barra lateral ESTÁTICA (04, seção 4). Sem colapso, sem animação, sem JS de aparência. */
+.casca {
+  display: flex;
+  min-height: 100vh;
+}
+
+.barra {
+  width: var(--sidebar-largura);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border-right: var(--borda-fina) solid var(--border-subtle);
+  z-index: var(--z-sidebar);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--logo-padding);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-extrabold);
+  color: var(--text-primary);
+}
+
+.logoIcone {
+  color: var(--cor-primaria);
+  flex-shrink: 0;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  min-height: var(--alvo-toque);
+  padding: var(--nav-link-padding);
+  border: var(--borda-fina) solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--fs-nav);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+
+:root[data-tema='escuro'] .link {
+  color: var(--text-secondary);
+}
+
+.link:hover {
+  background: var(--cor-chumbo-suave);
+  color: var(--text-primary);
+}
+
+/* Item ativo: só muda de cor (04, 4.2 e 4.4). */
+.link.ativo,
+:root[data-tema='escuro'] .link.ativo {
+  background: var(--cor-pessego-suave);
+  border-color: var(--cor-pessego-borda);
+  color: var(--cor-nav-ativo-texto);
+  font-weight: var(--fw-bold);
+}
+
+.link.ativo svg {
+  color: var(--cor-nav-ativo-icone);
+}
+
+.rodape {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-top: var(--borda-fina) solid var(--border-soft);
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  min-width: 0;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--avatar);
+  height: var(--avatar);
+  border-radius: var(--radius-circle);
+  background: var(--cor-pessego-suave);
+  color: var(--status-revisao-cor);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  box-shadow: var(--shadow-sm);
+}
+
+.usuarioTexto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usuarioNome {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usuarioPerfil {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+}
+
+.acao {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  width: 100%;
+  min-height: var(--alvo-toque);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  text-align: left;
+}
+
+.acao:hover {
+  background: var(--cor-chumbo-suave);
+  color: var(--text-primary);
+}
+
+.principal {
+  flex: 1;
+  min-width: 0;
+}
+
+.conteudo {
+  max-width: var(--conteudo-max);
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-10) var(--space-15);
+}
+
+/* 04, 4.3: abaixo de 860px, 76px e só ícones. Texto oculto só visualmente. */
+@media (max-width: 860px) {
+  .barra {
+    width: var(--sidebar-largura-estreita);
+  }
+
+  .textoOcultavel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .logo,
+  .usuario {
+    justify-content: center;
+  }
+
+  .link,
+  .acao {
+    justify-content: center;
+    padding: var(--space-3);
+  }
+
+  .rodape {
+    padding: var(--space-4) var(--space-2);
+    align-items: center;
+  }
+
+  .conteudo {
+    padding: var(--space-6) var(--space-6) var(--space-15);
+  }
+}

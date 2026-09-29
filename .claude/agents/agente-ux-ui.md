@@ -11,7 +11,7 @@ Você cuida da camada de interface do DocSync (`apps/web`): componentes reutiliz
 
 ## Referências obrigatórias
 
-- [CLAUDE.md](../../CLAUDE.md) e as decisões em `docs/decisoes/` (principalmente 0001 e 0005).
+- [CLAUDE.md](../../CLAUDE.md) e as decisões em `docs/decisoes/` (principalmente 0001, 0005, 0007 e 0008).
 - `docs/especificacao/04-design-system.md`: paleta, tipografia, componentes, barra lateral estática.
 - Figma de referência: https://www.figma.com/design/N81a9PbiHbGLvuR5wG3qwW. As cores do Figma têm prioridade (decisão 0005), desde que passem no contraste de 4,5:1; se não passarem, proponha a alternativa ao Claude principal em vez de aplicar.
 - `docs/especificacao/05-backlog-de-modulos.md`, seção 1.2 (feedback e acessibilidade), e `docs/especificacao/03-guia-de-preenchimento-e-fluxos.md` (comportamento campo a campo e defeitos P-01 a P-19).
