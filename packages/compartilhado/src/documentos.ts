@@ -262,14 +262,21 @@ export function emTramitacao(documento: Pick<Documento, 'status'>): boolean {
 }
 
 /**
- * Reprogramar só com prazo vencido (decisão 0015, item 5): documento em tramitação
- * cujo prazo é anterior a hoje ("vence hoje" ainda não venceu). Documento em
- * tramitação SEM prazo (importado) pode receber um: não há prazo a esperar vencer.
+ * Janela "vencendo" em dias corridos (hoje até hoje + 5): KPI "Vencendo", cor laranja do
+ * prazo e liberação da reprogramação (decisão 0015, atualização de 2026-09-29).
+ */
+export const DIAS_JANELA_VENCENDO = 5;
+
+/**
+ * Reprogramar só com prazo vencido ou vencendo (decisão 0015, atualização de 2026-09-29):
+ * documento em tramitação cujo prazo é até hoje + DIAS_JANELA_VENCENDO (inclusive). Com o
+ * prazo ainda no futuro, a regra "só adia" (`validarNovoPrazo`) volta a ter efeito.
+ * Documento em tramitação SEM prazo (importado) pode receber um.
  * A mesma regra decide o botão na interface e o 409 `acao_nao_permitida` na API.
  */
 export function podeReprogramarAgora(documento: Pick<Documento, 'status' | 'dataRevisao'>, hoje: string): boolean {
   if (!emTramitacao(documento)) return false;
-  return documento.dataRevisao === null || documento.dataRevisao < hoje;
+  return documento.dataRevisao === null || documento.dataRevisao <= somarDias(hoje, DIAS_JANELA_VENCENDO);
 }
 
 /** Corpo de POST /documentos/:id/reprogramacoes. Campo desconhecido é rejeitado. */

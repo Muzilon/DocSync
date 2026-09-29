@@ -107,7 +107,7 @@ function reprogramar(quem: JWTPayload, id: string, corpo: unknown) {
 }
 
 /**
- * Decisão 0015: reprogramar só com prazo vencido. Os testes de reprogramação vencem o
+ * Decisão 0015: reprogramar só com prazo vencido ou vencendo. Os testes de reprogramação vencem o
  * prazo direto no banco (ontem), sem mexer na versão; o prazo real continua sendo o
  * automático do cadastro (testado à parte).
  */
@@ -217,33 +217,54 @@ describe('POST /documentos/:id/reprogramacoes', () => {
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
-  it('B1: versão velha → 409 conflito_versao antes de qualquer regra de prazo; com a versão atual, prazo não vencido → 409 acao_nao_permitida', async () => {
+  it('B1: versão velha → 409 conflito_versao antes de qualquer regra de prazo; com a versão atual, prazo fora da janela → 409 acao_nao_permitida', async () => {
     // A vê prazo vencido (versão 1); B reprograma para P+10; A envia P+5 com versão 1.
     const doc = await cadastrarVencido();
     expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
     const deA = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 1 });
     expect(deA.statusCode).toBe(409);
     expect(deA.json()).toMatchObject({ codigo: 'conflito_versao', documento: { id: doc.id, versao: 2, dataRevisao: NOVO_PRAZO } });
-    // Com a versão atual, o prazo novo (futuro) ainda não venceu: decisão 0015 recusa.
+    // Com a versão atual, o prazo novo (bem no futuro) ainda não está vencendo: decisão 0015 recusa.
     const comVersaoAtual = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(PRAZO_PADRAO, 5), justificativa: 'Justificativa de quem viu o prazo antigo.', versao: 2 });
     expect(comVersaoAtual.statusCode).toBe(409);
-    expect(comVersaoAtual.json()).toMatchObject({ codigo: 'acao_nao_permitida', mensagem: expect.stringMatching(/ainda não venceu/) });
+    expect(comVersaoAtual.json()).toMatchObject({ codigo: 'acao_nao_permitida', mensagem: expect.stringMatching(/ainda não está vencendo/) });
     expect(await eventosDe(doc.id)).toHaveLength(2);
   });
 
-  it('decisão 0015: prazo ainda não vencido (hoje ou futuro) → 409 acao_nao_permitida; vencido ontem → 201; sem prazo (importado) → 201', async () => {
-    const futuro = await cadastrar(); // prazo = hoje + 30
-    const recusado = await reprogramar(ADMIN, futuro.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
+  it('decisão 0015 (atualização 2026-09-29): prazo além de hoje + 5 → 409 acao_nao_permitida; hoje + 5, hoje e vencido → 201', async () => {
+    const doc = await cadastrar(); // prazo = hoje + 30
+    const recusado = await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 });
     expect(recusado.statusCode).toBe(409);
     expect(recusado.json()).toEqual({
       codigo: 'acao_nao_permitida',
-      mensagem: expect.stringMatching(/ainda não venceu.*só é permitida com prazo vencido/),
+      mensagem: expect.stringMatching(/só é possível reprogramar prazo vencido ou que vence em até 5 dias\.$/),
     });
-    await vencerPrazo(futuro.id, HOJE); // "vence hoje" ainda não venceu
-    expect((await reprogramar(ADMIN, futuro.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(409);
-    await vencerPrazo(futuro.id, ONTEM);
-    expect((await reprogramar(ADMIN, futuro.id, { novoPrazo: HOJE, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
-    expect(await eventosDe(futuro.id)).toHaveLength(2);
+    await vencerPrazo(doc.id, somarDias(HOJE, 6)); // hoje + 6: fora da janela
+    expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(409);
+    await vencerPrazo(doc.id, somarDias(HOJE, 5)); // hoje + 5: vencendo, aceita
+    expect((await reprogramar(ADMIN, doc.id, { novoPrazo: NOVO_PRAZO, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
+
+    const venceHoje = await cadastrar();
+    await vencerPrazo(venceHoje.id, HOJE);
+    expect((await reprogramar(ADMIN, venceHoje.id, { novoPrazo: somarDias(HOJE, 1), justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
+
+    const vencido = await cadastrar();
+    await vencerPrazo(vencido.id, ONTEM);
+    expect((await reprogramar(ADMIN, vencido.id, { novoPrazo: HOJE, justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
+    expect(await eventosDe(vencido.id)).toHaveLength(2);
+  });
+
+  it('prazo vencendo: "só adia" volta a valer (novo prazo igual ou anterior ao atual → 400; posterior → 201)', async () => {
+    const doc = await cadastrar();
+    const prazoAtual = somarDias(HOJE, 3);
+    await vencerPrazo(doc.id, prazoAtual);
+    for (const novoPrazo of [somarDias(HOJE, 2), prazoAtual]) {
+      const recusado = await reprogramar(ADMIN, doc.id, { novoPrazo, justificativa: JUSTIFICATIVA, versao: 1 });
+      expect(recusado.statusCode).toBe(400);
+      expect(recusado.json()).toEqual({ codigo: 'dados_invalidos', campos: { novoPrazo: expect.stringMatching(/só adia/) } });
+    }
+    expect(await eventosDe(doc.id)).toHaveLength(1);
+    expect((await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(prazoAtual, 1), justificativa: JUSTIFICATIVA, versao: 1 })).statusCode).toBe(201);
   });
 
   it('B2: reenvio idêntico com campo extra → 400 dados_invalidos (esquema fechado antes da idempotência)', async () => {
@@ -289,8 +310,7 @@ describe('POST /documentos/:id/reprogramacoes', () => {
 
     const passado = await reprogramar(ADMIN, doc.id, { novoPrazo: somarDias(HOJE, -1), justificativa: JUSTIFICATIVA, versao: 1 });
     expect(passado.json().campos.novoPrazo).toMatch(/anterior a hoje/);
-    // Com o prazo vencido, qualquer data de hoje em diante é posterior ao prazo atual: a
-    // regra "só adia" (decisão 0012) fica coberta pelo teste puro de `validarNovoPrazo`.
+    // "Só adia" (decisão 0012) com prazo vencendo: teste próprio acima.
 
     const invalida = await reprogramar(ADMIN, doc.id, { novoPrazo: '2026-02-30', justificativa: JUSTIFICATIVA, versao: '1', extra: true });
     expect(invalida.json().campos).toEqual({

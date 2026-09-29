@@ -10,6 +10,7 @@ import {
   nomeDownloadPrincipal,
   pode,
   podeReprogramarAgora,
+  DIAS_JANELA_VENCENDO,
   sanitizarNomePasta,
   validarArquivo,
   validarConjuntoArquivos,
@@ -623,14 +624,15 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
         if (STATUS_SEM_PRAZO.has(documento.status)) {
           throw new ErroNegocio(409, { codigo: 'acao_nao_permitida', mensagem: 'Documento não tem prazo a reprogramar.' });
         }
-        // Decisão 0015 (item 5): reprogramar só com prazo vencido. Depois da idempotência
-        // (o reenvio de uma reprogramação aplicada encontra o prazo já no futuro) e do
+        // Decisão 0015 (atualização 2026-09-29): reprogramar só com prazo vencido ou vencendo
+        // (até hoje + DIAS_JANELA_VENCENDO). Depois da idempotência (o reenvio de uma
+        // reprogramação aplicada encontra o prazo já no futuro) e do
         // conflito de versão (quem viu o prazo velho recebe o estado atual). Mesma função
         // pura que mostra ou esconde o botão na interface.
         if (!podeReprogramarAgora(documento, hoje)) {
           throw new ErroNegocio(409, {
             codigo: 'acao_nao_permitida',
-            mensagem: `O prazo (${formatarDataCurta(documento.dataRevisao!)}) ainda não venceu: a reprogramação só é permitida com prazo vencido.`,
+            mensagem: `O prazo (${formatarDataCurta(documento.dataRevisao!)}) ainda não está vencendo: só é possível reprogramar prazo vencido ou que vence em até ${DIAS_JANELA_VENCENDO} dias.`,
           });
         }
         // "Só adia" (decisão 0012), contra o prazo atual da linha bloqueada.

@@ -67,3 +67,15 @@ Nenhuma decisão grande nova; tudo dentro do contrato aprovado. Nota de processo
 
 - **B1:** dois casos novos em `apps/api/src/documentos.test.ts` ("POST /documentos — cadastro"), sem mudar código da API: cadastro sem `revisao` → `400 dados_invalidos` com `campos` só em `revisao`; `revisao: "2"` (texto numérico, como o formulário envia) → `201` com `revisao: 2` (número) no documento gravado. Comportamento conferido antes: a API já aceitava "2" (contrato 2.1).
 - Validação: `npx vitest run apps/api/src/documentos.test.ts` e `npm test` verdes.
+
+## Ajuste da validação: reprogramar vencendo (2026-09-29, agente-arquitetura-dados)
+
+Decisão [0015](../decisoes/0015-cartao-estilo-planner.md), atualização de 2026-09-29.
+
+- **O que mudou:** `podeReprogramarAgora(documento, hoje)` aceita prazo vencido **ou vencendo** (`dataRevisao <= hoje + DIAS_JANELA_VENCENDO`, 5 dias, a mesma janela do KPI "Vencendo"). Mantido: documento sem prazo pode; Aprovado e Cancelado não. Com o prazo ainda no futuro, a regra "só adia" (`validarNovoPrazo`) volta a ter efeito: novo prazo igual ou anterior ao atual → 400 `dados_invalidos`.
+- `DIAS_JANELA_VENCENDO` passou a ser definida em `documentos.ts` (para não criar importação circular com `painel.ts`); `painel.ts` a reexporta, e o `index.ts` continua exportando o mesmo nome. Valor inalterado (5).
+- API: mensagem do 409 `acao_nao_permitida` agora é "O prazo (dd/mm/aaaa) ainda não está vencendo: só é possível reprogramar prazo vencido ou que vence em até 5 dias." (número vindo da constante). Posição na ordem de decisão inalterada (depois da idempotência e do conflito de versão).
+- **Arquivos:** `packages/compartilhado/src/documentos.ts`, `packages/compartilhado/src/painel.ts`, `packages/compartilhado/src/documentos.test.ts`, `apps/api/src/rotas/documentos.ts`, `apps/api/src/painel.test.ts`, `apps/api/src/arquivos.test.ts` (só comentário).
+- **Testes novos/ajustados:** puro: vencido, hoje, hoje+5 aceitam; hoje+6 recusa; com prazo vencendo, `validarNovoPrazo` recusa novo prazo igual ou anterior. API: hoje+30 e hoje+6 → 409 com a nova mensagem; hoje+5, hoje e ontem → 201; prazo em hoje+3 com novo prazo hoje+2 ou igual → 400 "só adia", hoje+4 → 201.
+- **Web:** não alterada. Na primeira execução de `npm test`, 18 testes da web falharam por causa da edição em andamento do outro agente (rodapé do modal); na execução seguinte, com a edição dele concluída (os testes da web já esperam hoje+5 visível e hoje+6 oculto), a suíte inteira passou.
+- **Validação:** `npm run typecheck` sem erros; `npm test` 26 arquivos, 572 testes verdes; `npm run segredos` sem achados.
