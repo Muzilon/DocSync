@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWTPayload } from 'jose';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { criarApp } from './app.ts';
+import { ArmazenamentoEmMemoria } from './armazenamento/arquivos.ts';
 import { abrirBanco, type Banco } from './banco/conexao.ts';
 import type { ProvedorChaves } from './autenticacao/token.ts';
 
@@ -53,6 +54,8 @@ export interface Ambiente {
   app: FastifyInstance;
   banco: Banco;
   entra: EntraFalso;
+  /** Arquivos gravados pela API (em memória). */
+  armazenamento: ArmazenamentoEmMemoria;
   /** Faz uma requisição com um token para a identidade dada. */
   chamar(
     identidade: JWTPayload,
@@ -60,24 +63,37 @@ export interface Ambiente {
     url: string,
     corpo?: unknown,
   ): Promise<LightMyRequestResponse>;
+  /** Envia um formulário multipart/form-data com um token para a identidade dada. */
+  enviarFormulario(identidade: JWTPayload, url: string, partes: ParteFormulario[]): Promise<LightMyRequestResponse>;
   fechar(): Promise<void>;
 }
 
 /** Banco-modelo já migrado; cada teste recebe uma cópia (clone é bem mais rápido que criar). */
 let modelo: Promise<Banco> | undefined;
 
-export async function criarAmbiente(entra: EntraFalso): Promise<Ambiente> {
+export async function criarAmbiente(
+  entra: EntraFalso,
+  opcoes: { areaAdministradorInicial?: string | null } = {},
+): Promise<Ambiente> {
   modelo ??= abrirBanco('memoria');
   const banco = await (await modelo).clone();
+  const armazenamento = new ArmazenamentoEmMemoria();
   const app = criarApp({
     banco,
+    armazenamento,
     chaves: entra.chaves,
-    autenticacao: { tenantId: TENANT, clientId: CLIENT, administradoresIniciais: [EMAIL_ADMIN_INICIAL] },
+    autenticacao: {
+      tenantId: TENANT,
+      clientId: CLIENT,
+      administradoresIniciais: [EMAIL_ADMIN_INICIAL],
+      areaAdministradorInicial: opcoes.areaAdministradorInicial === undefined ? 'Qualidade' : opcoes.areaAdministradorInicial,
+    },
   });
   return {
     app,
     banco,
     entra,
+    armazenamento,
     async chamar(identidade, metodo, url, corpo) {
       const token = await entra.token(identidade);
       return app.inject({
@@ -85,6 +101,16 @@ export async function criarAmbiente(entra: EntraFalso): Promise<Ambiente> {
         url,
         headers: { authorization: `Bearer ${token}` },
         ...(corpo === undefined ? {} : { payload: corpo as object }),
+      });
+    },
+    async enviarFormulario(identidade, url, partes) {
+      const token = await entra.token(identidade);
+      const { corpo, tipo } = montarFormulario(partes);
+      return app.inject({
+        method: 'POST',
+        url,
+        headers: { authorization: `Bearer ${token}`, 'content-type': tipo },
+        payload: corpo,
       });
     },
     async fechar() {
@@ -99,3 +125,29 @@ export const ADMIN = { oid: 'oid-admin', preferred_username: EMAIL_ADMIN_INICIAL
 export function pessoaFicticia(apelido: string): JWTPayload {
   return { oid: `oid-${apelido}`, preferred_username: `${apelido}@exemplo.test`, name: `Pessoa ${apelido}` };
 }
+
+// --- Formulário multipart (montado à mão; nada de dependência extra) ----------------
+
+export type ParteFormulario =
+  | { campo: string; valor: string; tipo?: string }
+  | { campo: string; arquivo: string; conteudo: Buffer | string; tipo?: string };
+
+export function montarFormulario(partes: readonly ParteFormulario[]): { corpo: Buffer; tipo: string } {
+  const fronteira = `----docsync-teste-${randomUUID()}`;
+  const pedacos: Buffer[] = [];
+  for (const parte of partes) {
+    let cabecalho = `--${fronteira}\r\nContent-Disposition: form-data; name="${parte.campo}"`;
+    let conteudo: Buffer;
+    if ('arquivo' in parte) {
+      cabecalho += `; filename="${parte.arquivo}"\r\nContent-Type: ${parte.tipo ?? 'application/octet-stream'}`;
+      conteudo = Buffer.isBuffer(parte.conteudo) ? parte.conteudo : Buffer.from(parte.conteudo);
+    } else {
+      if (parte.tipo) cabecalho += `\r\nContent-Type: ${parte.tipo}`;
+      conteudo = Buffer.from(parte.valor);
+    }
+    pedacos.push(Buffer.from(`${cabecalho}\r\n\r\n`), conteudo, Buffer.from('\r\n'));
+  }
+  pedacos.push(Buffer.from(`--${fronteira}--\r\n`));
+  return { corpo: Buffer.concat(pedacos), tipo: `multipart/form-data; boundary=${fronteira}` };
+}
+

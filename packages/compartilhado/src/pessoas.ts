@@ -31,16 +31,31 @@ export interface Area {
 }
 
 /**
- * Ações verificadas pela função de permissão.
- * Na F1 só existem as necessárias para login e pessoas; a lista cresce a cada
- * fatia (cadastrar documento, mudar status, exportar etc., documento 02, seção 7.3),
- * sempre com teste na tabela de permissões.
+ * Ações verificadas pela função de permissão (documento 02, seção 7.3).
+ * A lista cresce a cada fatia (mudar status, exportar etc.), sempre com teste
+ * na tabela de permissões.
  */
-export type Acao = 'gerenciarPessoas' | 'verDocumentos';
+export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento';
 
-const PERMISSOES: Record<Acao, readonly Perfil[]> = {
-  gerenciarPessoas: ['Administrador'],
-  verDocumentos: ['Administrador', 'Qualidade', 'Solicitante', 'Leitor'],
+/**
+ * Contexto do registro sobre o qual a ação é feita. Hoje só a área do documento:
+ * o Solicitante só atua sobre documentos da sua área.
+ */
+export interface ContextoPermissao {
+  areaId?: string;
+}
+
+/**
+ * Como cada perfil é tratado em cada ação.
+ * - 'daSuaArea': sem contexto → sim; com contexto → só se a área for a da pessoa.
+ * - 'somenteComSuaArea': exige contexto com a área da pessoa (sem contexto → não).
+ */
+type Regra = 'sim' | 'nao' | 'daSuaArea' | 'somenteComSuaArea';
+
+const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
+  gerenciarPessoas: { Administrador: 'sim', Qualidade: 'nao', Solicitante: 'nao', Leitor: 'nao' },
+  verDocumentos: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'sim' },
+  cadastrarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'somenteComSuaArea', Leitor: 'nao' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -60,10 +75,27 @@ export function acessoLiberado(pessoa: Pessoa | null): pessoa is Pessoa & { perf
 /**
  * Função única de permissão. Pessoa ausente, inativa ou sem acesso liberado
  * (sem perfil, ou sem área quando não é Administrador) não pode nada.
+ *
+ * `contexto.areaId` é a área do documento em questão. Regras do Solicitante:
+ * - `verDocumentos`: sem contexto, sim (vê a lista, que a API filtra pela área);
+ *   com contexto, só documentos da sua área;
+ * - `cadastrarDocumento`: só com contexto igual à sua área. Para mostrar o
+ *   botão "Novo", a interface pergunta `pode(eu, 'cadastrarDocumento', { areaId: eu.areaId })`.
  */
-export function pode(pessoa: Pessoa | null, acao: Acao): boolean {
+export function pode(pessoa: Pessoa | null, acao: Acao, contexto?: ContextoPermissao): boolean {
   if (!acessoLiberado(pessoa)) return false;
-  return PERMISSOES[acao].includes(pessoa.perfil);
+  const areaDoContexto = contexto?.areaId;
+  const ehDaSuaArea = areaDoContexto !== undefined && pessoa.areaId !== null && areaDoContexto === pessoa.areaId;
+  switch (PERMISSOES[acao][pessoa.perfil]) {
+    case 'sim':
+      return true;
+    case 'nao':
+      return false;
+    case 'daSuaArea':
+      return areaDoContexto === undefined || ehDaSuaArea;
+    case 'somenteComSuaArea':
+      return ehDaSuaArea;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +141,10 @@ export type CodigoErroApi =
   | 'ultimo_administrador'
   | 'nao_encontrado'
   | 'conflito_identidade'
+  /** POST /documentos: já existe documento com o mesmo código e revisão (decisão 0004). */
+  | 'codigo_revisao_existente'
+  /** POST /documentos: o ID já foi usado por outro autor ou com outros dados. */
+  | 'id_existente'
   | 'erro_interno';
 
 export interface ErroApi {

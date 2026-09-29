@@ -1,4 +1,5 @@
 import { criarApp } from './app.ts';
+import { ArmazenamentoLocal } from './armazenamento/arquivos.ts';
 import { abrirBanco } from './banco/conexao.ts';
 import { lerConfiguracao } from './config.ts';
 
@@ -6,6 +7,7 @@ const config = lerConfiguracao();
 const banco = await abrirBanco(config.bancoPasta);
 const app = criarApp({
   banco,
+  armazenamento: new ArmazenamentoLocal(config.armazenamentoPasta),
   autenticacao: config.autenticacao,
   // Logs sem token: o cabeçalho Authorization é sempre ocultado.
   logger: { level: 'info', redact: ['req.headers.authorization'] },

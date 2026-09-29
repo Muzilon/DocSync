@@ -3,33 +3,53 @@ import { CircleCheck, X } from 'lucide-react';
 import estilos from './Toast.module.css';
 
 const DURACAO_MS = 5000;
+/** Toast com ação fica mais tempo (04, 8.4): 8s, pausando no hover e no foco. */
+const DURACAO_COM_ACAO_MS = 8000;
 
-type Mostrar = (mensagem: string) => void;
+export interface AcaoToast {
+  rotulo: string;
+  aoAcionar: () => void;
+}
+
+type Mostrar = (mensagem: string, acao?: AcaoToast) => void;
 const ContextoToast = createContext<Mostrar>(() => {});
 
 export function useToast(): Mostrar {
   return useContext(ContextoToast);
 }
 
-/** Toast simples (04, 8.4): região de status educada, fecha sozinho em 5s, pausa no hover e no foco. */
+interface Aviso {
+  mensagem: string;
+  acao?: AcaoToast | undefined;
+  /** Muda a cada aviso, para reiniciar o tempo mesmo com o mesmo texto. */
+  chave: number;
+}
+
+/** Toast (04, 8.4): região de status educada, fecha sozinho, pausa no hover e no foco; ação opcional. */
 export function ProvedorToast({ children }: { children: ReactNode }) {
-  const [mensagem, setMensagem] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<Aviso | null>(null);
   const [pausado, setPausado] = useState(false);
 
-  const mostrar = useCallback<Mostrar>((texto) => setMensagem(texto), []);
+  const mostrar = useCallback<Mostrar>((mensagem, acao) => setAviso({ mensagem, acao, chave: Date.now() }), []);
 
   useEffect(() => {
-    if (mensagem === null || pausado) return;
-    const temporizador = window.setTimeout(() => setMensagem(null), DURACAO_MS);
+    if (aviso === null || pausado) return;
+    const temporizador = window.setTimeout(() => setAviso(null), aviso.acao ? DURACAO_COM_ACAO_MS : DURACAO_MS);
     return () => window.clearTimeout(temporizador);
-  }, [mensagem, pausado]);
+  }, [aviso, pausado]);
+
+  function fechar() {
+    setAviso(null);
+    setPausado(false);
+  }
 
   return (
     <ContextoToast.Provider value={mostrar}>
       {children}
       <div className={estilos.regiao} role="status" aria-live="polite">
-        {mensagem !== null && (
+        {aviso !== null && (
           <div
+            key={aviso.chave}
             className={estilos.toast}
             onMouseEnter={() => setPausado(true)}
             onMouseLeave={() => setPausado(false)}
@@ -37,8 +57,20 @@ export function ProvedorToast({ children }: { children: ReactNode }) {
             onBlur={() => setPausado(false)}
           >
             <CircleCheck className={estilos.icone} size={16} aria-hidden="true" />
-            <span>{mensagem}</span>
-            <button type="button" className={estilos.fechar} aria-label="Fechar aviso" onClick={() => setMensagem(null)}>
+            <span>{aviso.mensagem}</span>
+            {aviso.acao && (
+              <button
+                type="button"
+                className={estilos.acao}
+                onClick={() => {
+                  aviso.acao?.aoAcionar();
+                  fechar();
+                }}
+              >
+                {aviso.acao.rotulo}
+              </button>
+            )}
+            <button type="button" className={estilos.fechar} aria-label="Fechar aviso" onClick={fechar}>
               <X size={16} aria-hidden="true" />
             </button>
           </div>

@@ -14,10 +14,12 @@ function pessoa(perfil: Perfil | null, extra: Partial<Pessoa> = {}): Pessoa {
   };
 }
 
-describe('pode — tabela de permissões da F1', () => {
+describe('pode — tabela de permissões (sem contexto)', () => {
   const tabela: Record<Acao, Record<Perfil, boolean>> = {
     gerenciarPessoas: { Administrador: true, Qualidade: false, Solicitante: false, Leitor: false },
     verDocumentos: { Administrador: true, Qualidade: true, Solicitante: true, Leitor: true },
+    // Solicitante só cadastra com contexto da sua área (ver o bloco seguinte).
+    cadastrarDocumento: { Administrador: true, Qualidade: true, Solicitante: false, Leitor: false },
   };
 
   for (const [acao, porPerfil] of Object.entries(tabela) as [Acao, Record<Perfil, boolean>][]) {
@@ -62,5 +64,46 @@ describe('acessoLiberado e ehPerfil', () => {
     expect(ehPerfil('Qualidade')).toBe(true);
     expect(ehPerfil('qualidade')).toBe(false);
     expect(ehPerfil(null)).toBe(false);
+  });
+});
+
+describe('pode — com contexto de área (documento 02, seção 7.3)', () => {
+  const suaArea = { areaId: 'AREA-teste' };
+  const outraArea = { areaId: 'AREA-outra' };
+
+  it('cadastrarDocumento: Administrador e Qualidade em qualquer área', () => {
+    for (const perfil of ['Administrador', 'Qualidade'] as const) {
+      expect(pode(pessoa(perfil), 'cadastrarDocumento', suaArea)).toBe(true);
+      expect(pode(pessoa(perfil), 'cadastrarDocumento', outraArea)).toBe(true);
+    }
+  });
+
+  it('cadastrarDocumento: Solicitante só na sua área', () => {
+    expect(pode(pessoa('Solicitante'), 'cadastrarDocumento', suaArea)).toBe(true);
+    expect(pode(pessoa('Solicitante'), 'cadastrarDocumento', outraArea)).toBe(false);
+    expect(pode(pessoa('Solicitante'), 'cadastrarDocumento', {})).toBe(false);
+  });
+
+  it('cadastrarDocumento: Leitor nunca, nem na sua área', () => {
+    expect(pode(pessoa('Leitor'), 'cadastrarDocumento', suaArea)).toBe(false);
+  });
+
+  it('verDocumentos: Solicitante só documentos da sua área; demais perfis, todos', () => {
+    expect(pode(pessoa('Solicitante'), 'verDocumentos', suaArea)).toBe(true);
+    expect(pode(pessoa('Solicitante'), 'verDocumentos', outraArea)).toBe(false);
+    for (const perfil of ['Administrador', 'Qualidade', 'Leitor'] as const) {
+      expect(pode(pessoa(perfil), 'verDocumentos', outraArea)).toBe(true);
+    }
+  });
+
+  it('Administrador sem área continua podendo cadastrar e ver com contexto', () => {
+    const admin = pessoa('Administrador', { area: null, areaId: null });
+    expect(pode(admin, 'cadastrarDocumento', outraArea)).toBe(true);
+    expect(pode(admin, 'verDocumentos', outraArea)).toBe(true);
+  });
+
+  it('contexto não libera quem não tem acesso', () => {
+    expect(pode(null, 'verDocumentos', suaArea)).toBe(false);
+    expect(pode(pessoa('Solicitante', { status: 'Inativo' }), 'cadastrarDocumento', suaArea)).toBe(false);
   });
 });

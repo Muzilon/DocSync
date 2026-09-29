@@ -7,6 +7,8 @@ export type CodigoErro =
   | 'email_existente'
   | 'dados_invalidos'
   | 'ultimo_administrador'
+  | 'codigo_revisao_existente'
+  | 'id_existente'
   | 'sem_conexao'
   | 'desconhecido';
 
@@ -18,6 +20,8 @@ const MENSAGENS: Record<CodigoErro, string> = {
   email_existente: 'Já existe uma pessoa cadastrada com este e-mail.',
   dados_invalidos: 'Revise os campos destacados.',
   ultimo_administrador: 'Não é possível remover o último administrador ativo.',
+  codigo_revisao_existente: 'Já existe um documento com este código nesta revisão.',
+  id_existente: 'Este registro colidiu com outro já gravado. Tente novamente.',
   sem_conexao: 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
   desconhecido: 'Ocorreu um erro inesperado. Tente novamente.',
 };

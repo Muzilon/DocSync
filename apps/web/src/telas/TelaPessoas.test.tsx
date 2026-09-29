@@ -30,6 +30,10 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     areas: vi.fn().mockResolvedValue(AREAS),
     criarPessoa: vi.fn(),
     alterarPessoa: vi.fn(),
+    tiposDocumento: vi.fn(),
+    criarDocumento: vi.fn(),
+    documentosRecentes: vi.fn(),
+    documento: vi.fn(),
     ...sobrescrever,
   };
 }

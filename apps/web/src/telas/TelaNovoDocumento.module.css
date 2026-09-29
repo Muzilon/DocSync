@@ -1,0 +1,245 @@
+/* Tela Novo documento (04, seção 7) no estilo do Vigen (decisão 0009). */
+.coluna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.cartaoFormulario {
+  max-width: var(--formulario-max);
+  padding: 0;
+  overflow: hidden;
+}
+
+.topoFormulario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--borda-fina) solid var(--border-subtle);
+}
+
+.tituloFormulario {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+/* Grade de 2 colunas, 14px × 16px (04, 7.1); 1 coluna abaixo de 640px. */
+.formulario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-4);
+  padding: var(--space-5);
+}
+
+.resumoErros {
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  border: var(--borda-fina) solid var(--cor-erro-ponto);
+  border-left-width: var(--borda-destaque);
+  border-radius: var(--radius-sm);
+  background: var(--cor-erro-fundo);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+}
+
+.resumoErros ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.resumoErros a {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.statusFixo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rotuloFixo {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+.statusFixo p:first-of-type {
+  display: flex;
+  align-items: center;
+  min-height: var(--campo-altura);
+}
+
+.dicaFixa {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/* Rodapé (04, 7.1): informação à esquerda, banner de erro e botão à direita. */
+.rodape {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin: var(--space-1) calc(-1 * var(--space-5)) calc(-1 * var(--space-5));
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--borda-fina) solid var(--border-subtle);
+  background: var(--bg-subtle);
+}
+
+.infoRodape {
+  margin-right: auto;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.bannerErro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: var(--borda-fina) solid var(--cor-erro-ponto);
+  border-left-width: var(--borda-destaque);
+  border-radius: var(--radius-sm);
+  background: var(--cor-erro-fundo);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+}
+
+.bannerTitulo {
+  font-weight: var(--fw-bold);
+}
+
+.botaoEnviar {
+  min-width: 190px;
+}
+
+/* Lista de registrados recentemente (tabela no estilo Vigen). */
+.recentes h2 {
+  margin-bottom: var(--space-3);
+}
+
+.cartaoTabela {
+  background: var(--bg-card);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow-x: auto;
+}
+
+.cartaoTabela:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body-sm);
+}
+
+.tabela th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-subtle);
+  border-bottom: var(--borda-fina) solid var(--border-subtle);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--borda-fina) solid var(--border-soft);
+  vertical-align: middle;
+  color: var(--text-strong);
+}
+
+.tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabela tbody tr:hover td {
+  background: var(--bg-subtle);
+}
+
+/* Item mostrado por "Ver na lista": fundo e marcador da marca. */
+.tabela tbody tr.destacado td {
+  background: var(--cor-marca-suave);
+}
+
+.tabela tbody tr.destacado td:first-child {
+  box-shadow: inset var(--marcador-largura) 0 0 var(--cor-marca);
+}
+
+.tabela tbody tr:focus-visible {
+  outline-offset: calc(-1 * var(--foco-largura));
+}
+
+.codigo {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.semCodigo {
+  font-family: var(--font-primary);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.tituloDoc {
+  min-width: 160px;
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.vazio {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .formulario {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .botaoEnviar {
+    width: 100%;
+  }
+}
+
+/* Aviso informativo (já registrado): família informação da decisão 0009. */
+.bannerInfo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: var(--borda-fina) solid var(--cor-info-ponto);
+  border-left-width: var(--borda-destaque);
+  border-radius: var(--radius-sm);
+  background: var(--cor-info-fundo);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+}

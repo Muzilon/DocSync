@@ -137,6 +137,12 @@ export async function listarAreasAtivas(db: Executor): Promise<Area[]> {
   return ordenarAlfabetico(rows, (a) => a.nome);
 }
 
+/** Área ativa pelo nome exato (usada só no bootstrap, que recebe o nome do .env). */
+export async function buscarAreaAtivaPorNome(db: Executor, nome: string): Promise<Area | null> {
+  const { rows } = await db.query<Area>('SELECT id, nome, ativa FROM areas WHERE nome = $1 AND ativa', [nome]);
+  return rows[0] ?? null;
+}
+
 export async function buscarAreaAtiva(db: Executor, id: string): Promise<Area | null> {
   const { rows } = await db.query<Area>('SELECT id, nome, ativa FROM areas WHERE id = $1 AND ativa', [id]);
   return rows[0] ?? null;

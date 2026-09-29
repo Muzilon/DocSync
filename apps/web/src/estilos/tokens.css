@@ -164,6 +164,9 @@
   --cartao-autonomo-largura: 400px;
   --painel-marca-largura: 45%;
   --busca-largura: 320px;
+  --area-texto-altura: 76px;
+  --formulario-max: 860px;
+  --dropzone-altura: 112px;
   --toast-topo: 92px;
   --nav-gap: 10px;
   --nav-link-padding: 9px 12px;

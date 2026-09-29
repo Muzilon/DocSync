@@ -10,6 +10,7 @@ import {
   type EntraFalso,
 } from './apoio-testes.ts';
 import { aplicarMigracoes } from './banco/conexao.ts';
+import { lerAreaAdministradorInicial } from './config.ts';
 
 let entra: EntraFalso;
 let amb: Ambiente;
@@ -381,5 +382,72 @@ describe('banco', () => {
     await expect(amb.banco.query("UPDATE auditoria_pessoas SET depois = 'x'")).rejects.toThrow(/imutável/);
     await expect(amb.banco.query('DELETE FROM auditoria_pessoas')).rejects.toThrow(/imutável/);
     await expect(amb.banco.query('TRUNCATE auditoria_pessoas')).rejects.toThrow(/imutável/);
+  });
+});
+
+describe('área do primeiro Administrador (decisão 0010)', () => {
+  it('bootstrap define a área de AREA_ADMINISTRADOR_INICIAL e audita como sistema', async () => {
+    const eu = (await amb.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
+    expect(eu).toMatchObject({ perfil: 'Administrador', area: 'Qualidade', areaId: await idDaArea('Qualidade') });
+    const auditoria = (await amb.chamar(ADMIN, 'GET', `/pessoas/${eu.id}/auditoria`)).json<RegistroAuditoriaPessoa[]>();
+    expect(auditoria).toContainEqual(
+      expect.objectContaining({ campo: 'area', antes: null, depois: 'Qualidade', autorId: 'sistema' }),
+    );
+  });
+
+  it('área inexistente ou inativa: Administrador fica sem área (e o acesso continua liberado)', async () => {
+    const outro = await criarAmbiente(entra, { areaAdministradorInicial: 'Área Que Não Existe' });
+    try {
+      const eu = (await outro.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
+      expect(eu).toMatchObject({ perfil: 'Administrador', area: null, areaId: null });
+      expect((await outro.chamar(ADMIN, 'GET', '/pessoas')).statusCode).toBe(200);
+      const auditoria = (await outro.chamar(ADMIN, 'GET', `/pessoas/${eu.id}/auditoria`)).json<RegistroAuditoriaPessoa[]>();
+      expect(auditoria.map((r) => r.campo)).not.toContain('area');
+    } finally {
+      await outro.fechar();
+    }
+  });
+
+  it('variável nula: bootstrap sem área', async () => {
+    const outro = await criarAmbiente(entra, { areaAdministradorInicial: null });
+    try {
+      expect((await outro.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>().areaId).toBeNull();
+    } finally {
+      await outro.fechar();
+    }
+  });
+
+  it('Administrador já existente sem área não é alterado no login', async () => {
+    const eu = (await amb.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
+    await amb.banco.query('UPDATE usuarios SET area_id = NULL WHERE id = $1', [eu.id]);
+    const depois = (await amb.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
+    expect(depois).toMatchObject({ perfil: 'Administrador', areaId: null });
+    const auditoria = (await amb.chamar(ADMIN, 'GET', `/pessoas/${eu.id}/auditoria`)).json<RegistroAuditoriaPessoa[]>();
+    expect(auditoria.filter((r) => r.campo === 'area')).toHaveLength(1); // só a do bootstrap
+  });
+
+  it('pré-cadastro com área que vira Administrador pelo bootstrap mantém a própria área', async () => {
+    const outro = await criarAmbiente(entra);
+    try {
+      // Sem nenhum Administrador ainda: insere o pré-cadastro direto no banco, com área Custos.
+      const { rows } = await outro.banco.query<{ id: string }>("SELECT id FROM areas WHERE nome = 'Custos'");
+      await outro.banco.query(
+        "INSERT INTO usuarios (id, nome, email, area_id) VALUES ('USR-pre-admin', 'Pré Admin', $1, $2)",
+        [EMAIL_ADMIN_INICIAL, rows[0]!.id],
+      );
+      const eu = (await outro.chamar(ADMIN, 'GET', '/eu')).json<Pessoa>();
+      expect(eu).toMatchObject({ perfil: 'Administrador', area: 'Custos' });
+    } finally {
+      await outro.fechar();
+    }
+  });
+});
+
+describe('lerAreaAdministradorInicial', () => {
+  it('padrão Qualidade quando vazia ou placeholder; senão o nome aparado', () => {
+    expect(lerAreaAdministradorInicial(undefined)).toBe('Qualidade');
+    expect(lerAreaAdministradorInicial('  ')).toBe('Qualidade');
+    expect(lerAreaAdministradorInicial('<nome-da-area>')).toBe('Qualidade');
+    expect(lerAreaAdministradorInicial(' Engenharia ')).toBe('Engenharia');
   });
 });

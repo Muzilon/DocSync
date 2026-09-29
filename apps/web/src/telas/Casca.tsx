@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from 'react-router';
-import { FileText, House, LogOut, Users } from 'lucide-react';
+import { FilePlus2, FileText, House, LogOut, Users } from 'lucide-react';
 import { pode } from '@docsync/compartilhado';
 import { useSessao } from '../autenticacao/Sessao.tsx';
+import { podeCadastrarDocumento } from '../permissoes.ts';
 import { BotaoTema } from '../componentes/BotaoTema.tsx';
 import { ProvedorToast } from '../componentes/Toast.tsx';
 import estilos from './Casca.module.css';
@@ -40,6 +41,17 @@ export function Casca() {
               <span className={estilos.textoOcultavel}>Início</span>
             </NavLink>
             {/* Grupo só aparece quando tem ao menos um destino (decisão 0009, item 4). */}
+            {podeCadastrarDocumento(eu) && (
+              <div className={estilos.grupo} role="group" aria-labelledby="grupo-tramitacao">
+                <p id="grupo-tramitacao" className={`${estilos.rotuloGrupo} ${estilos.textoOcultavel}`}>
+                  Tramitação
+                </p>
+                <NavLink to="/documentos/novo" className={classeLink} title="Novo documento">
+                  <FilePlus2 size={18} aria-hidden="true" />
+                  <span className={estilos.textoOcultavel}>Novo documento</span>
+                </NavLink>
+              </div>
+            )}
             {pode(eu, 'gerenciarPessoas') && (
               <div className={estilos.grupo} role="group" aria-labelledby="grupo-administracao">
                 <p id="grupo-administracao" className={`${estilos.rotuloGrupo} ${estilos.textoOcultavel}`}>

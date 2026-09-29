@@ -2,6 +2,7 @@ import type { Banco } from '../banco/conexao.ts';
 import {
   AUTOR_SISTEMA,
   atualizarUsuario,
+  buscarAreaAtivaPorNome,
   buscarPorEmail,
   bloquearDecisaoAdministradores,
   buscarPorIdEntra,
@@ -13,7 +14,8 @@ import {
 import type { Identidade } from './token.ts';
 
 export type ResultadoIdentificacao =
-  | { tipo: 'ok'; usuario: Usuario }
+  /** `aviso`: algo a registrar no log (ex.: área do bootstrap não encontrada). */
+  | { tipo: 'ok'; usuario: Usuario; aviso?: string }
   /** O e-mail já está vinculado a outro objeto do Entra: não associa em silêncio. */
   | { tipo: 'conflito' }
   /** Primeiro login sem nenhum e-mail no token: impossível cadastrar. */
@@ -31,6 +33,8 @@ export async function identificarPessoa(
   banco: Banco,
   identidade: Identidade,
   administradoresIniciais: readonly string[],
+  /** Nome da área do primeiro Administrador (decisão 0010); null = sem área. */
+  areaAdministradorInicial: string | null = null,
 ): Promise<ResultadoIdentificacao> {
   return banco.transaction(async (tx) => {
     let usuario = await buscarPorIdEntra(tx, identidade.oid);
@@ -66,6 +70,7 @@ export async function identificarPessoa(
       }
     }
 
+    let aviso: string | undefined;
     const candidatoBootstrap =
       usuario.status === 'Ativo' &&
       usuario.perfil !== 'Administrador' &&
@@ -84,8 +89,27 @@ export async function identificarPessoa(
         antes,
         depois: 'Administrador',
       });
+
+      // Decisão 0010: o primeiro Administrador nasce com área. Só aqui, no bootstrap:
+      // Administrador que já existe sem área não é alterado em silêncio no login.
+      // Pré-cadastro que já tinha área mantém a sua.
+      if (usuario.areaId === null && areaAdministradorInicial !== null) {
+        const area = await buscarAreaAtivaPorNome(tx, areaAdministradorInicial);
+        if (!area) {
+          aviso = `AREA_ADMINISTRADOR_INICIAL "${areaAdministradorInicial}" não existe ou está inativa; primeiro Administrador ficou sem área.`;
+        } else {
+          usuario = await atualizarUsuario(tx, usuario.id, { area_id: area.id });
+          await registrarAuditoria(tx, {
+            idUsuario: usuario.id,
+            autorId: AUTOR_SISTEMA,
+            campo: 'area',
+            antes: null,
+            depois: area.nome,
+          });
+        }
+      }
     }
 
-    return { tipo: 'ok', usuario } as const;
+    return aviso === undefined ? ({ tipo: 'ok', usuario } as const) : ({ tipo: 'ok', usuario, aviso } as const);
   });
 }

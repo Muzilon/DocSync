@@ -1,0 +1,67 @@
+/* Badge com ponto colorido (ponto decorativo; o texto diz o status). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  flex-shrink: 0;
+  width: var(--ponto);
+  height: var(--ponto);
+  border-radius: var(--radius-circle);
+}
+
+.recebido {
+  background: var(--status-recebido-bg);
+  color: var(--status-recebido-cor);
+}
+.recebido::before {
+  background: var(--status-recebido-borda);
+}
+
+.revisao {
+  background: var(--status-revisao-bg);
+  color: var(--status-revisao-cor);
+}
+.revisao::before {
+  background: var(--status-revisao-borda);
+}
+
+.devolvido {
+  background: var(--status-devolvido-bg);
+  color: var(--status-devolvido-cor);
+}
+.devolvido::before {
+  background: var(--status-devolvido-borda);
+}
+
+.aprovacao {
+  background: var(--status-aprovacao-bg);
+  color: var(--status-aprovacao-cor);
+}
+.aprovacao::before {
+  background: var(--status-aprovacao-borda);
+}
+
+.aprovado {
+  background: var(--status-aprovado-bg);
+  color: var(--status-aprovado-cor);
+}
+.aprovado::before {
+  background: var(--status-aprovado-borda);
+}
+
+.cancelado {
+  background: var(--status-cancelado-bg);
+  color: var(--status-cancelado-cor);
+}
+.cancelado::before {
+  background: var(--status-cancelado-borda);
+}

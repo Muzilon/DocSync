@@ -5,6 +5,8 @@ import { RotaProtegida, useSessao } from './autenticacao/Sessao.tsx';
 import { Casca } from './telas/Casca.tsx';
 import { TelaInicio } from './telas/TelaInicio.tsx';
 import { TelaLogin } from './telas/TelaLogin.tsx';
+import { TelaNovoDocumento } from './telas/TelaNovoDocumento.tsx';
+import { podeCadastrarDocumento } from './permissoes.ts';
 import { TelaPessoas } from './telas/TelaPessoas.tsx';
 import pagina from './telas/Pagina.module.css';
 
@@ -12,6 +14,12 @@ import pagina from './telas/Pagina.module.css';
 function SoAdministrador({ children }: { children: ReactNode }) {
   const { eu } = useSessao();
   return pode(eu, 'gerenciarPessoas') ? children : <Navigate to="/" replace />;
+}
+
+/** Leitor (ou quem não pode cadastrar) que digitar a rota volta ao Início. */
+function SoQuemCadastra({ children }: { children: ReactNode }) {
+  const { eu } = useSessao();
+  return podeCadastrarDocumento(eu) ? children : <Navigate to="/" replace />;
 }
 
 function NaoEncontrada() {
@@ -40,6 +48,14 @@ export function App() {
               <SoAdministrador>
                 <TelaPessoas />
               </SoAdministrador>
+            }
+          />
+          <Route
+            path="documentos/novo"
+            element={
+              <SoQuemCadastra>
+                <TelaNovoDocumento />
+              </SoQuemCadastra>
             }
           />
           <Route path="*" element={<NaoEncontrada />} />

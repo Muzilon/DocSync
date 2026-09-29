@@ -1,12 +1,17 @@
+import multipart from '@fastify/multipart';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import type { ArmazenamentoArquivos } from './armazenamento/arquivos.ts';
 import type { Banco } from './banco/conexao.ts';
 import { enviarErro, registrarAutenticacao } from './autenticacao/plugin.ts';
 import { provedorChavesEntra, type ProvedorChaves } from './autenticacao/token.ts';
 import type { ConfiguracaoAutenticacao } from './config.ts';
+import { registrarRotasDocumentos } from './rotas/documentos.ts';
 import { registrarRotasPessoas } from './rotas/pessoas.ts';
 
 export interface OpcoesApp {
   banco: Banco;
+  /** Onde ficam os arquivos dos documentos (local em disco; em memória nos testes). */
+  armazenamento: ArmazenamentoArquivos;
   autenticacao: ConfiguracaoAutenticacao;
   /** Chaves do Entra. Padrão: JWKS remoto do locatário. Nos testes, um JWKS local. */
   chaves?: ProvedorChaves;
@@ -31,6 +36,10 @@ export function criarApp(opcoes: OpcoesApp): FastifyInstance {
     return enviarErro(resposta, 500, { codigo: 'erro_interno' });
   });
 
+  // Formulários com arquivos (cadastro de documento). Os limites finos (tamanho,
+  // quantidade) são aplicados na rota, com mensagens por campo.
+  app.register(multipart, { throwFileSizeLimit: false });
+
   // Verificação de funcionamento. Pública; não expõe versão, ambiente nem configuração.
   app.get('/saude', async () => ({ status: 'ok' }));
 
@@ -38,6 +47,7 @@ export function criarApp(opcoes: OpcoesApp): FastifyInstance {
   app.register(async (escopo) => {
     registrarAutenticacao(escopo, { banco: opcoes.banco, config: opcoes.autenticacao, chaves });
     registrarRotasPessoas(escopo, opcoes.banco);
+    registrarRotasDocumentos(escopo, { banco: opcoes.banco, armazenamento: opcoes.armazenamento });
   });
 
   return app;

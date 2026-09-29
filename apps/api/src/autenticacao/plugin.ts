@@ -50,7 +50,13 @@ export function registrarAutenticacao(escopo: FastifyInstance, opcoes: OpcoesAut
       return enviarErro(resposta, 401, { codigo: 'nao_autenticado' });
     }
 
-    const resultado = await identificarPessoa(opcoes.banco, identidade, opcoes.config.administradoresIniciais);
+    const resultado = await identificarPessoa(
+      opcoes.banco,
+      identidade,
+      opcoes.config.administradoresIniciais,
+      opcoes.config.areaAdministradorInicial,
+    );
+    if (resultado.tipo === 'ok' && resultado.aviso) requisicao.log.warn(resultado.aviso);
     if (resultado.tipo === 'sem_email') {
       return enviarErro(resposta, 401, {
         codigo: 'nao_autenticado',

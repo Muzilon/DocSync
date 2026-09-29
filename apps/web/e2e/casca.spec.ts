@@ -7,6 +7,7 @@ const TEMAS = ['claro', 'escuro'] as const;
 const ROTAS = [
   ['início', '/'],
   ['pessoas', '/pessoas'],
+  ['novo documento', '/documentos/novo'],
 ] as const;
 
 for (const tema of TEMAS) {
@@ -17,14 +18,15 @@ for (const tema of TEMAS) {
         await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
         await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent(rota)}`);
         await expect(page.getByRole('navigation', { name: 'Menu' })).toBeVisible();
-        if (rota === '/pessoas') await expect(page.getByRole('table')).toBeVisible();
+        if (rota !== '/') await expect(page.getByRole('table')).toBeVisible();
         const { rolagem, largura: visivel } = await page.evaluate(() => ({
           rolagem: document.documentElement.scrollWidth,
           largura: document.documentElement.clientWidth,
         }));
         expect(rolagem).toBeLessThanOrEqual(visivel);
         // Link ativo com aria-current e nome acessível mesmo em 76px.
-        const ativo = page.getByRole('link', { name: rota === '/' ? 'Início' : 'Pessoas' });
+        const nomeLink = { '/': 'Início', '/pessoas': 'Pessoas', '/documentos/novo': 'Novo documento' }[rota];
+        const ativo = page.getByRole('link', { name: nomeLink });
         await expect(ativo).toHaveAttribute('aria-current', 'page');
         const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
         expect(resultado.violations).toEqual([]);

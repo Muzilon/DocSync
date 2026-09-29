@@ -1,0 +1,201 @@
+/* Dropzone de arquivo (04, 7.3) com cores da decisão 0009. */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+.rotulo {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+.obrigatorio {
+  color: var(--cor-erro);
+  margin-left: var(--space-1);
+}
+
+.zona {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--dropzone-altura);
+  padding: var(--space-4);
+  border: var(--borda-fina) dashed var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  text-align: center;
+  transition: background-color var(--duracao-curta), border-color var(--duracao-curta);
+}
+
+.arrastando {
+  border-color: var(--cor-marca);
+  background: var(--cor-marca-suave);
+}
+
+.preenchida {
+  border-style: solid;
+  border-color: var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.comErro {
+  border-color: var(--cor-erro);
+  background: var(--cor-erro-fundo);
+}
+
+.convite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--text-strong);
+  font-weight: var(--fw-semibold);
+}
+
+.iconeUpload {
+  color: var(--text-secondary);
+}
+
+.textoArraste {
+  font-size: var(--fs-body-sm);
+}
+
+/* "Procurar arquivo" / "Trocar": <label> ligado ao input, com aparência de botão secundário. */
+.botao {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--botao-altura);
+  padding: 0 var(--space-4);
+  border: var(--borda-fina) solid var(--border-input);
+  border-radius: var(--radius-sm);
+  background: var(--botao-secundario-bg);
+  color: var(--text-strong);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.botao:hover {
+  background: var(--botao-secundario-hover);
+}
+
+/* O foco fica no input oculto; o anel aparece no botão visível. */
+.input:focus + * .botao,
+.input:focus ~ .convite .botao,
+.input:focus ~ .escolhido .botao {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+.dica {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/* Em fundo de erro (#FEF2F2) o texto secundário mantém contraste acima de 4,5:1. */
+.mensagem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-caption);
+  color: var(--cor-erro);
+}
+
+.escolhido {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.iconeArquivo {
+  flex-shrink: 0;
+  color: var(--cor-marca);
+}
+
+.nomeArquivo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+.tamanho {
+  flex-shrink: 0;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.remover {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--alvo-toque);
+  height: var(--alvo-toque);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.remover:hover {
+  background: var(--bg-hover);
+  color: var(--cor-erro);
+}
+
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding-left: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-strong);
+  font-size: var(--fs-body-sm);
+}
+
+.nomeEtiqueta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .textoArraste {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zona {
+    transition: none;
+  }
+}
