@@ -504,7 +504,7 @@ aplicarTema(temaSalvo());
 if (parametros.get('editar') === '1') {
   // Só na vitrine: abre "Editar dados" assim que o modal de detalhes termina de carregar.
   const abrirEdicao = () => {
-    const botao = Array.from(document.querySelectorAll<HTMLButtonElement>('dialog[open] button')).find((b) => b.textContent === 'Editar dados');
+    const botao = document.querySelector<HTMLButtonElement>('dialog[open] button[aria-label="Editar dados"]');
     if (botao) botao.click();
     else setTimeout(abrirEdicao, 50);
   };

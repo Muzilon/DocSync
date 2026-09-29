@@ -443,7 +443,7 @@ describe('TelaPainel: detalhes (F4)', () => {
     const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
     expect(api.documento).toHaveBeenCalledWith('DOC-1');
     expect(endereco()).toBe('/painel?documento=DOC-1');
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar' }));
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Fechar detalhes' }));
     await waitFor(() => expect(endereco()).toBe('/painel'));
     expect(botaoDe('Procedimento de auditoria')).toHaveFocus();
   });
@@ -497,12 +497,12 @@ describe('TelaPainel: detalhes (F4)', () => {
     await usuario.click(await within(janela).findByRole('button', { name: 'Ata de reunião, abrir detalhes' }));
     const detalhes = await screen.findByRole('dialog', { name: 'Ata de reunião' });
     expect(api.documento).toHaveBeenCalledWith('DOC-7');
-    await usuario.click(within(detalhes).getByRole('button', { name: 'Fechar' }));
+    await usuario.click(within(detalhes).getByRole('button', { name: 'Fechar detalhes' }));
     await waitFor(() => expect(within(janela).getByRole('button', { name: 'Ata de reunião, abrir detalhes' })).toHaveFocus());
     expect(screen.getByRole('dialog', { name: /Documentos cancelados/ })).toBeInTheDocument();
   });
 
-  it('reprogramar (só com prazo vencido) dentro dos detalhes atualiza o cartão do quadro sem recarregar o painel', async () => {
+  it('reprogramar (prazo vencido ou vencendo) dentro dos detalhes atualiza o cartão do quadro sem recarregar o painel', async () => {
     const api = apiComDetalhes();
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-3');
     await quadro();
@@ -589,8 +589,9 @@ describe('TelaPainel: mudança de status (F5)', () => {
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-1');
     await quadro();
     const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
     const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await usuario.selectOptions(within(etapa).getByRole('combobox', { name: /Etapa/ }), 'Em revisão da qualidade');
     // Sem responsáveis carregados (lista vazia): o campo aparece vazio e a validação pede a pessoa.
     await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
     expect(await within(etapa).findByText('Responsável: Informe o responsável por esta etapa.')).toBeInTheDocument();
@@ -609,8 +610,9 @@ describe('TelaPainel: mudança de status (F5)', () => {
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-1');
     await quadro();
     const dialogo = await screen.findByRole('dialog', { name: 'Procedimento de auditoria' });
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Iniciar revisão' }));
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Atualizar etapa…' }));
     const etapa = await screen.findByRole('dialog', { name: 'Atualizar etapa' });
+    await usuario.selectOptions(within(etapa).getByRole('combobox', { name: /Etapa/ }), 'Em revisão da qualidade');
     expect(await within(etapa).findByRole('combobox', { name: /Responsável/ })).toHaveValue('USR-1');
     await usuario.click(within(etapa).getByRole('button', { name: 'Registrar etapa' }));
     await waitFor(() => expect(within(coluna(/^Em Revisão/)).getByRole('article', { name: 'Procedimento de auditoria' })).toBeInTheDocument());

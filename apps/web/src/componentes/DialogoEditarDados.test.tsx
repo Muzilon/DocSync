@@ -124,12 +124,19 @@ describe('podeEditar (botão "Editar dados")', () => {
 });
 
 describe('DetalhesDocumento: Editar dados (F6)', () => {
-  it('rodapé: "Editar dados" depois de "Atualizar etapa…" e antes de "Cancelar documento"', async () => {
+  it('"Editar" discreto no título da seção Dados (nome acessível "Editar dados"), fora do rodapé', async () => {
     renderizar(apiSimulada({ documento: vi.fn().mockResolvedValue(detalhe({ status: 'Recebido', responsavelId: null, responsavel: null })) }));
     const modal = await detalhes();
-    const textos = within(modal).getAllByRole('button').map((b) => b.textContent);
-    expect(textos.indexOf('Editar dados')).toBe(textos.indexOf('Atualizar etapa…') + 1);
-    expect(textos.indexOf('Cancelar documento')).toBe(textos.indexOf('Editar dados') + 1);
+    const dados = within(modal).getByRole('region', { name: 'Dados' });
+    const botao = within(dados).getByRole('button', { name: 'Editar dados' });
+    expect(botao).toHaveTextContent(/^Editar$/);
+    expect(botao.closest('[class*="rodape"]')).toBeNull();
+    expect(within(modal).getAllByRole('button', { name: /Editar/ })).toHaveLength(1);
+  });
+
+  it('dica do N° de revisão', async () => {
+    const { dialogo } = await abrirEdicao(apiSimulada());
+    expect(campo(dialogo, /N° de revisão/)).toHaveAccessibleDescription('Corrigir o número de revisão não cria uma nova revisão.');
   });
 
   it.each<[string, Pessoa, StatusDocumento]>([

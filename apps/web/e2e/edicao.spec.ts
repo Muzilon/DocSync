@@ -162,16 +162,19 @@ test('Aprovado: sem "Editar dados" (nem para o Administrador)', async ({ page })
 });
 
 for (const tema of TEMAS) {
-  test(`rodapé com 6 botões ${tema} (Administrador, DOC-P4 com prazo vencido) em 768px: quebra sem rolagem horizontal`, async ({ page }) => {
+  test(`rodapé com no máximo 3 botões ${tema} (Administrador, DOC-P4 com prazo vencido) em 768px: sem Fechar, Editar no título de Dados`, async ({ page }) => {
     await abrir(page, { tema, largura: 768, documento: 'DOC-P4' });
-    const fechar = page.getByRole('button', { name: 'Fechar', exact: true });
-    await expect(fechar).toBeVisible();
-    const rodape = fechar.locator('..');
+    const detalhes = page.getByRole('dialog', { name: 'Inspeção de andaimes' });
+    const atualizar = detalhes.getByRole('button', { name: 'Atualizar etapa…', exact: true });
+    await expect(atualizar).toBeVisible();
+    const rodape = atualizar.locator('..');
     const botoes = rodape.getByRole('button');
-    await expect(botoes).toHaveCount(6);
-    for (const nome of ['Atualizar etapa…', 'Editar dados', 'Cancelar documento', 'Reprogramar', 'Fechar']) {
+    await expect(botoes).toHaveCount(3);
+    for (const nome of ['Atualizar etapa…', 'Cancelar documento', 'Reprogramar']) {
       await expect(rodape.getByRole('button', { name: nome, exact: true })).toBeVisible();
     }
+    await expect(detalhes.getByRole('button', { name: 'Fechar', exact: true })).toHaveCount(0);
+    await expect(detalhes.getByRole('region', { name: 'Dados' }).getByRole('button', { name: 'Editar dados' })).toHaveText('Editar');
     await semRolagemHorizontal(page);
     // Cada botão cabe inteiro na janela e dentro do rodapé (nenhum cortado nem empurrado para fora).
     const caixaRodape = (await rodape.boundingBox())!;

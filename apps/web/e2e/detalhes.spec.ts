@@ -149,10 +149,19 @@ test('Baixar: nome devolvido pelo servidor, blob sem token na URL; sem Visualiza
   await expect(detalhes(page).getByRole('button', { name: /Visualizar/ })).toHaveCount(0);
 });
 
-test('Reprogramar só com prazo vencido: some no documento em dia', async ({ page }) => {
+test('Reprogramar só com prazo vencido ou vencendo: some no documento em dia (10 dias)', async ({ page }) => {
   await abrir(page, { url: DIRETO });
   await expect(linhaDoTempo(page).locator('ol > li')).toHaveCount(9);
   await expect(detalhes(page).getByRole('button', { name: 'Reprogramar' })).toHaveCount(0);
+});
+
+test('prazo vencendo (vence amanhã, DOC-P7): Reprogramar aparece e só adia, axe', async ({ page }) => {
+  await abrir(page, { url: `/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P7')}` });
+  const dialogo = detalhes(page, 'Relatório de satisfação de clientes');
+  await dialogo.getByRole('button', { name: 'Reprogramar' }).click();
+  const reprog = page.getByRole('dialog', { name: 'Reprogramar prazo' });
+  await expect(reprog.getByLabel(/Novo prazo/)).toHaveAttribute('min', '2026-10-01');
+  await axe(page);
 });
 
 test('reprogramar (prazo vencido) dentro dos detalhes: modal e cartão se atualizam, evento novo no topo da linha do tempo', async ({ page }) => {
@@ -166,7 +175,7 @@ test('reprogramar (prazo vencido) dentro dos detalhes: modal e cartão se atuali
   await expect(reprog).toBeHidden();
   await expect(dialogo.getByText('Prazo: 30/10/2026')).toBeVisible();
   await expect(linhaDoTempo(page).locator('ol > li').first()).toContainText('Prazo de 27/09/2026 para 30/10/2026');
-  // O prazo deixou de estar vencido: o botão some e o foco vai para o ✕ (nunca se perde).
+  // O prazo deixou de estar vencido ou vencendo: o botão some e o foco vai para o ✕ (nunca se perde).
   await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(0);
   await expect(dialogo.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');

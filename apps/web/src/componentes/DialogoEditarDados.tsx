@@ -544,7 +544,7 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
               min={0}
               step={1}
               value={dados.revisao}
-              dica={dica('revisao', 'Corrige o número deste documento; não cria uma revisão nova.')}
+              dica={dica('revisao', 'Corrigir o número de revisão não cria uma nova revisão.')}
               erro={exibidos.revisao}
               onChange={(e) => alterar('revisao', e.target.value)}
             />

@@ -87,6 +87,47 @@
   letter-spacing: var(--ls-caixa-alta);
 }
 
+/* Título da seção com uma ação discreta à direita (ex.: "Editar" em Dados). */
+.linhaTituloSecao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--space-7);
+}
+
+/* "Editar" discreto (atualização da decisão 0015): mesmo padrão do "Detalhes" da linha do tempo. */
+.botaoEditar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--space-7);
+  padding: 0 var(--space-2);
+  margin-right: calc(-1 * var(--space-2));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--cor-link);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.botaoEditar:hover {
+  background: var(--bg-hover);
+}
+
+.botaoEditar:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+@media (pointer: coarse) {
+  .botaoEditar {
+    min-height: var(--alvo-toque);
+  }
+}
+
 .dados {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -161,8 +202,9 @@
 }
 
 /*
- * Rodapé de ações (contrato F5, 6.2): etapas, Cancelar, Reativar, Reprogramar e Fechar, nessa
- * ordem. Quebra em mais de uma linha em telas estreitas, sem rolagem horizontal.
+ * Rodapé de ações (decisão 0015, atualização de 2026-09-29): "Atualizar etapa…", "Cancelar
+ * documento" ou "Reativar" e "Reprogramar", nessa ordem. Quebra em mais de uma linha em telas
+ * estreitas, sem rolagem horizontal.
  */
 .rodape {
   display: flex;

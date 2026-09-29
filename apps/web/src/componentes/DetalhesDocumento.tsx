@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ArrowRightLeft, Ban, CalendarPlus, CircleCheckBig, Pencil, RotateCcw } from 'lucide-react';
+import { ArrowRightLeft, Ban, CalendarPlus, Pencil, RotateCcw } from 'lucide-react';
 import {
   avaliarMetas,
   contarDevolucoes,
@@ -7,7 +7,6 @@ import {
   dataInicioRevisao,
   etiquetaPrazo,
   statusDeReativacao,
-  type AcaoStatus,
   type DetalheDocumento,
   type Documento,
   type EstadoMeta,
@@ -44,17 +43,6 @@ type Estado =
   | { tipo: 'erro'; mensagem: string; semRepeticao: boolean }
   | { tipo: 'pronto'; detalhe: DetalheDocumento };
 
-/**
- * Rodapé enxuto (contrato F5, 13.1): só a ação principal vira botão; as demais transições
- * ficam dentro de "Atualizar etapa…".
- */
-export const MAXIMO_ACOES_RAPIDAS = 1;
-
-/** Ação rápida do rodapé: só a principal (estilo primário); sem principal, nenhuma. */
-export function acoesRapidas(acoes: readonly AcaoStatus[]): AcaoStatus[] {
-  return acoes.filter((a) => a.principal).slice(0, MAXIMO_ACOES_RAPIDAS);
-}
-
 /** Texto do estado da meta (a cor nunca vai sozinha). */
 const ROTULO_ESTADO_META: Record<EstadoMeta, string> = {
   cumprida: 'Cumprida',
@@ -66,8 +54,7 @@ const ROTULO_ESTADO_META: Record<EstadoMeta, string> = {
 /** Diálogo empilhado sobre os detalhes (um por vez); `chave` muda a cada abertura para começar limpo. */
 type Empilhado =
   | { tipo: 'reprogramar'; chave: number; aberto: boolean }
-  | { tipo: 'etapa'; chave: number; aberto: boolean; para: StatusDocumento | null }
-  | { tipo: 'aprovar'; chave: number; aberto: boolean; para: StatusDocumento }
+  | { tipo: 'etapa'; chave: number; aberto: boolean }
   | { tipo: 'cancelar'; chave: number; aberto: boolean }
   | { tipo: 'editar'; chave: number; aberto: boolean }
   | { tipo: 'reativar'; chave: number; aberto: boolean; volta: StatusDocumento };
@@ -89,10 +76,10 @@ interface Props {
 /**
  * Modal de detalhes do documento (contrato F4, 5.2; contrato F5, 6.2): Dados, Metas do ciclo,
  * Arquivos (Baixar) e Linha do tempo única. Faz o próprio GET /documentos/:id, então abre também
- * cancelados e documentos escondidos pela busca. É o ÚNICO lugar das ações (decisão 0015): etapas
- * de status (`acoesDeStatus`), Editar dados (F6), Cancelar, Reativar e Reprogramar (só com prazo
- * vencido); cada botão só aparece quando a regra permite (a API decide de verdade). Os dados em si
- * só mudam pelo diálogo empilhado "Editar dados".
+ * cancelados e documentos escondidos pela busca. É o ÚNICO lugar das ações (decisão 0015). Rodapé
+ * enxuto (atualização de 2026-09-29): "Atualizar etapa…" (todas as etapas), "Cancelar documento"
+ * ou "Reativar" e "Reprogramar"; sem "Fechar" (o ✕ fecha). "Editar" fica no título da seção Dados.
+ * Cada botão só aparece quando a regra permite (a API decide de verdade); sem nenhum, sem rodapé.
  */
 export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento, aoMudarStatus, aoCancelar, aoReativar }: Props) {
   const api = useApi();
@@ -145,7 +132,8 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
   }, [api, documentoId, tentativa, recarga]);
 
   // Depois de uma ação, o botão que abriu o diálogo pode sumir (ex.: Reprogramar com o prazo novo,
-  // "Iniciar revisão" depois da etapa). Foco perdido volta ao ✕, o primeiro controle do modal.
+  // "Atualizar etapa…" depois de aprovar, "Reativar" depois de reativar). Foco perdido volta ao ✕,
+  // o primeiro controle do modal.
   useEffect(() => {
     if (estado.tipo !== 'pronto') return;
     const quadro = requestAnimationFrame(() => {
@@ -161,7 +149,6 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
   const documento = detalhe?.documento ?? null;
   const mostraReprogramar = detalhe !== null && podeReprogramar(eu, detalhe.documento, detalhe.hoje);
   const acoes = documento ? acoesDeStatusPara(eu, documento) : [];
-  const rapidas = acoesRapidas(acoes);
   const mostraCancelar = documento !== null && podeCancelar(eu, documento);
   const mostraReativar = documento !== null && podeReativar(eu, documento);
   const mostraEditar = documento !== null && podeEditar(eu, documento);
@@ -171,23 +158,16 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
     setRecarga((n) => n + 1);
   }
 
-  function abrir(novo: Empilhado['tipo'], extra: { para?: StatusDocumento | null; volta?: StatusDocumento } = {}) {
+  function abrir(novo: Empilhado['tipo'], extra: { volta?: StatusDocumento } = {}) {
     chave.current += 1;
     setAviso('');
     const base = { chave: chave.current, aberto: true };
-    if (novo === 'etapa') setEmpilhado({ ...base, tipo: 'etapa', para: extra.para ?? null });
-    else if (novo === 'aprovar') setEmpilhado({ ...base, tipo: 'aprovar', para: extra.para ?? 'Aprovado' });
-    else if (novo === 'reativar') setEmpilhado({ ...base, tipo: 'reativar', volta: extra.volta ?? 'Recebido' });
+    if (novo === 'reativar') setEmpilhado({ ...base, tipo: 'reativar', volta: extra.volta ?? 'Recebido' });
     else setEmpilhado({ ...base, tipo: novo });
   }
 
   function fecharEmpilhado() {
     setEmpilhado((atual) => (atual ? { ...atual, aberto: false } : atual));
-  }
-
-  function acionar(acao: AcaoStatus) {
-    if (acao.exigeConfirmacao) abrir('aprovar', { para: acao.para });
-    else abrir('etapa', { para: acao.para });
   }
 
   function etapaRegistrada(resultado: ResultadoTransicao) {
@@ -207,6 +187,8 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
     return mensagemDeErro(erro);
   }
 
+  const temAcoes = acoes.length > 0 || mostraCancelar || mostraReativar || mostraReprogramar;
+
   let titulo = 'Detalhes do documento';
   if (documento) titulo = documento.titulo;
   else if (estado.tipo === 'erro' && estado.semRepeticao) titulo = 'Documento não encontrado';
@@ -222,50 +204,34 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
         classeConteudo={detalhe ? estilos.conteudo : undefined}
         aoFechar={aoFechar}
         acoes={
-          <div className={estilos.rodape}>
-            {rapidas.map((a) => (
-              <Botao
-                key={a.para}
-                variante={a.principal ? 'primario' : 'secundario'}
-                icone={a.exigeConfirmacao ? <CircleCheckBig size={16} aria-hidden="true" /> : undefined}
-                onClick={() => acionar(a)}
-              >
-                {a.rotulo}
-              </Botao>
-            ))}
-            {acoes.length > 0 && (
-              <Botao icone={<ArrowRightLeft size={16} aria-hidden="true" />} onClick={() => abrir('etapa')}>
-                Atualizar etapa…
-              </Botao>
-            )}
-            {mostraEditar && (
-              <Botao icone={<Pencil size={16} aria-hidden="true" />} onClick={() => abrir('editar')}>
-                Editar dados
-              </Botao>
-            )}
-            {mostraCancelar && (
-              <Botao variante="perigo" icone={<Ban size={16} aria-hidden="true" />} onClick={() => abrir('cancelar')}>
-                Cancelar documento
-              </Botao>
-            )}
-            {mostraReativar && detalhe && (
-              <Botao
-                variante="primario"
-                icone={<RotateCcw size={16} aria-hidden="true" />}
-                onClick={() => abrir('reativar', { volta: statusDeReativacao(detalhe.eventos) })}
-              >
-                Reativar
-              </Botao>
-            )}
-            {mostraReprogramar && (
-              <Botao icone={<CalendarPlus size={16} aria-hidden="true" />} onClick={() => abrir('reprogramar')}>
-                Reprogramar
-              </Botao>
-            )}
-            <Botao onClick={aoFechar}>
-              Fechar
-            </Botao>
-          </div>
+          temAcoes ? (
+            <div className={estilos.rodape}>
+              {acoes.length > 0 && (
+                <Botao icone={<ArrowRightLeft size={16} aria-hidden="true" />} onClick={() => abrir('etapa')}>
+                  Atualizar etapa…
+                </Botao>
+              )}
+              {mostraCancelar && (
+                <Botao variante="perigo" icone={<Ban size={16} aria-hidden="true" />} onClick={() => abrir('cancelar')}>
+                  Cancelar documento
+                </Botao>
+              )}
+              {mostraReativar && detalhe && (
+                <Botao
+                  variante="primario"
+                  icone={<RotateCcw size={16} aria-hidden="true" />}
+                  onClick={() => abrir('reativar', { volta: statusDeReativacao(detalhe.eventos) })}
+                >
+                  Reativar
+                </Botao>
+              )}
+              {mostraReprogramar && (
+                <Botao icone={<CalendarPlus size={16} aria-hidden="true" />} onClick={() => abrir('reprogramar')}>
+                  Reprogramar
+                </Botao>
+              )}
+            </div>
+          ) : null
         }
       >
         {estado.tipo === 'carregando' ? (
@@ -282,9 +248,17 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
           <div className={estilos.colunas}>
             <div className={estilos.esquerda}>
               <section className={estilos.secao} aria-labelledby={idDados}>
-                <h3 id={idDados} className={estilos.tituloSecao}>
-                  Dados
-                </h3>
+                <div className={estilos.linhaTituloSecao}>
+                  <h3 id={idDados} className={estilos.tituloSecao}>
+                    Dados
+                  </h3>
+                  {mostraEditar && (
+                    <button type="button" className={estilos.botaoEditar} aria-label="Editar dados" onClick={() => abrir('editar')}>
+                      <Pencil size={14} aria-hidden="true" />
+                      Editar
+                    </button>
+                  )}
+                </div>
                 <Dados documento={estado.detalhe.documento} />
               </section>
               <section className={estilos.secao} aria-labelledby={idMetas}>
@@ -348,35 +322,10 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
           documento={detalhe.documento}
           eu={eu}
           aberto={empilhado.aberto}
-          paraInicial={empilhado.para}
           aoFechar={fecharEmpilhado}
           aoRegistrar={etapaRegistrada}
           aoConflito={atualizado}
         />
-      )}
-
-      {empilhado?.tipo === 'aprovar' && detalhe && (
-        <DialogoConfirmar
-          key={empilhado.chave}
-          aberto={empilhado.aberto}
-          titulo="Aprovar documento"
-          rotuloConfirmar="Aprovar"
-          rotuloEnviando="Aprovando…"
-          icone={<CircleCheckBig size={16} aria-hidden="true" />}
-          aoFechar={fecharEmpilhado}
-          textoDoErro={textoDoErro}
-          aoConfirmar={async () => {
-            const { documento: atual } = detalhe;
-            etapaRegistrada(
-              await api.mudarStatus(atual.id, { para: empilhado.para, responsavelId: null, observacao: null, versao: atual.versao }),
-            );
-          }}
-        >
-          <p>
-            Aprovar <strong>{detalhe.documento.titulo}</strong>?
-          </p>
-          <p>A aprovação é final e encerra a tramitação.</p>
-        </DialogoConfirmar>
       )}
 
       {empilhado?.tipo === 'editar' && detalhe && (

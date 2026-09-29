@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, CircleCheckBig } from 'lucide-react';
 import {
   LIMITES_OBSERVACAO,
   acoesDeStatus,
@@ -64,8 +64,6 @@ interface Props {
   documento: Pick<Documento, 'id' | 'titulo' | 'codigo' | 'revisao' | 'status' | 'areaId' | 'versao'>;
   eu: Pessoa;
   aberto: boolean;
-  /** Etapa pré-selecionada (botão de ação rápida do rodapé); vazio = a pessoa escolhe. */
-  paraInicial?: StatusDocumento | null;
   aoFechar: () => void;
   /** 201 (ou 200 de reenvio idêntico): documento e evento STATUS devolvidos pela API. */
   aoRegistrar: (resultado: ResultadoTransicao) => void;
@@ -77,16 +75,17 @@ interface Props {
  * Diálogo "Atualizar etapa" (contrato F5, 6.3), empilhável sobre os detalhes. Etapa (opções de
  * `acoesDeStatus`, a mesma regra da API), Responsável (só quando `exigeResponsavel`; lista de
  * GET /responsaveis com as sugeridas primeiro) e Observação opcional. Validação por script, resumo
- * de erros focável e erros inline. Envia { para, responsavelId, observacao, versao }.
+ * de erros focável e erros inline. Envia { para, responsavelId, observacao, versao }. É o único
+ * caminho das etapas (sem botão de ação principal no rodapé, decisão 0015 atualizada): nada vem
+ * pré-selecionado, e a etapa que exige confirmação (Aprovado) avisa que é final e troca o botão
+ * para "Aprovar".
  * 409 conflito_versao: mostra o status atual, refaz as opções e mantém o diálogo aberto.
  */
-export function DialogoAtualizarEtapa({ documento, eu, aberto, paraInicial, aoFechar, aoRegistrar, aoConflito }: Props) {
+export function DialogoAtualizarEtapa({ documento, eu, aberto, aoFechar, aoRegistrar, aoConflito }: Props) {
   const api = useApi();
   const [base, setBase] = useState(() => ({ status: documento.status, versao: documento.versao }));
   const acoes = useMemo(() => acoesDeStatus(eu, { status: base.status, areaId: documento.areaId }), [eu, base.status, documento.areaId]);
-  const [para, setPara] = useState<StatusDocumento | ''>(() =>
-    paraInicial && acoes.some((a) => a.para === paraInicial) ? paraInicial : '',
-  );
+  const [para, setPara] = useState<StatusDocumento | ''>('');
   const [responsavelId, setResponsavelId] = useState('');
   const [escolheuResponsavel, setEscolheuResponsavel] = useState(false);
   const [observacao, setObservacao] = useState('');
@@ -119,6 +118,7 @@ export function DialogoAtualizarEtapa({ documento, eu, aberto, paraInicial, aoFe
     };
   }, [api, aberto, tentativa]);
 
+  const confirmaFinal = acoes.some((a) => a.para === para && a.exigeConfirmacao);
   const precisaResponsavel = para !== '' && exigeResponsavel(para);
   const grupos = useMemo(
     () =>
@@ -225,9 +225,9 @@ export function DialogoAtualizarEtapa({ documento, eu, aberto, paraInicial, aoFe
             form={ID_FORMULARIO}
             variante="primario"
             carregando={enviando}
-            icone={<ArrowRightLeft size={16} aria-hidden="true" />}
+            icone={confirmaFinal ? <CircleCheckBig size={16} aria-hidden="true" /> : <ArrowRightLeft size={16} aria-hidden="true" />}
           >
-            {enviando ? 'Registrando…' : 'Registrar etapa'}
+            {confirmaFinal ? (enviando ? 'Aprovando…' : 'Aprovar') : enviando ? 'Registrando…' : 'Registrar etapa'}
           </Botao>
         </>
       }
@@ -279,6 +279,7 @@ export function DialogoAtualizarEtapa({ documento, eu, aberto, paraInicial, aoFe
           rotulo="Etapa"
           obrigatorio
           value={para}
+          dica={confirmaFinal ? 'A aprovação é final e encerra a tramitação.' : undefined}
           erro={erros.para}
           onChange={(e) => {
             const valor = e.target.value as StatusDocumento | '';
