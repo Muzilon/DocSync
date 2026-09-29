@@ -143,6 +143,12 @@ export async function buscarAreaAtivaPorNome(db: Executor, nome: string): Promis
   return rows[0] ?? null;
 }
 
+/** Área pelo ID, ativa ou não (o painel filtra áreas inativas que ainda têm documentos). */
+export async function buscarArea(db: Executor, id: string): Promise<Area | null> {
+  const { rows } = await db.query<Area>('SELECT id, nome, ativa FROM areas WHERE id = $1', [id]);
+  return rows[0] ?? null;
+}
+
 export async function buscarAreaAtiva(db: Executor, id: string): Promise<Area | null> {
   const { rows } = await db.query<Area>('SELECT id, nome, ativa FROM areas WHERE id = $1 AND ativa', [id]);
   return rows[0] ?? null;

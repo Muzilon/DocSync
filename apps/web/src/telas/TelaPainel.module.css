@@ -1,0 +1,189 @@
+/* Tela Painel (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
+
+/* Três KPIs (P-13): rótulo, valor e subtítulo coerentes. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-left: var(--borda-destaque) solid var(--cor-marca);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+
+.alerta {
+  border-left-color: var(--cor-alerta-ponto);
+}
+
+.erro {
+  border-left-color: var(--cor-erro-ponto);
+}
+
+.kpiRotulo {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+  color: var(--text-secondary);
+}
+
+.kpiValor {
+  font-size: var(--kpi-valor);
+  font-weight: var(--fw-extrabold);
+  line-height: var(--lh-titulo);
+  color: var(--text-primary);
+}
+
+.kpiApoio {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/* Filtros: busca, área, Cancelados e contagem. */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.busca {
+  flex: 1 1 var(--busca-largura);
+  max-width: calc(var(--busca-largura) * 1.5);
+  min-width: 0;
+}
+
+.area {
+  flex: 0 1 var(--busca-largura);
+  min-width: 0;
+}
+
+/* Solicitante: área fixa em texto, alinhada à altura dos campos (sem controle). */
+.areaFixa {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--campo-altura);
+  min-width: 0;
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.areaFixaRotulo {
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+.botaoCancelados {
+  min-height: var(--campo-altura);
+}
+
+/* Toque: esta classe vem depois da regra de 44px do Botao; repete o alvo mínimo (B10). */
+@media (pointer: coarse) {
+  .botaoCancelados {
+    min-height: max(var(--campo-altura), var(--alvo-toque));
+  }
+}
+
+.encontrados {
+  flex-basis: 100%;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/*
+ * Quadro: 5 colunas com largura mínima (--kanban-coluna-min). Quando não cabem (tablet e telas
+ * estreitas), o quadro rola na horizontal POR DENTRO; a página nunca rola (decisão 0005).
+ */
+.quadro {
+  /* Ancestral posicionado: textos "visualmente-oculto" (absolute) ficam presos ao recorte do quadro. */
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(var(--kanban-coluna-min), 1fr));
+  align-items: start;
+  gap: var(--space-2);
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  overscroll-behavior-x: contain;
+}
+
+.vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-12) var(--space-6);
+  border: var(--borda-fina) dashed var(--border-input);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.vazioTitulo {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+/* Esqueleto do quadro enquanto carrega (aria-busy no quadro). */
+.colunaEsqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: var(--kanban-coluna-min);
+  min-height: var(--kanban-coluna-altura-min);
+  padding: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.rotuloEsqueleto {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+}
+
+.cartaoEsqueleto {
+  display: block;
+  height: var(--esqueleto-cartao);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  animation: pulsar var(--duracao-spinner-reduzido) ease-in-out infinite alternate;
+}
+
+@keyframes pulsar {
+  to {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartaoEsqueleto {
+    animation: none;
+  }
+}
+
+/* Tablet: KPIs continuam em 3 colunas, mais compactos. */
+@media (max-width: 1023px) {
+  .kpis {
+    gap: var(--space-3);
+  }
+
+  .kpi {
+    padding: var(--space-3) var(--space-4);
+  }
+}

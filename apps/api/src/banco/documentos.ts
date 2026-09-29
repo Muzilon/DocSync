@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
+  FASE_DO_STATUS,
+  STATUS_DOCUMENTO,
   ordenarAlfabetico,
+  type CartaoPainel,
   type Documento,
   type EventoHistorico,
   type NovoDocumento,
@@ -38,6 +41,8 @@ interface LinhaDocumento {
   revisao: number;
   data_recebimento: string;
   data_revisao: string | null;
+  reprogramado: boolean;
+  qtd_reprogramacoes: number;
   remetente: string;
   area_id: string;
   area: string;
@@ -57,7 +62,8 @@ interface LinhaDocumento {
 const SELECT_DOCUMENTO = `
   SELECT d.id, d.codigo, d.titulo, d.status, d.tipo_documento_id, t.nome AS tipo_documento,
          d.revisao, to_char(d.data_recebimento, 'YYYY-MM-DD') AS data_recebimento,
-         to_char(d.data_revisao, 'YYYY-MM-DD') AS data_revisao, d.remetente, d.area_id,
+         to_char(d.data_revisao, 'YYYY-MM-DD') AS data_revisao, d.reprogramado, d.qtd_reprogramacoes,
+         d.remetente, d.area_id,
          a.nome AS area, d.disciplina, d.observacao, d.nome_pasta, d.nome_arquivo_principal,
          d.qtd_anexos, d.id_documento_origem, d.versao, d.criado_por, d.criado_em, d.data_modificacao
   FROM documentos d
@@ -77,6 +83,8 @@ function paraDocumento(l: LinhaDocumento): Documento {
     revisao: l.revisao,
     dataRecebimento: l.data_recebimento,
     dataRevisao: l.data_revisao,
+    reprogramado: l.reprogramado,
+    qtdReprogramacoes: l.qtd_reprogramacoes,
     remetente: l.remetente,
     areaId: l.area_id,
     area: l.area,
@@ -96,6 +104,17 @@ function paraDocumento(l: LinhaDocumento): Documento {
 export async function buscarDocumento(db: Executor, id: string): Promise<Documento | null> {
   const { rows } = await db.query<LinhaDocumento>(`${SELECT_DOCUMENTO} WHERE d.id = $1`, [id]);
   return rows[0] ? paraDocumento(rows[0]) : null;
+}
+
+/**
+ * Lê o documento bloqueando a linha até o fim da transação (`FOR UPDATE`), para a
+ * decisão de concorrência/idempotência ser feita sobre o estado atual. Em PGlite
+ * (uma conexão) o bloqueio é inócuo; vale para o PostgreSQL real. Chame dentro de
+ * uma transação.
+ */
+export async function buscarDocumentoParaAtualizar(tx: Executor, id: string): Promise<Documento | null> {
+  await tx.query('SELECT 1 FROM documentos WHERE id = $1 FOR UPDATE', [id]);
+  return buscarDocumento(tx, id);
 }
 
 /** Autor e resumo do pedido de cadastro, para decidir a idempotência. */
@@ -136,6 +155,10 @@ export async function listarRecentes(db: Executor, areaId: string | null, limite
 
 export interface DadosInsercaoDocumento extends NovoDocumento {
   status: StatusDocumento;
+  /** Dia do cadastro no fuso de São Paulo (decisão 0012). */
+  dataRecebimento: string;
+  /** Prazo automático: `dataRecebimento` + 30 dias (decisão 0011). */
+  dataRevisao: string;
   nomePasta: string;
   nomeArquivoPrincipal: string;
   qtdAnexos: number;
@@ -171,6 +194,109 @@ export async function inserirDocumento(db: Executor, d: DadosInsercaoDocumento):
       d.hashCadastro,
     ],
   );
+}
+
+/**
+ * Reprogramação do prazo (decisão 0011): grava o novo prazo, marca como
+ * reprogramado, incrementa a contagem e a versão. Só atualiza se a versão for a
+ * esperada (concorrência otimista); devolve o documento atualizado ou null se a
+ * versão já mudou.
+ */
+export async function aplicarReprogramacao(
+  tx: Executor,
+  id: string,
+  versaoEsperada: number,
+  novoPrazo: string,
+): Promise<Documento | null> {
+  const { affectedRows } = await tx.query(
+    `UPDATE documentos
+        SET data_revisao = $3, reprogramado = true, qtd_reprogramacoes = qtd_reprogramacoes + 1,
+            versao = versao + 1, data_modificacao = now()
+      WHERE id = $1 AND versao = $2`,
+    [id, versaoEsperada, novoPrazo],
+  );
+  if (!affectedRows) return null;
+  return buscarDocumento(tx, id);
+}
+
+// --- Painel (F3) ---------------------------------------------------------------------
+
+interface LinhaCartao {
+  id: string;
+  codigo: string | null;
+  titulo: string;
+  revisao: number;
+  status: StatusDocumento;
+  tipo_documento: string;
+  area_id: string;
+  area: string;
+  remetente: string;
+  data_recebimento: string;
+  data_revisao: string | null;
+  reprogramado: boolean;
+  qtd_reprogramacoes: number;
+  qtd_devolucoes: number;
+  data_aprovacao: string | null;
+  versao: number;
+  criado_em: Date | string;
+  data_modificacao: Date | string;
+}
+
+/** Status cuja fase é 'devolvido', pela tabela explícita (nunca pelo texto). */
+const STATUS_DEVOLVIDO = STATUS_DOCUMENTO.filter((s) => FASE_DO_STATUS[s] === 'devolvido');
+
+/**
+ * Cartões do painel (só campos de exibição; sem observação, arquivos nem `criadoPor`).
+ * `qtd_devolucoes` = eventos STATUS/CANCELAMENTO que entraram na fase 'devolvido'
+ * (vindos de outra fase); `data_aprovacao` = dia (fuso de São Paulo) do evento STATUS
+ * mais recente com status 'Aprovado'. Os dois vêm de eventos, nunca de contador editável.
+ * Ordem: prazo crescente (nulos por último), depois cadastro, depois id.
+ * @param areaId null = todas as áreas; senão, só essa área.
+ * @param incluirCancelados false = só documentos que não estão cancelados.
+ */
+export async function listarCartoes(db: Executor, areaId: string | null, incluirCancelados: boolean): Promise<CartaoPainel[]> {
+  const { rows } = await db.query<LinhaCartao>(
+    `SELECT d.id, d.codigo, d.titulo, d.revisao, d.status, t.nome AS tipo_documento, d.area_id, a.nome AS area,
+            d.remetente, to_char(d.data_recebimento, 'YYYY-MM-DD') AS data_recebimento,
+            to_char(d.data_revisao, 'YYYY-MM-DD') AS data_revisao, d.reprogramado, d.qtd_reprogramacoes,
+            (SELECT count(*)::int FROM eventos_historico e
+              WHERE e.id_documento = d.id
+                AND e.tipo_acao IN ('STATUS', 'CANCELAMENTO')
+                AND e.status = ANY($3::text[])
+                AND (e.status_anterior IS NULL OR NOT (e.status_anterior = ANY($3::text[])))) AS qtd_devolucoes,
+            (SELECT to_char(max(e.data_hora) AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')
+               FROM eventos_historico e
+              WHERE e.id_documento = d.id AND e.tipo_acao = 'STATUS' AND e.status = 'Aprovado') AS data_aprovacao,
+            d.versao, d.criado_em, d.data_modificacao
+       FROM documentos d
+       JOIN tipos_documento t ON t.id = d.tipo_documento_id
+       JOIN areas a ON a.id = d.area_id
+      WHERE ($1::text IS NULL OR d.area_id = $1)
+        AND ($2::boolean OR d.status <> 'Cancelado')
+      ORDER BY d.data_revisao ASC NULLS LAST, d.criado_em ASC, d.id`,
+    [areaId, incluirCancelados, STATUS_DEVOLVIDO],
+  );
+  return rows.map((l) => ({
+    id: l.id,
+    codigo: l.codigo,
+    titulo: l.titulo,
+    revisao: l.revisao,
+    status: l.status,
+    fase: FASE_DO_STATUS[l.status],
+    tipoDocumento: l.tipo_documento,
+    areaId: l.area_id,
+    area: l.area,
+    remetente: l.remetente,
+    dataRecebimento: l.data_recebimento,
+    dataRevisao: l.data_revisao,
+    reprogramado: l.reprogramado,
+    qtdReprogramacoes: l.qtd_reprogramacoes,
+    qtdDevolucoes: l.qtd_devolucoes,
+    dataAprovacao: l.data_aprovacao,
+    versao: l.versao,
+    criadoEm: iso(l.criado_em),
+    dataModificacao: iso(l.data_modificacao),
+  }));
 }
 
 // --- Arquivos -----------------------------------------------------------------------
@@ -256,28 +382,29 @@ export async function registrarEvento(db: Executor, e: NovoEvento): Promise<stri
   return id;
 }
 
-export async function listarEventos(db: Executor, idDocumento: string): Promise<EventoHistorico[]> {
-  const { rows } = await db.query<{
-    id: string;
-    id_documento: string;
-    codigo: string | null;
-    tipo_acao: TipoAcaoHistorico;
-    status: StatusDocumento;
-    status_anterior: StatusDocumento | null;
-    data_hora: Date | string;
-    destino: string | null;
-    responsavel: string | null;
-    autor_id: string;
-    autor_nome: string;
-    detalhes: EventoHistorico['detalhes'] | string;
-    observacao: string | null;
-  }>(
-    `SELECT id, id_documento, codigo, tipo_acao, status, status_anterior, data_hora, destino,
-            responsavel, autor_id, autor_nome, detalhes, observacao
-     FROM eventos_historico WHERE id_documento = $1 ORDER BY ordem`,
-    [idDocumento],
-  );
-  return rows.map((l) => ({
+interface LinhaEvento {
+  id: string;
+  id_documento: string;
+  codigo: string | null;
+  tipo_acao: TipoAcaoHistorico;
+  status: StatusDocumento;
+  status_anterior: StatusDocumento | null;
+  data_hora: Date | string;
+  destino: string | null;
+  responsavel: string | null;
+  autor_id: string;
+  autor_nome: string;
+  detalhes: EventoHistorico['detalhes'] | string;
+  observacao: string | null;
+}
+
+const SELECT_EVENTO = `
+  SELECT id, id_documento, codigo, tipo_acao, status, status_anterior, data_hora, destino,
+         responsavel, autor_id, autor_nome, detalhes, observacao
+  FROM eventos_historico`;
+
+function paraEvento(l: LinhaEvento): EventoHistorico {
+  return {
     id: l.id,
     idDocumento: l.id_documento,
     codigo: l.codigo,
@@ -291,5 +418,24 @@ export async function listarEventos(db: Executor, idDocumento: string): Promise<
     autorNome: l.autor_nome,
     detalhes: typeof l.detalhes === 'string' ? JSON.parse(l.detalhes) : l.detalhes,
     observacao: l.observacao,
-  }));
+  };
+}
+
+export async function listarEventos(db: Executor, idDocumento: string): Promise<EventoHistorico[]> {
+  const { rows } = await db.query<LinhaEvento>(`${SELECT_EVENTO} WHERE id_documento = $1 ORDER BY ordem`, [idDocumento]);
+  return rows.map(paraEvento);
+}
+
+export async function buscarEvento(db: Executor, id: string): Promise<EventoHistorico | null> {
+  const { rows } = await db.query<LinhaEvento>(`${SELECT_EVENTO} WHERE id = $1`, [id]);
+  return rows[0] ? paraEvento(rows[0]) : null;
+}
+
+/** Último evento gravado do documento (pela ordem de gravação), ou null. */
+export async function ultimoEvento(db: Executor, idDocumento: string): Promise<EventoHistorico | null> {
+  const { rows } = await db.query<LinhaEvento>(
+    `${SELECT_EVENTO} WHERE id_documento = $1 ORDER BY ordem DESC LIMIT 1`,
+    [idDocumento],
+  );
+  return rows[0] ? paraEvento(rows[0]) : null;
 }

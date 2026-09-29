@@ -89,8 +89,11 @@ export interface Documento {
   tipoDocumento: string;
   revisao: number;
   dataRecebimento: string;
-  /** Prazo da tramitação. */
+  /** Prazo da tramitação: cadastro + 30 dias (decisão 0011), reprogramável. */
   dataRevisao: string | null;
+  /** Prazo já reprogramado ao menos uma vez (etiqueta "Reprogramado", decisão 0011). */
+  reprogramado: boolean;
+  qtdReprogramacoes: number;
   remetente: string;
   areaId: string;
   /** Nome da área (para exibir). */
@@ -111,7 +114,8 @@ export interface Documento {
   dataModificacao: string;
 }
 
-export type TipoAcaoHistorico = 'CRIACAO' | 'STATUS' | 'EDICAO' | 'ANEXO' | 'CANCELAMENTO';
+/** 'REPROGRAMACAO' = mudança do prazo com justificativa (decisão 0011, F3). */
+export type TipoAcaoHistorico = 'CRIACAO' | 'STATUS' | 'EDICAO' | 'ANEXO' | 'CANCELAMENTO' | 'REPROGRAMACAO';
 
 /** Evento imutável da trilha de auditoria da tramitação. */
 export interface EventoHistorico {
@@ -142,7 +146,9 @@ export interface DetalheDocumento {
 
 /**
  * Parte 'dados' de POST /documentos (multipart). Esquema fechado: campo
- * desconhecido é recusado, inclusive `status` (P-03: sempre 'Recebido').
+ * desconhecido é recusado, inclusive `status` (P-03: sempre 'Recebido'),
+ * `dataRecebimento` (decisão 0012) e `dataRevisao` (decisão 0011): as duas datas
+ * são gravadas pelo servidor (dia do cadastro no fuso de São Paulo e esse dia + 30).
  * O `id` 'DOC-uuid' é gerado pelo cliente (crypto.randomUUID) para permitir
  * reenvio idempotente.
  */
@@ -152,8 +158,6 @@ export interface NovoDocumento {
   titulo: string;
   tipoDocumentoId: string;
   revisao: number;
-  dataRecebimento: string;
-  dataRevisao: string | null;
   remetente: string;
   areaId: string;
   disciplina: string | null;
@@ -165,6 +169,105 @@ export function novoIdDocumento(): string {
   // Web Crypto existe no navegador e no Node 24; o pacote não depende dos tipos de nenhum dos dois.
   const cripto = (globalThis as unknown as { crypto: { randomUUID(): string } }).crypto;
   return `DOC-${cripto.randomUUID()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Datas só-dia, prazo automático (decisão 0011) e reprogramação (decisão 0012)
+// ---------------------------------------------------------------------------
+
+const DATA_SO_DIA = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Data 'AAAA-MM-DD' que existe no calendário (recusa '2026-02-30'). */
+export function ehDataSoDia(valor: unknown): valor is string {
+  if (typeof valor !== 'string') return false;
+  const partes = DATA_SO_DIA.exec(valor);
+  if (!partes) return false;
+  const [ano, mes, dia] = [Number(partes[1]), Number(partes[2]), Number(partes[3])];
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  return ano >= 1900 && data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
+}
+
+/** Prazo padrão de tramitação: dias corridos a partir do dia do cadastro (decisão 0011). */
+export const DIAS_PRAZO_PADRAO = 30;
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+function paraUtc(data: string): number {
+  const [ano, mes, dia] = data.split('-').map(Number) as [number, number, number];
+  return Date.UTC(ano, mes - 1, dia);
+}
+
+/** Soma dias corridos a uma data só-dia 'AAAA-MM-DD' (sem fuso; aritmética em UTC). */
+export function somarDias(data: string, dias: number): string {
+  return new Date(paraUtc(data) + dias * MS_POR_DIA).toISOString().slice(0, 10);
+}
+
+/** Diferença `fim - inicio` em dias corridos entre duas datas só-dia. */
+export function diferencaEmDias(inicio: string, fim: string): number {
+  return Math.round((paraUtc(fim) - paraUtc(inicio)) / MS_POR_DIA);
+}
+
+/** Prazo automático de um cadastro feito no dia `dataCadastro` ('AAAA-MM-DD'). */
+export function calcularPrazoAutomatico(dataCadastro: string): string {
+  return somarDias(dataCadastro, DIAS_PRAZO_PADRAO);
+}
+
+/** Corpo de POST /documentos/:id/reprogramacoes. Campo desconhecido é rejeitado. */
+export interface NovaReprogramacao {
+  /** 'AAAA-MM-DD'. */
+  novoPrazo: string;
+  justificativa: string;
+  /** Versão do documento que a pessoa está vendo (concorrência otimista, decisão 0002). */
+  versao: number;
+}
+
+export const LIMITES_JUSTIFICATIVA = { minimo: 10, maximo: 500 } as const;
+
+/** Resposta 200/201 da reprogramação. */
+export interface ResultadoReprogramacao {
+  documento: Documento;
+  evento: EventoHistorico;
+}
+
+/**
+ * Justificativa da reprogramação: obrigatória; depois de `trim`, entre 10 e 500
+ * caracteres. @returns mensagem pt-BR ou null se aceita.
+ */
+export function validarJustificativa(texto: unknown): string | null {
+  if (typeof texto !== 'string' || texto.trim() === '') return 'Informe a justificativa da reprogramação.';
+  const tamanho = texto.trim().length;
+  if (tamanho < LIMITES_JUSTIFICATIVA.minimo) {
+    return `A justificativa precisa ter ao menos ${LIMITES_JUSTIFICATIVA.minimo} caracteres.`;
+  }
+  if (tamanho > LIMITES_JUSTIFICATIVA.maximo) {
+    return `A justificativa pode ter até ${LIMITES_JUSTIFICATIVA.maximo} caracteres.`;
+  }
+  return null;
+}
+
+/**
+ * Novo prazo da reprogramação (decisão 0012: só adia): data só-dia válida,
+ * posterior ao prazo atual (se houver) e não anterior a hoje.
+ * @returns mensagem pt-BR ou null se aceito.
+ */
+export function validarNovoPrazo(novoPrazo: unknown, prazoAtual: string | null, hoje: string): string | null {
+  if (novoPrazo === undefined || novoPrazo === null || novoPrazo === '') return 'Informe o novo prazo.';
+  if (!ehDataSoDia(novoPrazo)) return 'Novo prazo inválido.';
+  if (novoPrazo < hoje) return 'O novo prazo não pode ser anterior a hoje.';
+  if (prazoAtual !== null && novoPrazo <= prazoAtual) {
+    return 'O novo prazo precisa ser posterior ao prazo atual (a reprogramação só adia).';
+  }
+  return null;
+}
+
+/** Lê prazo anterior, prazo novo e justificativa de um evento REPROGRAMACAO; null para outros tipos. */
+export function lerReprogramacao(
+  evento: EventoHistorico,
+): { prazoAnterior: string | null; prazoNovo: string; justificativa: string } | null {
+  if (evento.tipoAcao !== 'REPROGRAMACAO') return null;
+  const detalhe = evento.detalhes.find((d) => d.campo === 'dataRevisao');
+  if (!detalhe || detalhe.depois === null) return null;
+  return { prazoAnterior: detalhe.antes, prazoNovo: detalhe.depois, justificativa: evento.observacao ?? '' };
 }
 
 // ---------------------------------------------------------------------------

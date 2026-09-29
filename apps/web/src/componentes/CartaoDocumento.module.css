@@ -1,0 +1,135 @@
+/* Cartão do Painel Kanban (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
+.item {
+  list-style: none;
+}
+
+.cartao {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-left: var(--borda-destaque) solid var(--border-forte);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+
+.cartao:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.cartao:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+/* Marcador lateral com a cor da fase (decorativo: o badge diz o status em texto). */
+.recebido {
+  border-left-color: var(--status-recebido-borda);
+}
+.revisao {
+  border-left-color: var(--status-revisao-borda);
+}
+.devolvido {
+  border-left-color: var(--status-devolvido-borda);
+}
+.aprovacao {
+  border-left-color: var(--status-aprovacao-borda);
+}
+.aprovado {
+  border-left-color: var(--status-aprovado-borda);
+}
+.cancelado {
+  border-left-color: var(--status-cancelado-borda);
+}
+
+.topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.codigo {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.semCodigo {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.revisao {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.titulo {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-titulo);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.linhaStatus {
+  display: flex;
+}
+
+.linhaStatus > span {
+  white-space: normal;
+}
+
+.data {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* Etiqueta neutra de área: #1E293B sobre #F1F5F9 (claro), #F1F5F9 sobre #193942 (escuro). */
+.area {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-hover);
+  color: var(--text-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-base);
+  overflow-wrap: anywhere;
+}
+
+.devolucoes {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--status-devolvido-bg);
+  color: var(--status-devolvido-cor);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.acoes {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-1);
+  border-top: var(--borda-fina) solid var(--border-soft);
+}

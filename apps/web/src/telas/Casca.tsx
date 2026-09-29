@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router';
-import { FilePlus2, FileText, House, LogOut, Users } from 'lucide-react';
+import { FilePlus2, FileText, House, LayoutDashboard, LogOut, Users } from 'lucide-react';
 import { pode } from '@docsync/compartilhado';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import { podeCadastrarDocumento } from '../permissoes.ts';
@@ -40,6 +40,13 @@ export function Casca() {
               <House size={18} aria-hidden="true" />
               <span className={estilos.textoOcultavel}>Início</span>
             </NavLink>
+            {/* F3: o Painel só aparece agora, porque só agora o destino existe. */}
+            {pode(eu, 'verDocumentos') && (
+              <NavLink to="/painel" className={classeLink} title="Painel">
+                <LayoutDashboard size={18} aria-hidden="true" />
+                <span className={estilos.textoOcultavel}>Painel</span>
+              </NavLink>
+            )}
             {/* Grupo só aparece quando tem ao menos um destino (decisão 0009, item 4). */}
             {podeCadastrarDocumento(eu) && (
               <div className={estilos.grupo} role="group" aria-labelledby="grupo-tramitacao">

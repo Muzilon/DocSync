@@ -3,6 +3,8 @@ import { test } from '@playwright/test';
 // Capturas para validação visual; só rodam com CAPTURAS=<pasta> (fora do npm run test:e2e normal).
 const pasta = process.env.CAPTURAS;
 test.skip(!pasta, 'defina CAPTURAS para gerar capturas');
+// Campos de data no formato brasileiro, como no navegador das pessoas usuárias.
+test.use({ locale: 'pt-BR' });
 
 const casos = [
   ['login-claro', '/login', 'claro'],
@@ -13,6 +15,10 @@ const casos = [
   ['casca-pessoas-768-claro', '/e2e/vitrine/index.html?rota=%2Fpessoas', 'claro', 768],
   ['novo-documento-claro', '/e2e/vitrine/index.html?rota=%2Fdocumentos%2Fnovo', 'claro'],
   ['novo-documento-escuro', '/e2e/vitrine/index.html?rota=%2Fdocumentos%2Fnovo', 'escuro'],
+  ['painel-1440-claro', '/e2e/vitrine/index.html?rota=%2Fpainel', 'claro', 1440],
+  ['painel-1440-escuro', '/e2e/vitrine/index.html?rota=%2Fpainel', 'escuro', 1440],
+  ['painel-768-claro', '/e2e/vitrine/index.html?rota=%2Fpainel', 'claro', 768],
+  ['painel-768-escuro', '/e2e/vitrine/index.html?rota=%2Fpainel', 'escuro', 768],
 ] as const;
 
 for (const [nome, rota, tema, largura] of casos) {
@@ -33,3 +39,25 @@ test('captura novo-documento-erros-claro', async ({ page }) => {
   await page.getByRole('alert').first().waitFor();
   await page.screenshot({ path: `${pasta}/novo-documento-erros-claro.png`, fullPage: true });
 });
+
+for (const tema of ['claro', 'escuro'] as const) {
+  test(`captura painel-reprogramar-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto('/e2e/vitrine/index.html?rota=%2Fpainel');
+    await page.getByRole('button', { name: 'Reprogramar prazo de Inspeção de andaimes' }).click();
+    await page.getByRole('dialog', { name: 'Reprogramar prazo' }).waitFor();
+    await page.waitForTimeout(500); // fim da animação de entrada do diálogo
+    await page.screenshot({ path: `${pasta}/painel-reprogramar-${tema}.png` });
+  });
+
+  test(`captura painel-cancelados-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto('/e2e/vitrine/index.html?rota=%2Fpainel');
+    await page.getByRole('button', { name: 'Cancelados (2)' }).click();
+    await page.getByRole('dialog').getByRole('article').first().waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/painel-cancelados-${tema}.png` });
+  });
+}

@@ -30,8 +30,10 @@ export async function abrirBanco(pasta: string | 'memoria'): Promise<Banco> {
  * Aplica, em ordem, cada arquivo `NNNN_nome.sql` de apps/api/migracoes ainda não
  * registrado na tabela `migracoes`. Cada migração roda numa transação própria.
  * Migração aplicada nunca é editada: mudança nova = arquivo novo.
+ * @param ateVersao só nos testes: para depois desta versão (ex.: '0002'), para
+ *   preparar dados antes de aplicar a seguinte.
  */
-export async function aplicarMigracoes(banco: Banco): Promise<string[]> {
+export async function aplicarMigracoes(banco: Banco, ateVersao?: string): Promise<string[]> {
   await banco.exec(`
     CREATE TABLE IF NOT EXISTS migracoes (
       versao      text PRIMARY KEY,
@@ -46,6 +48,7 @@ export async function aplicarMigracoes(banco: Banco): Promise<string[]> {
   const novas: string[] = [];
   for (const arquivo of arquivos) {
     const versao = NOME_MIGRACAO.exec(arquivo)![1]!;
+    if (ateVersao !== undefined && versao > ateVersao) break;
     if (aplicadas.has(versao)) continue;
     const sql = await readFile(new URL(arquivo, PASTA_MIGRACOES), 'utf8');
     await banco.transaction(async (tx) => {

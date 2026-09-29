@@ -6,6 +6,7 @@ import { Casca } from './telas/Casca.tsx';
 import { TelaInicio } from './telas/TelaInicio.tsx';
 import { TelaLogin } from './telas/TelaLogin.tsx';
 import { TelaNovoDocumento } from './telas/TelaNovoDocumento.tsx';
+import { TelaPainel } from './telas/TelaPainel.tsx';
 import { podeCadastrarDocumento } from './permissoes.ts';
 import { TelaPessoas } from './telas/TelaPessoas.tsx';
 import pagina from './telas/Pagina.module.css';
@@ -20,6 +21,12 @@ function SoAdministrador({ children }: { children: ReactNode }) {
 function SoQuemCadastra({ children }: { children: ReactNode }) {
   const { eu } = useSessao();
   return podeCadastrarDocumento(eu) ? children : <Navigate to="/" replace />;
+}
+
+/** Quem não vê documentos (sem acesso liberado) volta ao Início. */
+function SoQuemVeDocumentos({ children }: { children: ReactNode }) {
+  const { eu } = useSessao();
+  return pode(eu, 'verDocumentos') ? children : <Navigate to="/" replace />;
 }
 
 function NaoEncontrada() {
@@ -42,6 +49,14 @@ export function App() {
       <Route element={<RotaProtegida />}>
         <Route element={<Casca />}>
           <Route index element={<TelaInicio />} />
+          <Route
+            path="painel"
+            element={
+              <SoQuemVeDocumentos>
+                <TelaPainel />
+              </SoQuemVeDocumentos>
+            }
+          />
           <Route
             path="pessoas"
             element={

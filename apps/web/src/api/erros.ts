@@ -1,3 +1,5 @@
+import type { Documento } from '@docsync/compartilhado';
+
 /** Erro devolvido pela API (ou falha de rede), com o código do contrato e mensagem em pt-BR. */
 export type CodigoErro =
   | 'nao_autenticado'
@@ -9,6 +11,9 @@ export type CodigoErro =
   | 'ultimo_administrador'
   | 'codigo_revisao_existente'
   | 'id_existente'
+  | 'nao_encontrado'
+  | 'conflito_versao'
+  | 'acao_nao_permitida'
   | 'sem_conexao'
   | 'desconhecido';
 
@@ -22,6 +27,9 @@ const MENSAGENS: Record<CodigoErro, string> = {
   ultimo_administrador: 'Não é possível remover o último administrador ativo.',
   codigo_revisao_existente: 'Já existe um documento com este código nesta revisão.',
   id_existente: 'Este registro colidiu com outro já gravado. Tente novamente.',
+  nao_encontrado: 'Documento não encontrado. Ele pode ter sido removido ou você não tem acesso a ele.',
+  conflito_versao: 'Alguém alterou este documento enquanto você o via. Confira o prazo atual e tente de novo.',
+  acao_nao_permitida: 'Este documento não aceita esta ação no status atual (aprovado ou cancelado).',
   sem_conexao: 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
   desconhecido: 'Ocorreu um erro inesperado. Tente novamente.',
 };
@@ -30,13 +38,16 @@ export class ErroApi extends Error {
   readonly status: number;
   readonly codigo: CodigoErro;
   readonly campos: Record<string, string>;
+  /** Em 409 `conflito_versao`: o estado atual do documento, devolvido pela API. */
+  readonly documento: Documento | null;
 
-  constructor(status: number, codigo: CodigoErro, campos: Record<string, string> = {}) {
+  constructor(status: number, codigo: CodigoErro, campos: Record<string, string> = {}, documento: Documento | null = null) {
     super(MENSAGENS[codigo]);
     this.name = 'ErroApi';
     this.status = status;
     this.codigo = codigo;
     this.campos = campos;
+    this.documento = documento;
   }
 }
 

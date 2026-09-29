@@ -1,0 +1,102 @@
+/* Coluna do Painel Kanban (contrato F3, seção 5). Largura mínima em --kanban-coluna-min. */
+.coluna {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: var(--kanban-coluna-min);
+  min-height: var(--kanban-coluna-altura-min);
+  padding: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-top: var(--marcador-largura) solid var(--border-forte);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.recebido {
+  border-top-color: var(--status-recebido-borda);
+}
+.revisao {
+  border-top-color: var(--status-revisao-borda);
+}
+.devolvido {
+  border-top-color: var(--status-devolvido-borda);
+}
+.aprovacao {
+  border-top-color: var(--status-aprovacao-borda);
+}
+.aprovado {
+  border-top-color: var(--status-aprovado-borda);
+}
+.cancelado {
+  border-top-color: var(--status-cancelado-borda);
+}
+
+.titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+
+.rotulo {
+  flex: 1;
+  min-width: 0;
+}
+
+.ponto {
+  flex-shrink: 0;
+  width: var(--ponto);
+  height: var(--ponto);
+  border-radius: var(--radius-circle);
+  background: var(--border-forte);
+}
+
+.recebido .ponto {
+  background: var(--status-recebido-borda);
+}
+.revisao .ponto {
+  background: var(--status-revisao-borda);
+}
+.devolvido .ponto {
+  background: var(--status-devolvido-borda);
+}
+.aprovacao .ponto {
+  background: var(--status-aprovacao-borda);
+}
+.aprovado .ponto {
+  background: var(--status-aprovado-borda);
+}
+
+.contagem {
+  flex-shrink: 0;
+  min-width: var(--icone-md);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  border: var(--borda-fina) solid var(--border-subtle);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+}
+
+/* --text-secondary (e não --text-muted) sobre --bg-subtle (decisão 0009). */
+.vazio {
+  padding: var(--space-6) var(--space-2);
+  border: var(--borda-fina) dashed var(--border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  text-align: center;
+}
