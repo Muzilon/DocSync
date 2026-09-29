@@ -188,10 +188,16 @@
   }
 }
 
-/* Tablet: KPIs em 2 colunas, mais compactos. */
-@media (max-width: 1023px) {
+/* Abaixo de 1200px (área útil menor que ~900px com a barra lateral): KPIs em 2 colunas. */
+@media (max-width: 1199px) {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Tablet: KPIs mais compactos. */
+@media (max-width: 1023px) {
+  .kpis {
     gap: var(--space-3);
   }
 

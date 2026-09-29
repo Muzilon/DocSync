@@ -44,8 +44,9 @@ for (const tema of ['claro', 'escuro'] as const) {
   test(`captura painel-reprogramar-${tema}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
-    await page.goto('/e2e/vitrine/index.html?rota=%2Fpainel');
-    await page.getByRole('button', { name: 'Reprogramar prazo de Inspeção de andaimes' }).click();
+    // F5 (decisão 0015): Reprogramar fica nos detalhes e só com prazo vencido.
+    await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P4')}`);
+    await page.getByRole('dialog', { name: 'Inspeção de andaimes' }).getByRole('button', { name: 'Reprogramar' }).click();
     await page.getByRole('dialog', { name: 'Reprogramar prazo' }).waitFor();
     await page.waitForTimeout(500); // fim da animação de entrada do diálogo
     await page.screenshot({ path: `${pasta}/painel-reprogramar-${tema}.png` });
@@ -89,5 +90,59 @@ for (const tema of ['claro', 'escuro'] as const) {
     await page.getByRole('region', { name: 'Linha do tempo' }).locator('ol > li').first().waitFor();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${pasta}/detalhes-sobre-cancelados-${tema}.png` });
+  });
+}
+
+// F5: cartão no estilo do Planner (decisão 0015) e detalhes com o rodapé de ações.
+for (const tema of ['claro', 'escuro'] as const) {
+  for (const largura of [1440, 1024, 768]) {
+    test(`captura painel-planner-${largura}-${tema}`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+      await page.goto('/e2e/vitrine/index.html?rota=%2Fpainel');
+      await page.getByRole('region', { name: 'Quadro de tramitação' }).getByRole('article').first().waitFor();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${pasta}/painel-planner-${largura}-${tema}.png` });
+    });
+  }
+
+  test(`captura detalhes-acoes-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P4')}`);
+    await page.getByRole('region', { name: 'Metas do ciclo' }).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/detalhes-acoes-${tema}.png` });
+  });
+
+  test(`captura detalhes-acoes-768-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P1')}`);
+    await page.getByRole('region', { name: 'Metas do ciclo' }).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/detalhes-acoes-768-${tema}.png` });
+  });
+
+  test(`captura detalhes-acoes-etapa-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P1')}`);
+    await page.getByRole('dialog', { name: 'Procedimento de auditoria interna' }).getByRole('button', { name: 'Iniciar revisão' }).click();
+    await page.getByRole('dialog', { name: 'Atualizar etapa' }).getByRole('combobox', { name: /Responsável/ }).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/detalhes-acoes-etapa-${tema}.png` });
+  });
+
+  test(`captura detalhes-acoes-desfazer-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P7')}`);
+    await page.getByRole('dialog', { name: 'Relatório de satisfação de clientes' }).getByRole('button', { name: 'Cancelar' }).click();
+    await page.getByLabel(/Motivo do cancelamento/).fill('Pesquisa substituída pelo novo formulário.');
+    await page.getByRole('button', { name: 'Sim, cancelar' }).click();
+    await page.getByRole('button', { name: 'Desfazer' }).waitFor();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${pasta}/detalhes-acoes-desfazer-${tema}.png` });
   });
 }

@@ -244,7 +244,8 @@ test.describe('toque emulado em 768px', () => {
     const noModal = await medir('dialog[open] button');
     expect(noModal.some((a) => a.nome.startsWith('Baixar'))).toBe(true);
     expect(noModal.some((a) => a.nome.startsWith('Detalhes'))).toBe(true);
-    for (const { nome, altura } of noModal) expect(altura, `altura de "${nome}"`).toBeGreaterThanOrEqual(44);
+    // Arredonda: o Chromium mede 43,9999 px em alguns botões de 44 px (subpixel).
+    for (const { nome, altura } of noModal) expect(Math.round(altura), `altura de "${nome}"`).toBeGreaterThanOrEqual(44);
     await page.keyboard.press('Escape');
     const titulos = await medir('main [data-cartao-id]');
     expect(titulos.length).toBeGreaterThan(0);

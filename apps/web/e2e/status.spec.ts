@@ -19,7 +19,9 @@ async function abrir(page: Page, { tema = 'claro', largura = 1440, rota = '/pain
 
 async function axe(page: Page) {
   // Espera o fim da animação de entrada dos diálogos (a opacidade parcial falsearia o contraste).
-  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
   const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(resultado.violations).toEqual([]);
 }
