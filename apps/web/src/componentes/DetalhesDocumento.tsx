@@ -43,13 +43,15 @@ type Estado =
   | { tipo: 'erro'; mensagem: string; semRepeticao: boolean }
   | { tipo: 'pronto'; detalhe: DetalheDocumento };
 
-/** Quantas ações de status aparecem como botão no rodapé; as demais ficam em "Atualizar etapa…" (contrato F5, 6.2). */
-export const MAXIMO_ACOES_RAPIDAS = 3;
+/**
+ * Rodapé enxuto (contrato F5, 13.1): só a ação principal vira botão; as demais transições
+ * ficam dentro de "Atualizar etapa…".
+ */
+export const MAXIMO_ACOES_RAPIDAS = 1;
 
-/** Ações rápidas do rodapé: a principal primeiro (estilo primário), depois as demais na ordem de `acoesDeStatus`. */
+/** Ação rápida do rodapé: só a principal (estilo primário); sem principal, nenhuma. */
 export function acoesRapidas(acoes: readonly AcaoStatus[]): AcaoStatus[] {
-  const principal = acoes.filter((a) => a.principal);
-  return [...principal, ...acoes.filter((a) => !a.principal)].slice(0, MAXIMO_ACOES_RAPIDAS);
+  return acoes.filter((a) => a.principal).slice(0, MAXIMO_ACOES_RAPIDAS);
 }
 
 /** Texto do estado da meta (a cor nunca vai sozinha). */
@@ -234,7 +236,7 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento,
             )}
             {mostraCancelar && (
               <Botao variante="perigo" icone={<Ban size={16} aria-hidden="true" />} onClick={() => abrir('cancelar')}>
-                Cancelar
+                Cancelar documento
               </Botao>
             )}
             {mostraReativar && detalhe && (

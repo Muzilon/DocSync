@@ -138,7 +138,7 @@ for (const tema of ['claro', 'escuro'] as const) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
     await page.goto(`/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P7')}`);
-    await page.getByRole('dialog', { name: 'Relatório de satisfação de clientes' }).getByRole('button', { name: 'Cancelar' }).click();
+    await page.getByRole('dialog', { name: 'Relatório de satisfação de clientes' }).getByRole('button', { name: 'Cancelar documento' }).click();
     await page.getByLabel(/Motivo do cancelamento/).fill('Pesquisa substituída pelo novo formulário.');
     await page.getByRole('button', { name: 'Sim, cancelar' }).click();
     await page.getByRole('button', { name: 'Desfazer' }).waitFor();

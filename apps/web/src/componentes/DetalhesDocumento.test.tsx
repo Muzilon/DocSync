@@ -392,10 +392,11 @@ describe('DetalhesDocumento', () => {
 });
 
 describe('funções puras do rodapé (F5)', () => {
-  it('acoesRapidas: a principal primeiro, no máximo 3', () => {
+  it('acoesRapidas: só a principal (rodapé enxuto, contrato F5 13.1)', () => {
     const acao = (para: StatusDocumento, principal = false) => ({ para, rotulo: para, principal, exigeResponsavel: true, exigeConfirmacao: false });
     const lista = [acao('Em revisão junto à área'), acao('Devolvido para correção'), acao('Em revisão do solicitante'), acao('Para aprovação da área solicitante', true)];
-    expect(acoesRapidas(lista).map((a) => a.para)).toEqual(['Para aprovação da área solicitante', 'Em revisão junto à área', 'Devolvido para correção']);
+    expect(acoesRapidas(lista).map((a) => a.para)).toEqual(['Para aprovação da área solicitante']);
+    expect(acoesRapidas(lista.filter((a) => !a.principal))).toEqual([]);
     expect(acoesRapidas([])).toEqual([]);
   });
 
@@ -406,10 +407,10 @@ describe('funções puras do rodapé (F5)', () => {
 });
 
 describe('DetalhesDocumento: ações de status (F5)', () => {
-  it('Qualidade em Recebido: principal "Iniciar revisão" primeiro, mais 2 rápidas, Atualizar etapa…, Cancelar e Fechar', async () => {
+  it('Qualidade em Recebido: só a principal "Iniciar revisão", Atualizar etapa…, Cancelar documento e Fechar', async () => {
     renderizar(apiSimulada({ documento: comStatus('Recebido', { responsavelId: null, responsavel: null }) }));
     const dialogo = await modal();
-    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Revisar junto à área', 'Devolver à área', 'Atualizar etapa…', 'Cancelar', 'Fechar']);
+    expect(rodape(dialogo)).toEqual(['Iniciar revisão', 'Atualizar etapa…', 'Cancelar documento', 'Fechar']);
     expect(within(dialogo).getByRole('button', { name: 'Iniciar revisão' })).toHaveClass('primario');
     // Nenhum botão desabilitado "de enfeite".
     for (const botao of within(dialogo).getAllByRole('button')) expect(botao).toBeEnabled();
@@ -550,7 +551,7 @@ describe('DetalhesDocumento: ações de status (F5)', () => {
   it('Cancelar exige motivo de 10 a 500 caracteres e entrega o resultado ao Painel', async () => {
     const api = apiSimulada();
     const { usuario, aoCancelar } = renderizar(api);
-    await usuario.click(within(await modal()).getByRole('button', { name: 'Cancelar' }));
+    await usuario.click(within(await modal()).getByRole('button', { name: 'Cancelar documento' }));
     const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
     const motivo = within(cancelar).getByLabelText(/Motivo do cancelamento/);
     await waitFor(() => expect(motivo).toHaveFocus());

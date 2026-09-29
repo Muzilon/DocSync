@@ -622,7 +622,7 @@ describe('TelaPainel: mudança de status (F5)', () => {
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-4');
     await quadro();
     const dialogo = await screen.findByRole('dialog', { name: 'Controle de informação' });
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Cancelar documento' }));
     const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
     await usuario.type(within(cancelar).getByLabelText(/Motivo/), 'Substituído por outro procedimento.');
     await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
@@ -644,7 +644,7 @@ describe('TelaPainel: mudança de status (F5)', () => {
     const api = apiComDetalhes({ reativarDocumento: vi.fn().mockRejectedValue(new ErroApi(409, 'conflito_versao', {}, null)) });
     const usuario = renderizarComRotas(api, '/painel?documento=DOC-4');
     await quadro();
-    await usuario.click(within(await screen.findByRole('dialog', { name: 'Controle de informação' })).getByRole('button', { name: 'Cancelar' }));
+    await usuario.click(within(await screen.findByRole('dialog', { name: 'Controle de informação' })).getByRole('button', { name: 'Cancelar documento' }));
     const cancelar = await screen.findByRole('dialog', { name: 'Cancelar documento' });
     await usuario.type(within(cancelar).getByLabelText(/Motivo/), 'Substituído por outro procedimento.');
     await usuario.click(within(cancelar).getByRole('button', { name: 'Sim, cancelar' }));
