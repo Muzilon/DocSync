@@ -34,11 +34,14 @@ export function prazoMinimo(prazoAtual: string | null, hoje: string): string {
   return seguinte > hoje ? seguinte : hoje;
 }
 
+/** O que o diálogo precisa do documento: vale para o cartão do Painel e para o `Documento` dos detalhes (F4). */
+export type AlvoReprogramacao = Pick<CartaoPainel, 'id' | 'titulo' | 'codigo' | 'revisao' | 'dataRevisao' | 'versao'>;
+
 interface Props {
-  /** Cartão cuja reprogramação foi pedida; null = fechado. */
-  cartao: CartaoPainel | null;
+  /** Cartão (ou documento aberto nos detalhes) cuja reprogramação foi pedida; null = fechado. */
+  cartao: AlvoReprogramacao | null;
   aberto: boolean;
-  /** Dia de referência do servidor (RespostaPainel.hoje). */
+  /** Dia de referência do servidor (RespostaPainel.hoje ou DetalheDocumento.hoje). */
   hoje: string;
   aoFechar: () => void;
   /** Sucesso (201, ou 200 de reenvio idêntico): documento atualizado devolvido pela API. */

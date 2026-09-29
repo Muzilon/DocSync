@@ -8,14 +8,24 @@ import {
   STATUS_INICIAL,
   DIAS_PRAZO_PADRAO,
   LIMITES_JUSTIFICATIVA,
+  CODIGO_AUSENTE_DOWNLOAD,
+  TAMANHO_MAXIMO_NOME_DOWNLOAD,
+  nomeDownloadPrincipal,
+  TIPO_MIME_GENERICO,
+  TIPO_MIME_POR_EXTENSAO,
   calcularPrazoAutomatico,
+  emTramitacao,
+  podeReprogramarAgora,
   diferencaEmDias,
   ehDataSoDia,
+  ehPdf,
   extensaoArquivo,
+  formatarTamanho,
   lerReprogramacao,
   novoIdDocumento,
   sanitizarNomePasta,
   somarDias,
+  tipoMimePorExtensao,
   validarArquivo,
   validarConjuntoArquivos,
   validarJustificativa,
@@ -199,6 +209,7 @@ describe('lerReprogramacao', () => {
     dataHora: '2026-09-29T12:00:00.000Z',
     destino: null,
     responsavel: null,
+    responsavelId: null,
     autorId: 'USR-1',
     autorNome: 'Pessoa',
     detalhes: [{ campo: 'dataRevisao', antes: '2026-10-29', depois: '2026-11-10' }],
@@ -221,5 +232,148 @@ describe('lerReprogramacao', () => {
   it('null para outros tipos de evento ou sem detalhe de prazo', () => {
     expect(lerReprogramacao({ ...base, tipoAcao: 'EDICAO' })).toBeNull();
     expect(lerReprogramacao({ ...base, detalhes: [] })).toBeNull();
+  });
+});
+
+describe('formatarTamanho (contrato F4, 5.2) — pt-BR, base 1024', () => {
+  it.each([
+    [0, '0 B'],
+    [999, '999 B'],
+    [1024, '1 KB'],
+    [340 * 1024, '340 KB'],
+    [1.5 * 1024 * 1024, '1,5 MB'],
+    [20 * 1024 * 1024, '20 MB'],
+    [3 * 1024 * 1024 * 1024, '3 GB'],
+  ])('%d bytes → %s', (bytes, esperado) => {
+    expect(formatarTamanho(bytes)).toBe(esperado);
+  });
+
+  it('valor inválido vira travessão', () => {
+    expect(formatarTamanho(-1)).toBe('—');
+    expect(formatarTamanho(Number.NaN)).toBe('—');
+  });
+});
+
+describe('TIPO_MIME_POR_EXTENSAO e tipoMimePorExtensao (contrato F4, 4.3)', () => {
+  it('cobre toda extensão permitida em LIMITES_ARQUIVO', () => {
+    for (const extensao of LIMITES_ARQUIVO.extensoes) {
+      expect(TIPO_MIME_POR_EXTENSAO[extensao]).toMatch(/^[a-z]+\/[a-z0-9.+-]+$/);
+    }
+    expect(Object.keys(TIPO_MIME_POR_EXTENSAO).sort()).toEqual([...LIMITES_ARQUIVO.extensoes].sort());
+  });
+
+  it('decide pela extensão, aceitando maiúsculas; fora da tabela → genérico', () => {
+    expect(tipoMimePorExtensao('doc.PDF')).toBe('application/pdf');
+    expect(tipoMimePorExtensao('Anexos/foto.JPG')).toBe('image/jpeg');
+    expect(tipoMimePorExtensao('sem-extensao')).toBe(TIPO_MIME_GENERICO);
+    expect(tipoMimePorExtensao('pagina.html')).toBe(TIPO_MIME_GENERICO);
+    // Nomes de propriedades herdadas não viram tipo.
+    expect(tipoMimePorExtensao('x.constructor')).toBe(TIPO_MIME_GENERICO);
+  });
+
+  it('ehPdf decide pela extensão', () => {
+    expect(ehPdf('a.pdf')).toBe(true);
+    expect(ehPdf('a.PDF')).toBe(true);
+    expect(ehPdf('a.docx')).toBe(false);
+  });
+});
+
+describe('nomeDownloadPrincipal (decisão 0014, item 4)', () => {
+  const doc = { codigo: 'PR-QUA-0010', titulo: 'Procedimento de auditoria interna', revisao: 1 };
+
+  it('exemplo da decisão: código-título_revisão=versão.ext', () => {
+    expect(nomeDownloadPrincipal(doc, 'Relatório Final.pdf', 3)).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=3.pdf');
+  });
+
+  it('versão 1 por padrão (até a F7) e extensão minúscula pelo nome do arquivo', () => {
+    expect(nomeDownloadPrincipal(doc, 'ARQUIVO.PDF')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1.pdf');
+    expect(nomeDownloadPrincipal(doc, 'Anexos/planilha.xlsx')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1.xlsx');
+    expect(nomeDownloadPrincipal(doc, 'sem-extensao')).toBe('PR-QUA-0010-Procedimento de auditoria interna_1=1');
+  });
+
+  it('acentos e cedilha ficam (o Windows aceita)', () => {
+    expect(nomeDownloadPrincipal({ codigo: 'IT-SSO-001', titulo: 'Instrução de Segurança: Içamento', revisao: 0 }, 'a.docx')).toBe(
+      'IT-SSO-001-Instrução de Segurança- Içamento_0=1.docx',
+    );
+  });
+
+  it('sem código → SEM-CODIGO; código só de caracteres proibidos também', () => {
+    expect(CODIGO_AUSENTE_DOWNLOAD).toBe('SEM-CODIGO');
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: 'Procedimento de teste', revisao: 0 }, 'x.pdf')).toBe(
+      'SEM-CODIGO-Procedimento de teste_0=1.pdf',
+    );
+    expect(nomeDownloadPrincipal({ codigo: '   ', titulo: 'Procedimento de teste', revisao: 0 }, 'x.pdf')).toBe(
+      'SEM-CODIGO-Procedimento de teste_0=1.pdf',
+    );
+  });
+
+  it('caracteres proibidos no Windows viram hífen; ponto e espaço nas pontas saem; controle sai', () => {
+    const titulo = ' Plano "A/B" <v2>: revisão? *final*|\\ ok. ';
+    expect(nomeDownloadPrincipal({ codigo: 'PL/01', titulo, revisao: 2 }, 'a.pdf')).toBe(
+      'PL-01-Plano -A-B- -v2-- revisão- -final--- ok_2=1.pdf',
+    );
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: 'a\u0000b\tc', revisao: 0 }, 'a.pdf')).toBe('SEM-CODIGO-a-b-c_0=1.pdf');
+    // Título sem nada aproveitável nunca some.
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: '...', revisao: 0 }, 'a.pdf')).toBe('SEM-CODIGO-Documento_0=1.pdf');
+  });
+
+  it('título longo: nome cortado em 200 caracteres, preservando código, sufixo e extensão', () => {
+    const longo = `${'Procedimento operacional '.repeat(20)}fim`;
+    const nome = nomeDownloadPrincipal({ codigo: 'PR-0001', titulo: longo, revisao: 3 }, 'a.pdf');
+    expect(nome.length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome.startsWith('PR-0001-Procedimento operacional')).toBe(true);
+    expect(nome.endsWith('_3=1.pdf')).toBe(true);
+    expect(nome).not.toMatch(/\s_3=1\.pdf$/);
+    // Título de 300 caracteres (limite do cadastro) cabe inteiro? Não: fica o começo.
+    const exato = 'x'.repeat(300);
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: exato, revisao: 0 }, 'a.pdf')).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+  });
+
+  it('corte por code points em fronteira de grafema: emoji ou acento composto no limite nunca é partido', () => {
+    // 'SEM-CODIGO-' (11) + '_0=1.pdf' (8) = 19; sobram 181 code points para o título.
+    const titulo = `${'a'.repeat(180)}😀${'b'.repeat(50)}`;
+    const nome = nomeDownloadPrincipal({ codigo: null, titulo, revisao: 0 }, 'a.pdf');
+    expect(Array.from(nome)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome).toContain('😀_0=1.pdf');
+    expect(nome).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/); // sem par substituto solto
+    // Emoji que não cabe inteiro (só sobra 1 code point) fica de fora, em vez de sair pela metade.
+    const apertado = `${'a'.repeat(181)}😀${'b'.repeat(50)}`;
+    const nome2 = nomeDownloadPrincipal({ codigo: null, titulo: apertado, revisao: 0 }, 'a.pdf');
+    expect(nome2).toBe(`SEM-CODIGO-${'a'.repeat(181)}_0=1.pdf`);
+    // Acento decomposto (e + U+0301) no limite: os dois code points ficam juntos ou saem juntos.
+    const composto = `${'a'.repeat(179)}e\u0301${'b'.repeat(50)}`;
+    const nome3 = nomeDownloadPrincipal({ codigo: null, titulo: composto, revisao: 0 }, 'a.pdf');
+    expect(Array.from(nome3)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome3).toContain('e\u0301_0=1.pdf');
+    const compostoApertado = `${'a'.repeat(180)}e\u0301${'b'.repeat(50)}`;
+    expect(nomeDownloadPrincipal({ codigo: null, titulo: compostoApertado, revisao: 0 }, 'a.pdf')).toBe(
+      `SEM-CODIGO-${'a'.repeat(180)}_0=1.pdf`,
+    );
+  });
+
+  it('código longo demais: o nome nunca passa de 200 code points', () => {
+    const codigoLongo = 'C'.repeat(250);
+    const nome = nomeDownloadPrincipal({ codigo: codigoLongo, titulo: 'Título', revisao: 1 }, 'a.pdf');
+    expect(Array.from(nome)).toHaveLength(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+    expect(nome.startsWith('CCCC')).toBe(true);
+    const quaseLimite = 'C'.repeat(195);
+    const nome2 = nomeDownloadPrincipal({ codigo: quaseLimite, titulo: 'Título longo', revisao: 1 }, 'a.pdf');
+    expect(Array.from(nome2).length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_DOWNLOAD);
+  });
+});
+
+describe('podeReprogramarAgora (decisão 0015, item 5: só com prazo vencido)', () => {
+  const hoje = '2026-09-29';
+  it('prazo anterior a hoje → sim; hoje ou futuro → não', () => {
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-28' }, hoje)).toBe(true);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: '2026-09-29' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Em revisão da qualidade', dataRevisao: '2026-10-29' }, hoje)).toBe(false);
+  });
+  it('Aprovado e Cancelado nunca, mesmo vencidos; sem prazo (importado) pode receber um', () => {
+    expect(podeReprogramarAgora({ status: 'Aprovado', dataRevisao: '2026-01-01' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Cancelado', dataRevisao: '2026-01-01' }, hoje)).toBe(false);
+    expect(podeReprogramarAgora({ status: 'Recebido', dataRevisao: null }, hoje)).toBe(true);
+    expect(emTramitacao({ status: 'Aprovado' })).toBe(false);
+    expect(emTramitacao({ status: 'Devolvido para correção' })).toBe(true);
   });
 });

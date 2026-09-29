@@ -6,7 +6,8 @@
  * `filtrarCartoes` que a interface, e "hoje" é sempre injetado (vem do servidor).
  */
 
-import { diferencaEmDias, type Fase, type StatusDocumento } from './documentos.ts';
+import { diferencaEmDias, emTramitacao, type Fase, type StatusDocumento } from './documentos.ts';
+import { concluidoNaMeta } from './metas.ts';
 
 // ---------------------------------------------------------------------------
 // Contrato de GET /painel
@@ -31,8 +32,22 @@ export interface CartaoPainel {
   qtdReprogramacoes: number;
   /** Quantas vezes o documento entrou na fase 'devolvido' (calculado dos eventos, nunca de contador editável). */
   qtdDevolucoes: number;
-  /** Dia ('AAAA-MM-DD') do evento mais recente com status 'Aprovado'; null se nunca aprovado. Base do KPI "Aprovados no mês" (P-12, F5). */
+  /** Dia ('AAAA-MM-DD', fuso de São Paulo) do evento STATUS mais recente com status 'Aprovado'; null se nunca aprovado. Base do KPI "Aprovados no mês" (P-12) e da meta de 40 dias. */
   dataAprovacao: string | null;
+  /**
+   * Dia ('AAAA-MM-DD', fuso de São Paulo) do PRIMEIRO evento STATUS cujo status está na
+   * fase 'revisao'; null se ainda não entrou em revisão. Base da meta de 14 dias (F5).
+   */
+  dataInicioRevisao: string | null;
+  /** Responsável atual pela etapa (`USR-uuid`); null em Recebido, Aprovado e importados. */
+  responsavelId: string | null;
+  /** Nome atual do responsável; o cartão mostra as iniciais e o nome como texto acessível (decisão 0015). */
+  responsavel: string | null;
+  /**
+   * `statusAnterior` do último evento CANCELAMENTO; só não nulo quando status = 'Cancelado'.
+   * Para a confirmação "Reativar: volta para <status>" na janela de cancelados.
+   */
+  statusAntesDoCancelamento: StatusDocumento | null;
   versao: number;
   criadoEm: string;
   dataModificacao: string;
@@ -59,20 +74,30 @@ export interface Kpis {
   vencendo: number;
   /** Em tramitação com prazo anterior a hoje. */
   atrasados: number;
+  /** Aprovados com `dataAprovacao` no mesmo mês e ano de `hoje` (P-12, F5). */
+  aprovadosNoMes: number;
+  /** Dos aprovados no mês, quantos cumpriram a meta de 40 dias (decisão 0012). */
+  aprovadosNoMesNaMeta: number;
 }
 
-function emTramitacao(cartao: Pick<CartaoPainel, 'status'>): boolean {
-  return cartao.status !== 'Cancelado' && cartao.status !== 'Aprovado';
+/** 'AAAA-MM' de uma data só-dia. */
+function mesDe(data: string): string {
+  return data.slice(0, 7);
 }
 
 /**
  * KPIs sobre os cartões já filtrados por busca e área (documento 03, 9.1).
- * Cancelados nunca contam; sem prazo conta só em `emTramitacao`.
- * "Aprovados no mês" (P-12) fica para a F5 (decisão 0012).
+ * Cancelados nunca contam; sem prazo conta só em `emTramitacao`. "Aprovados no mês"
+ * conta a ÚLTIMA aprovação (`dataAprovacao` é o máximo) de cartões Aprovados.
  */
 export function calcularKpis(cartoes: readonly CartaoPainel[], hoje: string): Kpis {
-  const kpis: Kpis = { emTramitacao: 0, vencendo: 0, atrasados: 0 };
+  const kpis: Kpis = { emTramitacao: 0, vencendo: 0, atrasados: 0, aprovadosNoMes: 0, aprovadosNoMesNaMeta: 0 };
+  const mesAtual = mesDe(hoje);
   for (const cartao of cartoes) {
+    if (cartao.status === 'Aprovado' && cartao.dataAprovacao !== null && mesDe(cartao.dataAprovacao) === mesAtual) {
+      kpis.aprovadosNoMes++;
+      if (concluidoNaMeta(cartao)) kpis.aprovadosNoMesNaMeta++;
+    }
     if (!emTramitacao(cartao)) continue;
     kpis.emTramitacao++;
     if (cartao.dataRevisao === null) continue;
@@ -101,15 +126,28 @@ export function normalizarBusca(texto: string): string {
     .trim();
 }
 
-/** Busca sem acento e sem diferenciar maiúsculas em título, código e remetente; área por ID. */
+/** Busca sem acento e sem diferenciar maiúsculas em título, código, remetente e responsável (F5); área por ID. */
 export function filtrarCartoes(cartoes: readonly CartaoPainel[], filtro: FiltroPainel): CartaoPainel[] {
   const termo = normalizarBusca(filtro.busca ?? '');
   const areaId = filtro.areaId ?? null;
   return cartoes.filter((c) => {
     if (areaId !== null && c.areaId !== areaId) return false;
     if (termo === '') return true;
-    return [c.titulo, c.codigo ?? '', c.remetente].some((campo) => normalizarBusca(campo).includes(termo));
+    return [c.titulo, c.codigo ?? '', c.remetente, c.responsavel ?? ''].some((campo) => normalizarBusca(campo).includes(termo));
   });
+}
+
+/**
+ * Iniciais de um nome para o círculo do responsável no cartão (decisão 0015): primeira
+ * letra do primeiro e do último nome ("Maria da Silva" → "MS"; "Ana" → "A"), em
+ * maiúsculas. O nome completo continua como texto acessível; isto é só o desenho.
+ */
+export function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '';
+  const primeira = Array.from(partes[0]!)[0] ?? '';
+  const ultima = partes.length > 1 ? (Array.from(partes[partes.length - 1]!)[0] ?? '') : '';
+  return `${primeira}${ultima}`.toLocaleUpperCase('pt-BR');
 }
 
 // ---------------------------------------------------------------------------

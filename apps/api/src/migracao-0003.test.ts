@@ -34,7 +34,7 @@ describe('migração 0003 — prazo e reprogramação', () => {
     // Virada de ano.
     await inserirDocumento('DOC-fim-de-ano', '2026-12-15T15:00:00Z', null);
 
-    expect(await aplicarMigracoes(banco)).toEqual(['0003_prazo_e_reprogramacao.sql']);
+    expect(await aplicarMigracoes(banco, '0003')).toEqual(['0003_prazo_e_reprogramacao.sql']);
 
     const { rows } = await banco.query<{ id: string; prazo: string | null; reprogramado: boolean; qtd: number }>(
       `SELECT id, to_char(data_revisao, 'YYYY-MM-DD') AS prazo, reprogramado, qtd_reprogramacoes AS qtd
@@ -63,6 +63,6 @@ describe('migração 0003 — prazo e reprogramação', () => {
     ).rejects.toThrow();
 
     // Reaplicar não faz nada.
-    expect(await aplicarMigracoes(banco)).toEqual([]);
+    expect(await aplicarMigracoes(banco, '0003')).toEqual([]);
   });
 });

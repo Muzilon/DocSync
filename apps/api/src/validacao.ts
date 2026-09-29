@@ -1,11 +1,19 @@
 import {
   ehDataSoDia,
   ehPerfil,
+  ehStatusDocumento,
+  exigeResponsavel,
+  normalizarObservacao,
   validarJustificativa,
+  validarMotivoCancelamento,
   validarNovoPrazo,
+  validarObservacao,
   type AlteracaoPessoa,
   type NovaPessoa,
+  type NovaReativacao,
   type NovaReprogramacao,
+  type NovaTransicao,
+  type NovoCancelamento,
   type NovoDocumento,
   type Perfil,
 } from '@docsync/compartilhado';
@@ -235,6 +243,89 @@ export function validarNovaReprogramacao(corpo: unknown, prazoAtual: string | nu
 }
 
 // ---------------------------------------------------------------------------
+// Mudança de status (F5) — corpos de POST /documentos/:id/{transicoes,cancelamentos,reativacoes}
+// ---------------------------------------------------------------------------
+
+const ID_USUARIO = /^USR-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MENSAGEM_VERSAO = 'Versão inválida. Recarregue o painel e tente de novo.';
+
+function validarVersao(valor: unknown, campos: Record<string, string>): number {
+  if (typeof valor !== 'number' || !Number.isInteger(valor) || valor < 1) {
+    campos.versao = MENSAGEM_VERSAO;
+    return 0;
+  }
+  return valor;
+}
+
+const CAMPOS_TRANSICAO = ['para', 'responsavelId', 'observacao', 'versao'] as const satisfies readonly (keyof NovaTransicao)[];
+
+/**
+ * Valida a transição (contrato F5, 3.2, passo 5). Esquema fechado. `para` é um
+ * StatusDocumento diferente de 'Em Revisão' (genérico, só dados migrados) e de
+ * 'Cancelado' (rota própria); responsável obrigatório quando o destino exige e
+ * proibido em Aprovado. Observação devolvida aparada (vazia → null).
+ */
+export function validarNovaTransicao(corpo: unknown): Validado<NovaTransicao> {
+  if (!ehObjeto(corpo)) return { ok: false, campos: { corpo: 'Envie a etapa, o responsável, a observação e a versão.' } };
+  const campos = camposDesconhecidos(corpo, CAMPOS_TRANSICAO);
+
+  const para = corpo.para;
+  if (!ehStatusDocumento(para)) campos.para = 'Selecione a etapa de destino.';
+  else if (para === 'Em Revisão') campos.para = 'Escolha um status específico de revisão (Em Revisão é só de dados migrados).';
+  else if (para === 'Cancelado') campos.para = 'Para cancelar, use a ação Cancelar.';
+
+  const responsavelId = corpo.responsavelId ?? null;
+  if (responsavelId !== null && (typeof responsavelId !== 'string' || !ID_USUARIO.test(responsavelId))) {
+    campos.responsavelId = 'Responsável inválido.';
+  } else if (!campos.para && ehStatusDocumento(para)) {
+    if (para === 'Aprovado' && responsavelId !== null) campos.responsavelId = 'Documento aprovado não tem responsável.';
+    else if (exigeResponsavel(para) && responsavelId === null) campos.responsavelId = 'Informe o responsável por esta etapa.';
+  }
+
+  const erroObservacao = validarObservacao(corpo.observacao);
+  if (erroObservacao) campos.observacao = erroObservacao;
+
+  const versao = validarVersao(corpo.versao, campos);
+
+  if (Object.keys(campos).length > 0) return { ok: false, campos };
+  return {
+    ok: true,
+    dados: {
+      para: para as NovaTransicao['para'],
+      responsavelId: responsavelId as string | null,
+      observacao: normalizarObservacao(corpo.observacao),
+      versao,
+    },
+  };
+}
+
+const CAMPOS_CANCELAMENTO = ['motivo', 'versao'] as const satisfies readonly (keyof NovoCancelamento)[];
+
+/** Valida o cancelamento (contrato 3.3, passo 5): motivo 10–500 após trim; versão ≥ 1. Motivo devolvido aparado. */
+export function validarNovoCancelamento(corpo: unknown): Validado<NovoCancelamento> {
+  if (!ehObjeto(corpo)) return { ok: false, campos: { corpo: 'Envie o motivo e a versão.' } };
+  const campos = camposDesconhecidos(corpo, CAMPOS_CANCELAMENTO);
+  const erroMotivo = validarMotivoCancelamento(corpo.motivo);
+  if (erroMotivo) campos.motivo = erroMotivo;
+  const versao = validarVersao(corpo.versao, campos);
+  if (Object.keys(campos).length > 0) return { ok: false, campos };
+  return { ok: true, dados: { motivo: (corpo.motivo as string).trim(), versao } };
+}
+
+const CAMPOS_REATIVACAO = ['observacao', 'versao'] as const satisfies readonly (keyof NovaReativacao)[];
+
+/** Valida a reativação (contrato 3.4, passo 5): observação opcional ≤ 500; versão ≥ 1. */
+export function validarNovaReativacao(corpo: unknown): Validado<NovaReativacao> {
+  if (!ehObjeto(corpo)) return { ok: false, campos: { corpo: 'Envie a observação e a versão.' } };
+  const campos = camposDesconhecidos(corpo, CAMPOS_REATIVACAO);
+  const erroObservacao = validarObservacao(corpo.observacao);
+  if (erroObservacao) campos.observacao = erroObservacao;
+  const versao = validarVersao(corpo.versao, campos);
+  if (Object.keys(campos).length > 0) return { ok: false, campos };
+  return { ok: true, dados: { observacao: normalizarObservacao(corpo.observacao), versao } };
+}
+
+// ---------------------------------------------------------------------------
 // Painel (F3) — query de GET /painel
 // ---------------------------------------------------------------------------
 
@@ -273,4 +364,15 @@ export function validarQueryPainel(query: unknown): Validado<FiltroPainelQuery> 
 
   if (Object.keys(campos).length > 0) return { ok: false, campos };
   return { ok: true, dados: { busca, areaId, cancelados } };
+}
+
+// ---------------------------------------------------------------------------
+// Rotas de leitura sem parâmetros (F4) — GET /documentos/:id e arquivos
+// ---------------------------------------------------------------------------
+
+/** Esquema fechado numa rota que não aceita query: qualquer parâmetro → erro por campo. */
+export function validarQueryVazia(query: unknown): Validado<Record<never, never>> {
+  const corpo = ehObjeto(query) ? query : {};
+  const campos = camposDesconhecidos(corpo, []);
+  return Object.keys(campos).length > 0 ? { ok: false, campos } : { ok: true, dados: {} };
 }

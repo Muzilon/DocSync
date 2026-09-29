@@ -5,8 +5,11 @@ import {
   STATUS_INICIAL,
   calcularPrazoAutomatico,
   filtrarCartoes,
+  formatarDataCurta,
   lerReprogramacao,
+  nomeDownloadPrincipal,
   pode,
+  podeReprogramarAgora,
   sanitizarNomePasta,
   validarArquivo,
   validarConjuntoArquivos,
@@ -26,13 +29,16 @@ import {
   ErroArmazenamento,
   planejarArquivos,
   type ArmazenamentoArquivos,
+  sanitizarNomeArquivo,
   type ArquivoParaSalvar,
   type PapelArquivo,
 } from '../armazenamento/arquivos.ts';
+import { cabecalhosDownload } from '../armazenamento/download.ts';
 import { enviarErro } from '../autenticacao/plugin.ts';
 import type { Banco, Executor } from '../banco/conexao.ts';
 import {
   aplicarReprogramacao,
+  buscarArquivoDoDocumento,
   buscarDocumento,
   buscarDocumentoParaAtualizar,
   buscarEvento,
@@ -41,16 +47,19 @@ import {
   existeCodigoRevisao,
   inserirArquivos,
   inserirDocumento,
+  listarArquivos,
   listarCartoes,
   listarEventos,
   listarRecentes,
   listarTiposAtivos,
+  paraArquivoDocumento,
+  registrarAcessoArquivo,
   registrarEvento,
   ultimoEvento,
 } from '../banco/documentos.ts';
 import { buscarArea, buscarAreaAtiva, type Usuario } from '../banco/pessoas.ts';
 import { hojeNoFuso } from '../datas.ts';
-import { validarNovaReprogramacao, validarNovoDocumento, validarQueryPainel } from '../validacao.ts';
+import { validarNovaReprogramacao, validarNovoDocumento, validarQueryPainel, validarQueryVazia } from '../validacao.ts';
 
 const MB = 1024 * 1024;
 const LIMITE_ARQUIVO_BYTES = LIMITES_ARQUIVO.tamanhoMaximoMB * MB;
@@ -393,6 +402,7 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           statusAnterior: null,
           destino: null,
           responsavel: null,
+          responsavelId: null,
           autorId: eu.id, // Autor sempre do token.
           autorNome: eu.nome,
           // O histórico mostra de onde veio o prazo (contrato F3, 2.2).
@@ -451,14 +461,87 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
     return documentos.filter((d) => podeVer(requisicao.usuario, d));
   });
 
-  escopo.get<{ Params: { id: string } }>('/documentos/:id', async (requisicao, resposta) => {
+  // Sem HEAD automático (o Fastify criaria um para cada GET): HEAD não é usado pela
+  // interface e, no download, executaria a rota inteira e gravaria um acesso falso.
+  const semHead = { exposeHeadRoute: false } as const;
+
+  escopo.get<{ Params: { id: string } }>('/documentos/:id', semHead, async (requisicao, resposta) => {
     const eu = requisicao.usuario;
+    // Ordem de decisão do contrato F4 (2.2): permissão geral → existência/visibilidade →
+    // resposta. Esquema fechado também na query.
     if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
     const documento = await buscarDocumento(banco, requisicao.params.id);
     // Sem permissão para este documento = mesmo 404 de inexistente (não revela existência).
     if (!documento || !podeVer(eu, documento)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
-    const detalhe: DetalheDocumento = { documento, eventos: await listarEventos(banco, documento.id) };
+    const query = validarQueryVazia(requisicao.query);
+    if (!query.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: query.campos });
+    const detalhe: DetalheDocumento = {
+      documento,
+      arquivos: (await listarArquivos(banco, documento.id)).map(paraArquivoDocumento),
+      eventos: await listarEventos(banco, documento.id),
+      hoje: hojeNoFuso(),
+    };
     return detalhe;
+  });
+
+  // --- Arquivos: download (F4, contrato seções 4 e 10; decisão 0014) ------------------
+
+  type ParamsArquivo = { Params: { id: string; arquivoId: string } };
+
+  /**
+   * Entrega um arquivo do documento para download. Ordem de decisão do contrato (4.2):
+   * permissão geral → existência/visibilidade do documento → permissão da ação →
+   * arquivo pertence a ESTE documento → conteúdo no armazenamento → registro de
+   * acesso → resposta. O conteúdo sai como foi gravado (sem marca d'água, decisão 0014).
+   */
+  escopo.get<ParamsArquivo>('/documentos/:id/arquivos/:arquivoId', semHead, async (requisicao, resposta) => {
+    const eu = requisicao.usuario;
+    const { id, arquivoId } = requisicao.params;
+    if (!pode(eu, 'verDocumentos')) return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    const documento = await buscarDocumento(banco, id);
+    if (!documento || !podeVer(eu, documento)) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
+    if (!pode(eu, 'baixarArquivo', { areaId: documento.areaId })) {
+      return enviarErro(resposta, 403, { codigo: 'sem_permissao' });
+    }
+    const query = validarQueryVazia(requisicao.query);
+    if (!query.ok) return enviarErro(resposta, 400, { codigo: 'dados_invalidos', campos: query.campos });
+
+    // O arquivoId sozinho nunca localiza nada: tem de pertencer a este documento.
+    const arquivo = await buscarArquivoDoDocumento(banco, documento.id, arquivoId);
+    if (!arquivo) return enviarErro(resposta, 404, { codigo: 'nao_encontrado' });
+
+    let conteudo: Buffer | null;
+    try {
+      conteudo = await armazenamento.ler(documento.id, arquivo.nomeArmazenado);
+    } catch (erro) {
+      // Inclui nome armazenado inválido (nunca lê fora da pasta). Só IDs no log.
+      requisicao.log.error({ idDocumento: documento.id, idArquivo: arquivo.id }, 'falha do armazenamento na leitura');
+      return enviarErro(resposta, 500, { codigo: 'erro_interno' });
+    }
+    if (conteudo === null) {
+      requisicao.log.error({ idDocumento: documento.id, idArquivo: arquivo.id }, 'arquivo registrado sem conteúdo no armazenamento');
+      return enviarErro(resposta, 404, {
+        codigo: 'arquivo_indisponivel',
+        mensagem: 'Este arquivo não está disponível no momento. Avise o administrador do DocSync.',
+      });
+    }
+
+    // Registro imutável de acesso, com autor do token (decisão 0014, item 3).
+    await registrarAcessoArquivo(banco, {
+      idDocumento: documento.id,
+      idArquivo: arquivo.id,
+      tipo: 'DOWNLOAD',
+      autorId: eu.id,
+      autorNome: eu.nome,
+    });
+
+    // Decisão 0014 (item 4): principal como `[código]-[título]_[revisão]=[versão].[ext]`
+    // (versão 1 até a F7); anexo com o nome original.
+    const nome =
+      arquivo.papel === 'principal'
+        ? nomeDownloadPrincipal(documento, arquivo.nomeArmazenado)
+        : sanitizarNomeArquivo(arquivo.nomeOriginal);
+    return resposta.code(200).headers(cabecalhosDownload(nome, arquivo.nomeArmazenado, conteudo.length)).send(conteudo);
   });
 
   // --- Painel (F3, contrato seção 4) --------------------------------------------------
@@ -538,6 +621,16 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
         if (STATUS_SEM_PRAZO.has(documento.status)) {
           throw new ErroNegocio(409, { codigo: 'acao_nao_permitida', mensagem: 'Documento não tem prazo a reprogramar.' });
         }
+        // Decisão 0015 (item 5): reprogramar só com prazo vencido. Depois da idempotência
+        // (o reenvio de uma reprogramação aplicada encontra o prazo já no futuro) e do
+        // conflito de versão (quem viu o prazo velho recebe o estado atual). Mesma função
+        // pura que mostra ou esconde o botão na interface.
+        if (!podeReprogramarAgora(documento, hoje)) {
+          throw new ErroNegocio(409, {
+            codigo: 'acao_nao_permitida',
+            mensagem: `O prazo (${formatarDataCurta(documento.dataRevisao!)}) ainda não venceu: a reprogramação só é permitida com prazo vencido.`,
+          });
+        }
         // "Só adia" (decisão 0012), contra o prazo atual da linha bloqueada.
         const erroPrazo = validarNovoPrazo(pedido.novoPrazo, documento.dataRevisao, hoje);
         if (erroPrazo) {
@@ -560,6 +653,7 @@ export function registrarRotasDocumentos(escopo: FastifyInstance, { banco, armaz
           statusAnterior: null,
           destino: null,
           responsavel: null,
+          responsavelId: null,
           autorId: eu.id, // Autor sempre do token.
           autorNome: eu.nome,
           detalhes: [{ campo: 'dataRevisao', antes: documento.dataRevisao, depois: pedido.novoPrazo }],

@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWTPayload } from 'jose';
-import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import type { FastifyInstance, FastifyServerOptions, LightMyRequestResponse } from 'fastify';
 import { criarApp } from './app.ts';
 import { ArmazenamentoEmMemoria } from './armazenamento/arquivos.ts';
 import { abrirBanco, type Banco } from './banco/conexao.ts';
@@ -59,7 +59,7 @@ export interface Ambiente {
   /** Faz uma requisição com um token para a identidade dada. */
   chamar(
     identidade: JWTPayload,
-    metodo: 'GET' | 'POST' | 'PATCH',
+    metodo: 'GET' | 'HEAD' | 'POST' | 'PATCH',
     url: string,
     corpo?: unknown,
   ): Promise<LightMyRequestResponse>;
@@ -73,7 +73,7 @@ let modelo: Promise<Banco> | undefined;
 
 export async function criarAmbiente(
   entra: EntraFalso,
-  opcoes: { areaAdministradorInicial?: string | null } = {},
+  opcoes: { areaAdministradorInicial?: string | null; logger?: FastifyServerOptions['logger'] } = {},
 ): Promise<Ambiente> {
   modelo ??= abrirBanco('memoria');
   const banco = await (await modelo).clone();
@@ -82,6 +82,7 @@ export async function criarAmbiente(
     banco,
     armazenamento,
     chaves: entra.chaves,
+    ...(opcoes.logger === undefined ? {} : { logger: opcoes.logger }),
     autenticacao: {
       tenantId: TENANT,
       clientId: CLIENT,

@@ -6,7 +6,7 @@
  * (que apenas esconde o que a pessoa não pode fazer).
  */
 
-import type { Documento } from './documentos.ts';
+import type { Documento, StatusDocumento } from './documentos.ts';
 
 export const PERFIS = ['Administrador', 'Qualidade', 'Solicitante', 'Leitor'] as const;
 export type Perfil = (typeof PERFIS)[number];
@@ -37,14 +37,47 @@ export interface Area {
  * A lista cresce a cada fatia (mudar status, exportar etc.), sempre com teste
  * na tabela de permissões.
  */
-export type Acao = 'gerenciarPessoas' | 'verDocumentos' | 'cadastrarDocumento' | 'reprogramarPrazo';
+export type Acao =
+  | 'gerenciarPessoas'
+  | 'verDocumentos'
+  | 'cadastrarDocumento'
+  | 'reprogramarPrazo'
+  | 'baixarArquivo'
+  | 'mudarStatus'
+  | 'cancelarDocumento'
+  | 'reativarDocumento';
 
 /**
- * Contexto do registro sobre o qual a ação é feita. Hoje só a área do documento:
- * o Solicitante só atua sobre documentos da sua área.
+ * Contexto do registro sobre o qual a ação é feita: a área do documento (o
+ * Solicitante só atua sobre documentos da sua área) e, em `mudarStatus`, a
+ * transição pedida.
  */
 export interface ContextoPermissao {
   areaId?: string;
+  /**
+   * Só em 'mudarStatus': a transição pedida. Sem ela, `pode` responde à pergunta
+   * genérica "esta pessoa pode mudar status de documentos desta área?" (para
+   * mostrar o rodapé de ações).
+   */
+  transicao?: { de: StatusDocumento; para: StatusDocumento };
+}
+
+/**
+ * Transições que o Solicitante pode aplicar (documento 02, 7.3; contrato F5, 2.3,
+ * resposta 3 do Eric): "só reenvia após devolução e aprova quando 'Para aprovação
+ * da área solicitante'". A aprovação final ('Aprovado') nunca é dele: o "aprovar"
+ * da área é encaminhar à aprovação da Qualidade. Fica aqui (e não em
+ * transicoes.ts) porque é a regra de perfil que `pode` aplica.
+ */
+export const TRANSICOES_SOLICITANTE: ReadonlyArray<readonly [de: StatusDocumento, para: StatusDocumento]> = [
+  ['Devolvido para área para revisão', 'Em revisão da qualidade'],
+  ['Devolvido para correção', 'Em revisão da qualidade'],
+  ['Em revisão do solicitante', 'Em revisão da qualidade'],
+  ['Para aprovação da área solicitante', 'Para aprovação qualidade'],
+];
+
+function transicaoDoSolicitante(transicao: { de: StatusDocumento; para: StatusDocumento }): boolean {
+  return TRANSICOES_SOLICITANTE.some(([de, para]) => de === transicao.de && para === transicao.para);
 }
 
 /**
@@ -52,7 +85,7 @@ export interface ContextoPermissao {
  * - 'daSuaArea': sem contexto → sim; com contexto → só se a área for a da pessoa.
  * - 'somenteComSuaArea': exige contexto com a área da pessoa (sem contexto → não).
  */
-type Regra = 'sim' | 'nao' | 'daSuaArea' | 'somenteComSuaArea';
+type Regra = 'sim' | 'nao' | 'daSuaArea' | 'somenteComSuaArea' | 'daSuaAreaETransicaoPermitida';
 
 const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   gerenciarPessoas: { Administrador: 'sim', Qualidade: 'nao', Solicitante: 'nao', Leitor: 'nao' },
@@ -61,6 +94,15 @@ const PERMISSOES: Record<Acao, Record<Perfil, Regra>> = {
   // Decisão 0011: reprogramam Qualidade e Administrador. O contexto de área é aceito
   // (regra uniforme), mas hoje não altera o resultado.
   reprogramarPrazo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
+  // Decisão 0014 (item 2): Administrador e Qualidade baixam qualquer arquivo; o
+  // Solicitante só de documentos da sua área; o Leitor vê os detalhes, mas não baixa.
+  baixarArquivo: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaArea', Leitor: 'nao' },
+  // Contrato F5 (2.3, respostas 1 e 3 do Eric): Administrador e Qualidade mudam qualquer
+  // status (a máquina de estados é conferida à parte, por `transicaoPermitida`); o
+  // Solicitante só na sua área e só nos pares de TRANSICOES_SOLICITANTE; o Leitor não.
+  mudarStatus: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'daSuaAreaETransicaoPermitida', Leitor: 'nao' },
+  cancelarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
+  reativarDocumento: { Administrador: 'sim', Qualidade: 'sim', Solicitante: 'nao', Leitor: 'nao' },
 };
 
 export function ehPerfil(valor: unknown): valor is Perfil {
@@ -85,7 +127,11 @@ export function acessoLiberado(pessoa: Pessoa | null): pessoa is Pessoa & { perf
  * - `verDocumentos`: sem contexto, sim (vê a lista, que a API filtra pela área);
  *   com contexto, só documentos da sua área;
  * - `cadastrarDocumento`: só com contexto igual à sua área. Para mostrar o
- *   botão "Novo", a interface pergunta `pode(eu, 'cadastrarDocumento', { areaId: eu.areaId })`.
+ *   botão "Novo", a interface pergunta `pode(eu, 'cadastrarDocumento', { areaId: eu.areaId })`;
+ * - `mudarStatus`: como `verDocumentos` quanto à área; com `contexto.transicao`,
+ *   só se o par estiver em TRANSICOES_SOLICITANTE. `pode` NÃO embute a máquina de
+ *   estados (transicoes.ts): "o fluxo aceita?" e "este perfil pode?" são conferidos
+ *   separadamente pela API; a interface usa `acoesDeStatus`, que combina os dois.
  */
 export function pode(pessoa: Pessoa | null, acao: Acao, contexto?: ContextoPermissao): boolean {
   if (!acessoLiberado(pessoa)) return false;
@@ -100,6 +146,9 @@ export function pode(pessoa: Pessoa | null, acao: Acao, contexto?: ContextoPermi
       return areaDoContexto === undefined || ehDaSuaArea;
     case 'somenteComSuaArea':
       return ehDaSuaArea;
+    case 'daSuaAreaETransicaoPermitida':
+      if (areaDoContexto !== undefined && !ehDaSuaArea) return false;
+      return contexto?.transicao === undefined || transicaoDoSolicitante(contexto.transicao);
   }
 }
 
@@ -154,6 +203,8 @@ export type CodigoErroApi =
   | 'conflito_versao'
   /** 409: o estado do documento não aceita a ação (ex.: reprogramar prazo de Aprovado/Cancelado). */
   | 'acao_nao_permitida'
+  /** 404: o registro do arquivo existe, mas o conteúdo não está no armazenamento. */
+  | 'arquivo_indisponivel'
   | 'erro_interno';
 
 export interface ErroApi {

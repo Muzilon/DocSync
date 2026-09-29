@@ -7,6 +7,7 @@ import { provedorChavesEntra, type ProvedorChaves } from './autenticacao/token.t
 import type { ConfiguracaoAutenticacao } from './config.ts';
 import { registrarRotasDocumentos } from './rotas/documentos.ts';
 import { registrarRotasPessoas } from './rotas/pessoas.ts';
+import { registrarRotasTransicoes } from './rotas/transicoes.ts';
 
 export interface OpcoesApp {
   banco: Banco;
@@ -48,6 +49,7 @@ export function criarApp(opcoes: OpcoesApp): FastifyInstance {
     registrarAutenticacao(escopo, { banco: opcoes.banco, config: opcoes.autenticacao, chaves });
     registrarRotasPessoas(escopo, opcoes.banco);
     registrarRotasDocumentos(escopo, { banco: opcoes.banco, armazenamento: opcoes.armazenamento });
+    registrarRotasTransicoes(escopo, opcoes.banco);
   });
 
   return app;

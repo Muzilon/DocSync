@@ -3,12 +3,15 @@ import {
   FASE_DO_STATUS,
   STATUS_DOCUMENTO,
   ordenarAlfabetico,
+  type ArquivoDocumento,
   type CartaoPainel,
   type Documento,
   type EventoHistorico,
   type NovoDocumento,
+  type RegistroAcessoArquivo,
   type StatusDocumento,
   type TipoAcaoHistorico,
+  type TipoAcessoArquivo,
   type TipoDocumento,
 } from '@docsync/compartilhado';
 import type { PapelArquivo } from '../armazenamento/arquivos.ts';
@@ -52,23 +55,27 @@ interface LinhaDocumento {
   nome_arquivo_principal: string;
   qtd_anexos: number;
   id_documento_origem: string | null;
+  responsavel_id: string | null;
+  responsavel: string | null;
   versao: number;
   criado_por: string;
   criado_em: Date | string;
   data_modificacao: Date | string;
 }
 
-/** Datas só-dia saem como texto 'AAAA-MM-DD' (sem fuso); data/hora em ISO UTC. */
+/** Datas só-dia saem como texto 'AAAA-MM-DD' (sem fuso); data/hora em ISO UTC. Responsável por JOIN (nome atual). */
 const SELECT_DOCUMENTO = `
   SELECT d.id, d.codigo, d.titulo, d.status, d.tipo_documento_id, t.nome AS tipo_documento,
          d.revisao, to_char(d.data_recebimento, 'YYYY-MM-DD') AS data_recebimento,
          to_char(d.data_revisao, 'YYYY-MM-DD') AS data_revisao, d.reprogramado, d.qtd_reprogramacoes,
          d.remetente, d.area_id,
          a.nome AS area, d.disciplina, d.observacao, d.nome_pasta, d.nome_arquivo_principal,
-         d.qtd_anexos, d.id_documento_origem, d.versao, d.criado_por, d.criado_em, d.data_modificacao
+         d.qtd_anexos, d.id_documento_origem, d.responsavel_id, r.nome AS responsavel,
+         d.versao, d.criado_por, d.criado_em, d.data_modificacao
   FROM documentos d
   JOIN tipos_documento t ON t.id = d.tipo_documento_id
-  JOIN areas a ON a.id = d.area_id`;
+  JOIN areas a ON a.id = d.area_id
+  LEFT JOIN usuarios r ON r.id = d.responsavel_id`;
 
 const iso = (valor: Date | string) => new Date(valor).toISOString();
 
@@ -94,6 +101,8 @@ function paraDocumento(l: LinhaDocumento): Documento {
     nomeArquivoPrincipal: l.nome_arquivo_principal,
     qtdAnexos: l.qtd_anexos,
     idDocumentoOrigem: l.id_documento_origem,
+    responsavelId: l.responsavel_id,
+    responsavel: l.responsavel,
     versao: l.versao,
     criadoPor: l.criado_por,
     criadoEm: iso(l.criado_em),
@@ -219,6 +228,56 @@ export async function aplicarReprogramacao(
   return buscarDocumento(tx, id);
 }
 
+// --- Mudança de status (F5) -----------------------------------------------------------
+
+/**
+ * Transição de status (contrato F5, 3.2, passo 6.6): grava o status novo, o responsável
+ * pela etapa (null em Aprovado) e incrementa a versão. Só atualiza se a versão for a
+ * esperada (`WHERE versao = $n`); devolve o documento atualizado ou null se já mudou.
+ * A F5 muda SÓ `status`, `responsavel_id`, `versao` e `data_modificacao` (P-14).
+ */
+export async function aplicarTransicao(
+  tx: Executor,
+  id: string,
+  versaoEsperada: number,
+  status: StatusDocumento,
+  responsavelId: string | null,
+): Promise<Documento | null> {
+  const { affectedRows } = await tx.query(
+    `UPDATE documentos
+        SET status = $3, responsavel_id = $4, versao = versao + 1, data_modificacao = now()
+      WHERE id = $1 AND versao = $2`,
+    [id, versaoEsperada, status, responsavelId],
+  );
+  if (!affectedRows) return null;
+  return buscarDocumento(tx, id);
+}
+
+/** Cancelamento (contrato 3.3): status 'Cancelado', `responsavel_id` intacto, versão + 1. */
+export async function aplicarCancelamento(tx: Executor, id: string, versaoEsperada: number): Promise<Documento | null> {
+  return mudarSoStatus(tx, id, versaoEsperada, 'Cancelado');
+}
+
+/** Reativação (contrato 3.4, decisão 0004): volta ao `destino`, `responsavel_id` intacto, versão + 1. */
+export async function aplicarReativacao(
+  tx: Executor,
+  id: string,
+  versaoEsperada: number,
+  destino: StatusDocumento,
+): Promise<Documento | null> {
+  return mudarSoStatus(tx, id, versaoEsperada, destino);
+}
+
+async function mudarSoStatus(tx: Executor, id: string, versaoEsperada: number, status: StatusDocumento) {
+  const { affectedRows } = await tx.query(
+    `UPDATE documentos SET status = $3, versao = versao + 1, data_modificacao = now()
+      WHERE id = $1 AND versao = $2`,
+    [id, versaoEsperada, status],
+  );
+  if (!affectedRows) return null;
+  return buscarDocumento(tx, id);
+}
+
 // --- Painel (F3) ---------------------------------------------------------------------
 
 interface LinhaCartao {
@@ -237,19 +296,28 @@ interface LinhaCartao {
   qtd_reprogramacoes: number;
   qtd_devolucoes: number;
   data_aprovacao: string | null;
+  data_inicio_revisao: string | null;
+  responsavel_id: string | null;
+  responsavel: string | null;
+  status_antes_do_cancelamento: StatusDocumento | null;
   versao: number;
   criado_em: Date | string;
   data_modificacao: Date | string;
 }
 
-/** Status cuja fase é 'devolvido', pela tabela explícita (nunca pelo texto). */
+/** Status cuja fase é 'devolvido' / 'revisao', pela tabela explícita (nunca pelo texto). */
 const STATUS_DEVOLVIDO = STATUS_DOCUMENTO.filter((s) => FASE_DO_STATUS[s] === 'devolvido');
+const STATUS_REVISAO = STATUS_DOCUMENTO.filter((s) => FASE_DO_STATUS[s] === 'revisao');
 
 /**
  * Cartões do painel (só campos de exibição; sem observação, arquivos nem `criadoPor`).
  * `qtd_devolucoes` = eventos STATUS/CANCELAMENTO que entraram na fase 'devolvido'
  * (vindos de outra fase); `data_aprovacao` = dia (fuso de São Paulo) do evento STATUS
- * mais recente com status 'Aprovado'. Os dois vêm de eventos, nunca de contador editável.
+ * mais recente com status 'Aprovado'; `data_inicio_revisao` = dia do PRIMEIRO evento STATUS
+ * em fase 'revisao'; `status_antes_do_cancelamento` = statusAnterior do último CANCELAMENTO
+ * (só quando o documento está Cancelado). Tudo vem de eventos, nunca de contador editável;
+ * as funções puras `contarDevolucoes`, `dataAprovacao` e `dataInicioRevisao` (compartilhado)
+ * aplicam a mesma regra sobre os eventos devolvidos por GET /documentos/:id.
  * Ordem: prazo crescente (nulos por último), depois cadastro, depois id.
  * @param areaId null = todas as áreas; senão, só essa área.
  * @param incluirCancelados false = só documentos que não estão cancelados.
@@ -267,14 +335,25 @@ export async function listarCartoes(db: Executor, areaId: string | null, incluir
             (SELECT to_char(max(e.data_hora) AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')
                FROM eventos_historico e
               WHERE e.id_documento = d.id AND e.tipo_acao = 'STATUS' AND e.status = 'Aprovado') AS data_aprovacao,
+            (SELECT to_char(min(e.data_hora) AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')
+               FROM eventos_historico e
+              WHERE e.id_documento = d.id AND e.tipo_acao = 'STATUS'
+                AND e.status = ANY($4::text[])) AS data_inicio_revisao,
+            d.responsavel_id, r.nome AS responsavel,
+            CASE WHEN d.status = 'Cancelado' THEN
+              (SELECT e.status_anterior FROM eventos_historico e
+                WHERE e.id_documento = d.id AND e.tipo_acao = 'CANCELAMENTO'
+                ORDER BY e.ordem DESC LIMIT 1)
+            END AS status_antes_do_cancelamento,
             d.versao, d.criado_em, d.data_modificacao
        FROM documentos d
        JOIN tipos_documento t ON t.id = d.tipo_documento_id
        JOIN areas a ON a.id = d.area_id
+       LEFT JOIN usuarios r ON r.id = d.responsavel_id
       WHERE ($1::text IS NULL OR d.area_id = $1)
         AND ($2::boolean OR d.status <> 'Cancelado')
       ORDER BY d.data_revisao ASC NULLS LAST, d.criado_em ASC, d.id`,
-    [areaId, incluirCancelados, STATUS_DEVOLVIDO],
+    [areaId, incluirCancelados, STATUS_DEVOLVIDO, STATUS_REVISAO],
   );
   return rows.map((l) => ({
     id: l.id,
@@ -293,6 +372,10 @@ export async function listarCartoes(db: Executor, areaId: string | null, incluir
     qtdReprogramacoes: l.qtd_reprogramacoes,
     qtdDevolucoes: l.qtd_devolucoes,
     dataAprovacao: l.data_aprovacao,
+    dataInicioRevisao: l.data_inicio_revisao,
+    responsavelId: l.responsavel_id,
+    responsavel: l.responsavel,
+    statusAntesDoCancelamento: l.status_antes_do_cancelamento,
     versao: l.versao,
     criadoEm: iso(l.criado_em),
     dataModificacao: iso(l.data_modificacao),
@@ -319,25 +402,117 @@ export async function inserirArquivos(db: Executor, idDocumento: string, arquivo
   }
 }
 
-export async function listarArquivos(db: Executor, idDocumento: string): Promise<RegistroArquivo[]> {
-  const { rows } = await db.query<{
-    papel: PapelArquivo;
-    nome_original: string;
-    nome_armazenado: string;
-    tamanho: number;
-    tipo_mime: string;
-  }>(
-    `SELECT papel, nome_original, nome_armazenado, tamanho::integer AS tamanho, tipo_mime
-     FROM arquivos_documento WHERE id_documento = $1
-     ORDER BY papel DESC, nome_armazenado`,
-    [idDocumento],
-  );
-  return rows.map((l) => ({
+/** Arquivo como está no banco: metadados públicos + o caminho relativo no armazenamento. */
+export interface ArquivoGravado extends ArquivoDocumento {
+  idDocumento: string;
+  nomeArmazenado: string;
+}
+
+interface LinhaArquivo {
+  id: string;
+  id_documento: string;
+  papel: PapelArquivo;
+  nome_original: string;
+  nome_armazenado: string;
+  tamanho: number;
+  criado_em: Date | string;
+}
+
+const SELECT_ARQUIVO = `
+  SELECT id, id_documento, papel, nome_original, nome_armazenado, tamanho::integer AS tamanho, criado_em
+  FROM arquivos_documento`;
+
+function paraArquivo(l: LinhaArquivo): ArquivoGravado {
+  return {
+    id: l.id,
+    idDocumento: l.id_documento,
     papel: l.papel,
     nomeOriginal: l.nome_original,
     nomeArmazenado: l.nome_armazenado,
     tamanho: l.tamanho,
-    tipoMime: l.tipo_mime,
+    criadoEm: iso(l.criado_em),
+  };
+}
+
+/** Só os campos do contrato (sem `nomeArmazenado`, sem `tipoMime`, sem `idDocumento`). */
+export function paraArquivoDocumento(a: ArquivoGravado): ArquivoDocumento {
+  return { id: a.id, papel: a.papel, nomeOriginal: a.nomeOriginal, tamanho: a.tamanho, criadoEm: a.criadoEm };
+}
+
+/** Arquivos do documento: principal primeiro, depois anexos em ordem alfabética pt-BR do nome original. */
+export async function listarArquivos(db: Executor, idDocumento: string): Promise<ArquivoGravado[]> {
+  const { rows } = await db.query<LinhaArquivo>(`${SELECT_ARQUIVO} WHERE id_documento = $1`, [idDocumento]);
+  const arquivos = rows.map(paraArquivo);
+  const principais = arquivos.filter((a) => a.papel === 'principal');
+  const anexos = ordenarAlfabetico(
+    arquivos.filter((a) => a.papel === 'anexo'),
+    (a) => a.nomeOriginal,
+  );
+  return [...principais, ...anexos];
+}
+
+/**
+ * Arquivo pelo ID, só se pertencer a ESTE documento (contrato F4, 4.2, passo 4):
+ * um `ARQ-uuid` de outro documento responde null, como se não existisse.
+ */
+export async function buscarArquivoDoDocumento(
+  db: Executor,
+  idDocumento: string,
+  idArquivo: string,
+): Promise<ArquivoGravado | null> {
+  const { rows } = await db.query<LinhaArquivo>(`${SELECT_ARQUIVO} WHERE id = $1 AND id_documento = $2`, [
+    idArquivo,
+    idDocumento,
+  ]);
+  return rows[0] ? paraArquivo(rows[0]) : null;
+}
+
+// --- Registro de acesso a arquivos (decisão 0013; imutável: só INSERT) -----------------
+
+export interface NovoRegistroAcesso {
+  idDocumento: string;
+  idArquivo: string;
+  tipo: TipoAcessoArquivo;
+  /** Sempre do token. */
+  autorId: string;
+  autorNome: string;
+}
+
+export async function registrarAcessoArquivo(db: Executor, r: NovoRegistroAcesso): Promise<string> {
+  const id = `ACS-${randomUUID()}`;
+  await db.query(
+    `INSERT INTO registros_acesso_arquivos (id, id_documento, id_arquivo, tipo, autor_id, autor_nome)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, r.idDocumento, r.idArquivo, r.tipo, r.autorId, r.autorNome],
+  );
+  return id;
+}
+
+interface LinhaAcesso {
+  id: string;
+  id_documento: string;
+  id_arquivo: string;
+  tipo: TipoAcessoArquivo;
+  autor_id: string;
+  autor_nome: string;
+  data_hora: Date | string;
+}
+
+/** Registros de acesso de um documento, em ordem de gravação (sem tela nesta fatia; usado em testes). */
+export async function listarAcessosArquivos(db: Executor, idDocumento: string): Promise<RegistroAcessoArquivo[]> {
+  const { rows } = await db.query<LinhaAcesso>(
+    `SELECT id, id_documento, id_arquivo, tipo, autor_id, autor_nome, data_hora
+       FROM registros_acesso_arquivos WHERE id_documento = $1 ORDER BY ordem`,
+    [idDocumento],
+  );
+  return rows.map((l) => ({
+    id: l.id,
+    idDocumento: l.id_documento,
+    idArquivo: l.id_arquivo,
+    tipo: l.tipo,
+    autorId: l.autor_id,
+    autorNome: l.autor_nome,
+    dataHora: iso(l.data_hora),
   }));
 }
 
@@ -350,7 +525,10 @@ export interface NovoEvento {
   status: StatusDocumento;
   statusAnterior: StatusDocumento | null;
   destino: string | null;
+  /** Nome do responsável pela etapa no momento (F5); null quando não há. */
   responsavel: string | null;
+  /** ID do responsável (F5, migração 0005); null quando não há. */
+  responsavelId: string | null;
   autorId: string;
   autorNome: string;
   detalhes: EventoHistorico['detalhes'];
@@ -361,9 +539,9 @@ export async function registrarEvento(db: Executor, e: NovoEvento): Promise<stri
   const id = `HIST-${randomUUID()}`;
   await db.query(
     `INSERT INTO eventos_historico (
-       id, id_documento, codigo, tipo_acao, status, status_anterior, destino, responsavel,
+       id, id_documento, codigo, tipo_acao, status, status_anterior, destino, responsavel, responsavel_id,
        autor_id, autor_nome, detalhes, observacao)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)`,
     [
       id,
       e.idDocumento,
@@ -373,6 +551,7 @@ export async function registrarEvento(db: Executor, e: NovoEvento): Promise<stri
       e.statusAnterior,
       e.destino,
       e.responsavel,
+      e.responsavelId,
       e.autorId,
       e.autorNome,
       JSON.stringify(e.detalhes),
@@ -392,6 +571,7 @@ interface LinhaEvento {
   data_hora: Date | string;
   destino: string | null;
   responsavel: string | null;
+  responsavel_id: string | null;
   autor_id: string;
   autor_nome: string;
   detalhes: EventoHistorico['detalhes'] | string;
@@ -400,7 +580,7 @@ interface LinhaEvento {
 
 const SELECT_EVENTO = `
   SELECT id, id_documento, codigo, tipo_acao, status, status_anterior, data_hora, destino,
-         responsavel, autor_id, autor_nome, detalhes, observacao
+         responsavel, responsavel_id, autor_id, autor_nome, detalhes, observacao
   FROM eventos_historico`;
 
 function paraEvento(l: LinhaEvento): EventoHistorico {
@@ -414,6 +594,7 @@ function paraEvento(l: LinhaEvento): EventoHistorico {
     dataHora: iso(l.data_hora),
     destino: l.destino,
     responsavel: l.responsavel,
+    responsavelId: l.responsavel_id,
     autorId: l.autor_id,
     autorNome: l.autor_nome,
     detalhes: typeof l.detalhes === 'string' ? JSON.parse(l.detalhes) : l.detalhes,

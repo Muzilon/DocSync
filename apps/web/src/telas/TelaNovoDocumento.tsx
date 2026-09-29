@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { FilePlus2, RotateCw, Send, X } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import {
   LIMITES_ARQUIVO,
   STATUS_INICIAL,
@@ -330,6 +331,7 @@ interface PropsFormulario {
 }
 
 function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVerNaLista }: PropsFormulario) {
+  const navegar = useNavigate();
   const api = useApi();
   const toast = useToast();
   const inicial = useMemo(() => dadosIniciais(eu), [eu]);
@@ -467,7 +469,11 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
       limpar();
       // O prazo vem da resposta (calculado no servidor, decisão 0011); a tela nunca o calcula.
       const prazo = documento.dataRevisao ? ` Prazo: ${formatarData(documento.dataRevisao)}.` : '';
-      toast(`Documento registrado.${prazo}`, { rotulo: 'Ver na lista', aoAcionar: () => aoVerNaLista(documento.id) });
+      // F4: o destino do link agora existe (P-01). /documentos/<id> redireciona para os detalhes no Painel.
+      toast(`Documento registrado.${prazo}`, {
+        rotulo: 'Abrir detalhes',
+        aoAcionar: () => navegar(`/documentos/${encodeURIComponent(documento.id)}`),
+      });
     } catch (erro) {
       await tratarErro(erro);
     } finally {

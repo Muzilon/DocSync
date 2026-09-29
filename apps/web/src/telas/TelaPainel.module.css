@@ -1,9 +1,21 @@
 /* Tela Painel (contrato F3, seção 5), no estilo Vigen (decisão 0009). */
 
-/* Três KPIs (P-13): rótulo, valor e subtítulo coerentes. */
+/* Tela de altura cheia (decisão 0015 item 4): cabeçalho, KPIs e filtros no topo; o quadro fica com o resto. */
+.tela {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tela > * {
+  flex-shrink: 0;
+}
+
+/* Quatro KPIs (P-12, P-13): rótulo, valor e subtítulo coerentes. 4 → 2 → 1 colunas, só CSS. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
@@ -29,6 +41,10 @@
   border-left-color: var(--cor-erro-ponto);
 }
 
+.sucesso {
+  border-left-color: var(--cor-sucesso-ponto);
+}
+
 .kpiRotulo {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
@@ -47,6 +63,13 @@
 .kpiApoio {
   font-size: var(--fs-caption);
   color: var(--text-secondary);
+}
+
+/* "N dentro da meta de 40 dias": #047857 sobre #FFFFFF (5,5:1). */
+.kpiMeta {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--cor-sucesso-texto);
 }
 
 /* Filtros: busca, área, Cancelados e contagem. */
@@ -107,11 +130,19 @@
  * Quadro: 5 colunas com largura mínima (--kanban-coluna-min). Quando não cabem (tablet e telas
  * estreitas), o quadro rola na horizontal POR DENTRO; a página nunca rola (decisão 0005).
  */
+.tela > .quadro {
+  flex-shrink: 1;
+}
+
 .quadro {
   /* Ancestral posicionado: textos "visualmente-oculto" (absolute) ficam presos ao recorte do quadro. */
   position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(var(--kanban-coluna-min), 1fr));
+  /* Uma linha com a altura do quadro: a coluna usa max-height: 100% e rola por dentro. */
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: var(--kanban-coluna-altura-min);
   align-items: start;
   gap: var(--space-2);
   width: 100%;
@@ -177,7 +208,14 @@
   }
 }
 
-/* Tablet: KPIs continuam em 3 colunas, mais compactos. */
+/* Abaixo de 1200px (área útil menor que ~900px com a barra lateral): KPIs em 2 colunas. */
+@media (max-width: 1199px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Tablet: KPIs mais compactos. */
 @media (max-width: 1023px) {
   .kpis {
     gap: var(--space-3);
@@ -185,5 +223,11 @@
 
   .kpi {
     padding: var(--space-3) var(--space-4);
+  }
+}
+
+@media (max-width: 599px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

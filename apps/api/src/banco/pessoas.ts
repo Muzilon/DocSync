@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import {
+  PERFIS_RESPONSAVEL,
+  acessoLiberado,
   ordenarAlfabetico,
   type Area,
   type Perfil,
   type Pessoa,
+  type PessoaResumo,
   type RegistroAuditoriaPessoa,
   type StatusPessoa,
 } from '@docsync/compartilhado';
@@ -66,6 +69,34 @@ export const buscarPorEmail = (db: Executor, email: string) => umUsuario(db, 'u.
 export async function listarUsuarios(db: Executor): Promise<Usuario[]> {
   const { rows } = await db.query<LinhaUsuario>(SELECT_USUARIO);
   return ordenarAlfabetico(rows.map(paraUsuario), (u) => u.nome);
+}
+
+// --- Responsáveis pela etapa (F5, contrato 2.4 e 3.5) ----------------------------------
+
+/**
+ * Pessoa elegível a responsável: ativa, com acesso liberado (perfil e área, ou
+ * Administrador) e perfil Administrador, Qualidade ou Solicitante (o Leitor não atua).
+ * A regra usa a mesma `acessoLiberado` da interface.
+ */
+export function ehResponsavelElegivel(u: Usuario): u is Usuario & { perfil: Perfil } {
+  return acessoLiberado(u) && PERFIS_RESPONSAVEL.includes(u.perfil);
+}
+
+/** Só os campos de `PessoaResumo` (sem e-mail: LGPD, o mínimo para escolher e exibir). */
+export function paraPessoaResumo(u: Usuario & { perfil: Perfil }): PessoaResumo {
+  return { id: u.id, nome: u.nome, perfil: u.perfil, areaId: u.areaId, area: u.area };
+}
+
+/** Pessoas elegíveis a responsável, em ordem alfabética pt-BR do nome. */
+export async function listarResponsaveis(db: Executor): Promise<PessoaResumo[]> {
+  const usuarios = await listarUsuarios(db);
+  return usuarios.filter(ehResponsavelElegivel).map(paraPessoaResumo);
+}
+
+/** A pessoa pelo ID, só se elegível a responsável; senão null (inexistente, inativa, sem acesso ou Leitor). */
+export async function buscarResponsavelElegivel(db: Executor, id: string): Promise<PessoaResumo | null> {
+  const usuario = await buscarPorId(db, id);
+  return usuario && ehResponsavelElegivel(usuario) ? paraPessoaResumo(usuario) : null;
 }
 
 /** Chave fixa do bloqueio que serializa as decisões sobre "quem é Administrador ativo". */

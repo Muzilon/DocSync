@@ -23,6 +23,8 @@ O documento 03 previa a "Data de Revisão (Prazo)" preenchida à mão. A decisã
 - Documentos já cadastrados sem prazo recebem **data do cadastro + 30 dias** (migração nova).
 - Reprogramação **só adia** o prazo; "data do cadastro" = dia em que o sistema recebeu (decisão [0012](0012-recebimento-automatico-e-metas-de-ciclo.md)).
 
+- Atualização 2026-09-29: reprogramar **só com prazo vencido** (decisão [0015](0015-cartao-estilo-planner.md)).
+
 ## Consequências
 - O cadastro (F2, já validado) passa a gravar o prazo calculado: mudança pequena no servidor, feita no início da F3, com migração nova (nunca editar a 0002).
 - Nova ação de permissão (`reprogramarPrazo`) e novo tipo de evento no histórico, com linha nova na tabela de testes de `pode`.

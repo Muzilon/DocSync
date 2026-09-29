@@ -6,6 +6,8 @@
   gap: var(--space-3);
   min-width: var(--kanban-coluna-min);
   min-height: var(--kanban-coluna-altura-min);
+  /* Decisão 0015: a coluna tem altura máxima e a lista rola por dentro (como no Planner). */
+  max-height: var(--kanban-coluna-altura-max);
   padding: var(--space-3);
   border: var(--borda-fina) solid var(--border-subtle);
   border-top: var(--marcador-largura) solid var(--border-forte);
@@ -39,6 +41,7 @@
   font-size: var(--fs-body-sm);
   font-weight: var(--fw-bold);
   color: var(--text-strong);
+  flex-shrink: 0;
 }
 
 .rotulo {
@@ -83,12 +86,20 @@
   text-align: center;
 }
 
+/*
+ * Rolagem vertical própria da coluna. A folga interna mantém o anel de foco do cartão visível
+ * dentro do recorte; os cartões têm controles focáveis, então a região é alcançável pelo teclado.
+ */
 .lista {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin: 0;
-  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 /* --text-secondary (e não --text-muted) sobre --bg-subtle (decisão 0009). */

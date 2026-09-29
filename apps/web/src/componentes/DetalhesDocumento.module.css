@@ -1,0 +1,234 @@
+/* Modal de detalhes (contrato F4, 5.2; documento 04, 6.1 e 6.2; cores da decisão 0009). */
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.linhaCabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.codigo {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.semCodigo {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.revisao {
+  color: var(--text-secondary);
+}
+
+.devolucoes {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--status-devolvido-bg);
+  color: var(--status-devolvido-cor);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Uma coluna até 860px; depois, Dados + Arquivos à esquerda e Linha do tempo à direita. */
+.colunas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (min-width: 860px) {
+  .colunas {
+    grid-template-columns: minmax(0, 1.2fr) minmax(var(--detalhes-coluna-direita-min), 0.95fr);
+  }
+}
+
+.esquerda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.direita {
+  min-width: 0;
+}
+
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tituloSecao {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+}
+
+.dados {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+@media (max-width: 639px) {
+  .dados {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.par {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.largo {
+  grid-column: 1 / -1;
+}
+
+.rotulo {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+}
+
+.valor {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.textoLivre {
+  white-space: pre-wrap;
+}
+
+.erroArquivo {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro);
+  font-size: var(--fs-body-sm);
+}
+
+.naoEncontrado {
+  padding: var(--space-6);
+  border: var(--borda-fina) dashed var(--border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.blocoEsqueleto {
+  display: block;
+  height: var(--esqueleto-cartao);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+
+.baixo {
+  height: var(--space-15);
+}
+
+.conteudo {
+  gap: var(--space-4);
+}
+
+/*
+ * Rodapé de ações (contrato F5, 6.2): etapas, Cancelar, Reativar, Reprogramar e Fechar, nessa
+ * ordem. Quebra em mais de uma linha em telas estreitas, sem rolagem horizontal.
+ */
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.rodape > button {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Metas do ciclo (decisão 0012): rótulo, estado por extenso e o texto de `avaliarMetas`. */
+.metas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.limiteMeta {
+  font-weight: var(--fw-regular);
+}
+
+.valorMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-primary);
+}
+
+.estadoMeta {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-base);
+  white-space: nowrap;
+}
+
+/* Mesmas cores das etiquetas de prazo: #047857 sobre #ECFDF5, #B91C1C sobre #FEF2F2, #1E293B sobre #F1F5F9. */
+.sucesso {
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
+}
+
+.erro {
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro);
+}
+
+.neutro {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}

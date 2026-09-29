@@ -106,6 +106,13 @@ export interface Documento {
   qtdAnexos: number;
   /** Documento revisado por este (decisão 0004); null em documento novo. */
   idDocumentoOrigem: string | null;
+  /**
+   * Responsável atual pela etapa (F5, contrato 2.4): pessoa cadastrada (`USR-uuid`).
+   * null em Recebido (ninguém ainda), Aprovado (fluxo concluído) e importados.
+   */
+  responsavelId: string | null;
+  /** Nome ATUAL do responsável (por JOIN); o nome no momento de cada etapa fica no evento. */
+  responsavel: string | null;
   /** Número de versão para concorrência otimista (decisão 0002). Começa em 1. */
   versao: number;
   /** ID (`USR-uuid`) de quem cadastrou, vindo do token. */
@@ -129,7 +136,10 @@ export interface EventoHistorico {
   statusAnterior: StatusDocumento | null;
   dataHora: string;
   destino: string | null;
+  /** Nome do responsável pela etapa no momento do evento (F5); null quando não há. */
   responsavel: string | null;
+  /** ID (`USR-uuid`) do responsável pela etapa (F5, migração 0005); null quando não há. */
+  responsavelId: string | null;
   /** Sempre da identidade autenticada, nunca do corpo da requisição. */
   autorId: string;
   /** Nome do autor no momento do evento. */
@@ -138,10 +148,28 @@ export interface EventoHistorico {
   observacao: string | null;
 }
 
-/** Resposta de GET /documentos/:id. Eventos em ordem de gravação. */
+/** Arquivo do documento (metadados; o conteúdo vem por GET /documentos/:id/arquivos/:arquivoId). */
+export interface ArquivoDocumento {
+  /** 'ARQ-uuid', gerado no cadastro e nunca reaproveitado. É a única forma de pedir o download. */
+  id: string;
+  papel: 'principal' | 'anexo';
+  /** Nome como veio de quem enviou (só exibição; o nome do download é sanitizado pelo servidor). */
+  nomeOriginal: string;
+  /** Bytes. */
+  tamanho: number;
+  /** ISO 8601 UTC. */
+  criadoEm: string;
+}
+
+/** Resposta de GET /documentos/:id (contrato F4, 2.1). */
 export interface DetalheDocumento {
   documento: Documento;
+  /** Principal primeiro, depois anexos em ordem alfabética pt-BR do nome. */
+  arquivos: ArquivoDocumento[];
+  /** Todos os eventos, em ordem de gravação (mais antigo primeiro). A tela inverte. */
   eventos: EventoHistorico[];
+  /** Dia de referência do servidor ('AAAA-MM-DD', fuso de São Paulo), para a etiqueta de prazo do modal. */
+  hoje: string;
 }
 
 /**
@@ -210,6 +238,44 @@ export function diferencaEmDias(inicio: string, fim: string): number {
 /** Prazo automático de um cadastro feito no dia `dataCadastro` ('AAAA-MM-DD'). */
 export function calcularPrazoAutomatico(dataCadastro: string): string {
   return somarDias(dataCadastro, DIAS_PRAZO_PADRAO);
+}
+
+/** Fuso de referência de todas as datas só-dia do DocSync (decisão 0012). */
+export const FUSO_SAO_PAULO = 'America/Sao_Paulo';
+
+const formatadorDiaSaoPaulo = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO_SAO_PAULO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Dia ('AAAA-MM-DD') no fuso de São Paulo de um instante (ISO 8601 UTC ou `Date`).
+ * A mesma conversão do SQL `AT TIME ZONE 'America/Sao_Paulo'` do painel: um evento
+ * às 02:00 UTC de 10/10 é 09/10 em São Paulo.
+ */
+export function diaEmSaoPaulo(instante: string | Date): string {
+  // en-CA formata como 'AAAA-MM-DD'; as partes garantem o resultado mesmo se o formato mudar.
+  const partes = formatadorDiaSaoPaulo.formatToParts(typeof instante === 'string' ? new Date(instante) : instante);
+  const pegar = (tipo: string) => partes.find((p) => p.type === tipo)!.value;
+  return `${pegar('year')}-${pegar('month')}-${pegar('day')}`;
+}
+
+/** Documento ainda em tramitação (nem Aprovado nem Cancelado): o único que tem prazo a acompanhar. */
+export function emTramitacao(documento: Pick<Documento, 'status'>): boolean {
+  return documento.status !== 'Cancelado' && documento.status !== 'Aprovado';
+}
+
+/**
+ * Reprogramar só com prazo vencido (decisão 0015, item 5): documento em tramitação
+ * cujo prazo é anterior a hoje ("vence hoje" ainda não venceu). Documento em
+ * tramitação SEM prazo (importado) pode receber um: não há prazo a esperar vencer.
+ * A mesma regra decide o botão na interface e o 409 `acao_nao_permitida` na API.
+ */
+export function podeReprogramarAgora(documento: Pick<Documento, 'status' | 'dataRevisao'>, hoje: string): boolean {
+  if (!emTramitacao(documento)) return false;
+  return documento.dataRevisao === null || documento.dataRevisao < hoje;
 }
 
 /** Corpo de POST /documentos/:id/reprogramacoes. Campo desconhecido é rejeitado. */
@@ -304,6 +370,143 @@ export function validarArquivo(nome: string, tamanhoBytes: number): string | nul
     return `O arquivo passa do limite de ${LIMITES_ARQUIVO.tamanhoMaximoMB} MB.`;
   }
   return null;
+}
+
+/**
+ * Tipo de conteúdo do download, decidido só pela extensão do nome armazenado
+ * (contrato F4, 4.3). Tabela fechada: toda extensão de `LIMITES_ARQUIVO.extensoes`
+ * tem tipo; fora dela, `application/octet-stream`. O `tipo_mime` declarado por quem
+ * enviou nunca é usado.
+ */
+export const TIPO_MIME_POR_EXTENSAO: Record<(typeof LIMITES_ARQUIVO.extensoes)[number], string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+};
+
+export const TIPO_MIME_GENERICO = 'application/octet-stream';
+
+/** Tipo de conteúdo pela extensão do nome (maiúsculas aceitas); genérico se fora da tabela. */
+export function tipoMimePorExtensao(nome: string): string {
+  const extensao = extensaoArquivo(nome);
+  return Object.hasOwn(TIPO_MIME_POR_EXTENSAO, extensao)
+    ? TIPO_MIME_POR_EXTENSAO[extensao as keyof typeof TIPO_MIME_POR_EXTENSAO]
+    : TIPO_MIME_GENERICO;
+}
+
+/** O arquivo é um PDF (pela extensão). Sem uso especial na tramitação desde a decisão 0014. */
+export function ehPdf(nome: string): boolean {
+  return extensaoArquivo(nome) === 'pdf';
+}
+
+// ---------------------------------------------------------------------------
+// Nome do arquivo principal baixado (decisão 0014, item 4)
+// ---------------------------------------------------------------------------
+
+/** Caracteres que o Windows não aceita em nome de arquivo, mais os de controle. */
+const PROIBIDOS_WINDOWS = /[\\/:*?"<>|\u0000-\u001f\u007f]/g;
+
+/** Código usado quando o documento ainda não tem código (decisão 0014, item 4). */
+export const CODIGO_AUSENTE_DOWNLOAD = 'SEM-CODIGO';
+
+/** Versão de todo arquivo até a F7 (versionamento com justificativa). */
+export const VERSAO_ARQUIVO_INICIAL = 1;
+
+/** Limite prático do nome baixado (sistemas de arquivos aceitam 255; folga para a pasta). */
+export const TAMANHO_MAXIMO_NOME_DOWNLOAD = 200;
+
+function semProibidosWindows(texto: string): string {
+  return texto.replace(PROIBIDOS_WINDOWS, '-').replace(/\s+/g, ' ').replace(/^[\s.]+|[\s.]+$/g, '');
+}
+
+/**
+ * Nome do arquivo PRINCIPAL baixado: `[código]-[título]_[revisão]=[versão].[ext]`, ex.:
+ * `PR-QUA-0010-Procedimento de auditoria interna_1=3.pdf`. Sem código, `SEM-CODIGO-...`.
+ * O título entra inteiro, só sem os caracteres que o Windows não aceita (`\ / : * ? " < > |`
+ * e de controle) e sem ponto ou espaço nas pontas. A extensão vem do nome do arquivo
+ * (minúscula); sem extensão, sem ponto. Nome maior que 200 caracteres é cortado no
+ * título, preservando o sufixo de revisão/versão e a extensão. Anexos NÃO passam por
+ * aqui: baixam com o nome original.
+ */
+export function nomeDownloadPrincipal(
+  documento: Pick<Documento, 'codigo' | 'titulo' | 'revisao'>,
+  nomeArquivo: string,
+  versao: number = VERSAO_ARQUIVO_INICIAL,
+): string {
+  const codigo = semProibidosWindows(documento.codigo ?? '') || CODIGO_AUSENTE_DOWNLOAD;
+  const titulo = semProibidosWindows(documento.titulo) || 'Documento';
+  const extensao = extensaoArquivo(nomeArquivo);
+  const sufixo = `_${documento.revisao}=${versao}${extensao ? `.${extensao}` : ''}`;
+  const prefixo = `${codigo}-`;
+  // Limite contado em code points; o corte cai só em fronteira de caractere visível
+  // (grafema): emoji, bandeira ou acento decomposto nunca é partido ao meio.
+  const espaco = TAMANHO_MAXIMO_NOME_DOWNLOAD - contarCodePoints(prefixo) - contarCodePoints(sufixo);
+  const tituloCabe = cortarEmGrafemas(titulo, Math.max(espaco, 1)).replace(/[\s.]+$/g, '') || 'Documento';
+  const nome = `${prefixo}${tituloCabe}${sufixo}`;
+  // Garantia final: código longo demais não pode estourar o limite mesmo com o título mínimo.
+  return contarCodePoints(nome) > TAMANHO_MAXIMO_NOME_DOWNLOAD ? cortarEmGrafemas(nome, TAMANHO_MAXIMO_NOME_DOWNLOAD) : nome;
+}
+
+function contarCodePoints(texto: string): number {
+  return Array.from(texto).length;
+}
+
+const segmentadorGrafemas = new Intl.Segmenter('pt-BR', { granularity: 'grapheme' });
+
+/**
+ * Corta o texto para caber em `maximo` code points, só em fronteira de grafema.
+ * Um grafema que não cabe inteiro fica de fora (nunca sai meio caractere).
+ */
+function cortarEmGrafemas(texto: string, maximo: number): string {
+  if (contarCodePoints(texto) <= maximo) return texto;
+  let usado = 0;
+  let saida = '';
+  for (const { segment } of segmentadorGrafemas.segment(texto)) {
+    const tamanho = contarCodePoints(segment);
+    if (usado + tamanho > maximo) break;
+    saida += segment;
+    usado += tamanho;
+  }
+  return saida;
+}
+
+const UNIDADES_TAMANHO = ['B', 'KB', 'MB', 'GB'] as const;
+const formatadorTamanho = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+/** Tamanho legível em pt-BR, base 1024: '0 B', '999 B', '1 KB', '1,5 MB', '20 MB'. */
+export function formatarTamanho(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  let valor = bytes;
+  let indice = 0;
+  while (valor >= 1024 && indice < UNIDADES_TAMANHO.length - 1) {
+    valor /= 1024;
+    indice++;
+  }
+  return `${formatadorTamanho.format(valor)} ${UNIDADES_TAMANHO[indice]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Registro de acesso a arquivos (decisão 0013): fora da linha do tempo, imutável
+// ---------------------------------------------------------------------------
+
+export type TipoAcessoArquivo = 'VISUALIZACAO' | 'DOWNLOAD';
+
+/** Registro imutável de quem acessou um arquivo ('ACS-uuid'). Sem tela nesta fatia. */
+export interface RegistroAcessoArquivo {
+  id: string;
+  idDocumento: string;
+  idArquivo: string;
+  tipo: TipoAcessoArquivo;
+  /** Sempre da identidade autenticada. */
+  autorId: string;
+  autorNome: string;
+  /** ISO 8601 UTC. */
+  dataHora: string;
 }
 
 /**

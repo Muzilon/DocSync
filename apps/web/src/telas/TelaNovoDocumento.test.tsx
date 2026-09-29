@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import type { Area, Documento, NovoDocumento, Pessoa, TipoDocumento } from '@docsync/compartilhado';
 import { ContextoApi, type Api } from '../api/cliente.ts';
 import { ErroApi } from '../api/erros.ts';
@@ -37,6 +38,8 @@ function documentoDe(d: NovoDocumento): Documento {
     nomeArquivoPrincipal: 'principal.pdf',
     qtdAnexos: 0,
     idDocumentoOrigem: null,
+    responsavelId: null,
+    responsavel: null,
     versao: 1,
     criadoPor: 'USR-1',
     criadoEm: '2026-09-29T12:00:00Z',
@@ -52,13 +55,24 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     criarPessoa: vi.fn(),
     alterarPessoa: vi.fn(),
     tiposDocumento: vi.fn().mockResolvedValue(TIPOS),
+    baixarArquivo: vi.fn(),
     documentosRecentes: vi.fn().mockResolvedValue([]),
     criarDocumento: vi.fn(async (d: NovoDocumento) => documentoDe(d)),
     documento: vi.fn().mockRejectedValue(new ErroApi(404, 'desconhecido')),
     painel: vi.fn(),
+    mudarStatus: vi.fn(),
+    cancelarDocumento: vi.fn(),
+    reativarDocumento: vi.fn(),
+    responsaveis: vi.fn(),
     reprogramarPrazo: vi.fn(),
     ...sobrescrever,
   };
+}
+
+/** Mostra o endereço atual (destino da ação "Abrir detalhes" do toast). */
+function SondaRota() {
+  const local = useLocation();
+  return <p>Endereço: {local.pathname}</p>;
 }
 
 function renderizar(api: Api, eu: Pessoa = EU) {
@@ -67,9 +81,14 @@ function renderizar(api: Api, eu: Pessoa = EU) {
   render(
     <ContextoApi.Provider value={api}>
       <ContextoSessao.Provider value={{ eu, sair: () => undefined }}>
-        <ProvedorToast>
-          <TelaNovoDocumento />
-        </ProvedorToast>
+        <MemoryRouter initialEntries={['/documentos/novo']}>
+          <ProvedorToast>
+            <Routes>
+              <Route path="/documentos/novo" element={<TelaNovoDocumento />} />
+              <Route path="/documentos/:id" element={<SondaRota />} />
+            </Routes>
+          </ProvedorToast>
+        </MemoryRouter>
       </ContextoSessao.Provider>
     </ContextoApi.Provider>,
   );
@@ -167,7 +186,7 @@ describe('TelaNovoDocumento', () => {
     await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));
 
     await screen.findByText(/^Documento registrado\./);
-    expect(screen.getByRole('button', { name: 'Ver na lista' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir detalhes' })).toBeInTheDocument();
     const enviado = vi.mocked(api.criarDocumento).mock.calls[0]![0];
     expect(enviado).not.toHaveProperty('dataRevisao');
     expect(enviado).not.toHaveProperty('dataRecebimento');
@@ -184,6 +203,16 @@ describe('TelaNovoDocumento', () => {
     await waitFor(() => expect(api.criarDocumento).toHaveBeenCalledTimes(2));
     const segundo = vi.mocked(api.criarDocumento).mock.calls[1]![0];
     expect(segundo.id).not.toBe(enviado.id);
+  });
+
+  it('toast "Abrir detalhes" leva a /documentos/<id> (que redireciona para os detalhes no Painel)', async () => {
+    const api = apiSimulada();
+    const usuario = renderizar(api);
+    await preencherObrigatorios(usuario);
+    await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));
+    await usuario.click(await screen.findByRole('button', { name: 'Abrir detalhes' }));
+    const enviado = vi.mocked(api.criarDocumento).mock.calls[0]![0];
+    expect(await screen.findByText(`Endereço: /documentos/${enviado.id}`)).toBeInTheDocument();
   });
 
   it('Limpar formulário (com confirmação) zera arquivo principal e anexos e repreenche remetente', async () => {
@@ -280,7 +309,7 @@ describe('TelaNovoDocumento', () => {
       })
       .mockRejectedValueOnce(new ErroApi(409, 'id_existente'))
       .mockImplementation(async (d: NovoDocumento) => documentoDe(d));
-    const documento = vi.fn(async () => ({ documento: gravado!, eventos: [] }));
+    const documento = vi.fn(async () => ({ documento: gravado!, eventos: [], arquivos: [], hoje: '2026-09-29' }));
     const usuario = renderizar(apiSimulada({ criarDocumento, documento }));
     await preencherObrigatorios(usuario);
     await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));
@@ -306,7 +335,7 @@ describe('TelaNovoDocumento', () => {
       .mockRejectedValueOnce(new ErroApi(409, 'id_existente'))
       .mockImplementation(async (d: NovoDocumento) => documentoDe(d));
     const outro = { ...documentoDe({ ...dadosIniciais(EU), id: 'x', codigo: null, revisao: 0, disciplina: null, observacao: null }), criadoPor: 'USR-OUTRO' };
-    const documento = vi.fn(async () => ({ documento: outro, eventos: [] }));
+    const documento = vi.fn(async () => ({ documento: outro, eventos: [], arquivos: [], hoje: '2026-09-29' }));
     const usuario = renderizar(apiSimulada({ criarDocumento, documento }));
     await preencherObrigatorios(usuario);
     await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));

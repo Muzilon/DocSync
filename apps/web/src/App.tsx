@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router';
 import { pode } from '@docsync/compartilhado';
 import { RotaProtegida, useSessao } from './autenticacao/Sessao.tsx';
 import { Casca } from './telas/Casca.tsx';
@@ -27,6 +27,15 @@ function SoQuemCadastra({ children }: { children: ReactNode }) {
 function SoQuemVeDocumentos({ children }: { children: ReactNode }) {
   const { eu } = useSessao();
   return pode(eu, 'verDocumentos') ? children : <Navigate to="/" replace />;
+}
+
+/**
+ * Atalho curto /documentos/:id (toasts e, no futuro, e-mails): redireciona para o endereço real,
+ * /painel?documento=<id>, que abre os detalhes sobre o Painel (contrato F4, 5.1).
+ */
+export function RedirecionarDocumento() {
+  const { id = '' } = useParams();
+  return <Navigate to={`/painel?${new URLSearchParams({ documento: id }).toString()}`} replace />;
 }
 
 function NaoEncontrada() {
@@ -71,6 +80,14 @@ export function App() {
               <SoQuemCadastra>
                 <TelaNovoDocumento />
               </SoQuemCadastra>
+            }
+          />
+          <Route
+            path="documentos/:id"
+            element={
+              <SoQuemVeDocumentos>
+                <RedirecionarDocumento />
+              </SoQuemVeDocumentos>
             }
           />
           <Route path="*" element={<NaoEncontrada />} />

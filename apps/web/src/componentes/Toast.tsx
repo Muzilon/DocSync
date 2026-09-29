@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { CircleCheck, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import estilos from './Toast.module.css';
 
 const DURACAO_MS = 5000;
@@ -11,7 +11,10 @@ export interface AcaoToast {
   aoAcionar: () => void;
 }
 
-type Mostrar = (mensagem: string, acao?: AcaoToast) => void;
+/** Sucesso (padrão) ou erro: muda só o ícone; o texto sempre diz o que aconteceu. */
+export type TomToast = 'sucesso' | 'erro';
+
+type Mostrar = (mensagem: string, acao?: AcaoToast, tom?: TomToast) => void;
 const ContextoToast = createContext<Mostrar>(() => {});
 
 export function useToast(): Mostrar {
@@ -21,6 +24,7 @@ export function useToast(): Mostrar {
 interface Aviso {
   mensagem: string;
   acao?: AcaoToast | undefined;
+  tom: TomToast;
   /** Muda a cada aviso, para reiniciar o tempo mesmo com o mesmo texto. */
   chave: number;
 }
@@ -30,7 +34,10 @@ export function ProvedorToast({ children }: { children: ReactNode }) {
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [pausado, setPausado] = useState(false);
 
-  const mostrar = useCallback<Mostrar>((mensagem, acao) => setAviso({ mensagem, acao, chave: Date.now() }), []);
+  const mostrar = useCallback<Mostrar>(
+    (mensagem, acao, tom = 'sucesso') => setAviso({ mensagem, acao, tom, chave: Date.now() }),
+    [],
+  );
 
   useEffect(() => {
     if (aviso === null || pausado) return;
@@ -56,7 +63,11 @@ export function ProvedorToast({ children }: { children: ReactNode }) {
             onFocus={() => setPausado(true)}
             onBlur={() => setPausado(false)}
           >
-            <CircleCheck className={estilos.icone} size={16} aria-hidden="true" />
+            {aviso.tom === 'erro' ? (
+              <CircleAlert className={estilos.iconeErro} size={16} aria-hidden="true" />
+            ) : (
+              <CircleCheck className={estilos.icone} size={16} aria-hidden="true" />
+            )}
             <span>{aviso.mensagem}</span>
             {aviso.acao && (
               <button

@@ -157,6 +157,13 @@
   --icone-md: 20px;
   --dialogo-largura: 440px;
   --dialogo-largura-larga: 760px;
+  --dialogo-largura-detalhes: 980px;
+  /* Detalhes (F4): duas colunas a partir de 860px, direita com no mínimo 320px (documento 04, 6.2). */
+  --detalhes-coluna-direita-min: 320px;
+  --linha-tempo-ponto: 22px;
+  --linha-tempo-linha: 2px;
+  /* Lista de arquivos (F4): largura base do bloco de nome antes de quebrar linha. */
+  --arquivo-texto-base: 12rem;
   --dialogo-altura-max: 85vh;
   --campo-altura: 40px;
   --borda-fina: 1px;
@@ -178,6 +185,9 @@
   /* Painel Kanban (F3): colunas com largura mínima; o quadro rola por dentro quando não cabem. */
   --kanban-coluna-min: 216px;
   --kanban-coluna-altura-min: 240px;
+  /* F5 (decisão 0015): a coluna ocupa no máximo a altura do quadro (que é o que sobra da janela) e rola por dentro. */
+  --kanban-coluna-altura-max: 100%;
+  --avatar-cartao: 24px;
   --kpi-valor: 28px;
   --esqueleto-cartao: 96px;
 
@@ -209,6 +219,7 @@
   --duracao-media: 0.25s;
   --duracao-spinner: 0.8s;
   --duracao-spinner-reduzido: 1.5s;
+  --duracao-pulso: 2s;
 }
 
 /* Tema escuro: fundos petróleo profundos, textos claros da mesma família. */

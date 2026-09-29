@@ -1,0 +1,84 @@
+/* Arquivos do documento (contrato F4, 5.2). */
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.icone {
+  flex-shrink: 0;
+  color: var(--cor-marca);
+}
+
+:root[data-tema='escuro'] .icone {
+  color: var(--cor-link);
+}
+
+.texto {
+  flex: 1 1 var(--arquivo-texto-base);
+  min-width: 0;
+}
+
+.nome {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.principal {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--cor-marca-suave);
+  color: var(--text-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caixa-alta);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.vazio {
+  padding: var(--space-4);
+  border: var(--borda-fina) dashed var(--border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Perfil sem download (ex.: Leitor): frase secundária acima da lista (contrato F4, 11.6). */
+.semDownload {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+}

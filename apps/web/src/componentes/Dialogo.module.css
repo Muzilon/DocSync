@@ -14,16 +14,79 @@
   width: min(var(--dialogo-largura-larga), calc(100vw - var(--space-8)));
 }
 
-/* Na janela larga, o cabeçalho e as ações ficam fixos e só o conteúdo rola. */
-.larga[open] {
+/* Detalhes do documento (contrato F4, 5.2): 980px; em 768px ocupa a largura menos 2 × space-4 (= space-8). */
+.detalhes {
+  width: min(var(--dialogo-largura-detalhes), calc(100vw - var(--space-8)));
+}
+
+/* Janelas larga e detalhes: cabeçalho e ações fixos, só o conteúdo rola. */
+.rolavel[open] {
   display: flex;
   flex-direction: column;
   max-height: var(--dialogo-altura-max);
 }
 
-.larga .conteudo {
+.rolavel .conteudo {
   overflow-y: auto;
   min-height: 0;
+  flex: 1 1 auto;
+}
+
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--borda-fina) solid var(--border-soft);
+}
+
+.cabecalho + .conteudo {
+  padding-top: var(--space-5);
+}
+
+.linhaTitulo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.linhaTitulo .titulo {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: var(--lh-titulo);
+  padding-top: var(--space-1);
+}
+
+.fechar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--botao-icone);
+  height: var(--botao-icone);
+  border: var(--borda-fina) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.fechar:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.fechar:focus-visible {
+  outline: var(--foco-largura) solid var(--cor-foco);
+  outline-offset: var(--foco-afastamento);
+}
+
+@media (pointer: coarse) {
+  .fechar {
+    width: var(--alvo-toque);
+    height: var(--alvo-toque);
+  }
 }
 
 .dialogo[open] {
