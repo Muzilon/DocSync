@@ -140,6 +140,16 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
   const ultimoCorpo = useRef<EdicaoDocumento | null>(null);
   const resumo = useRef<HTMLDivElement>(null);
   const aviso = useRef<HTMLDivElement>(null);
+  /**
+   * Pedido de foco no resumo de erros ou no aviso: atendido DEPOIS do commit (efeito), para o
+   * elemento já existir mesmo com a máquina lenta. `n` muda a cada pedido.
+   */
+  const [pedidoFoco, setPedidoFoco] = useState<{ alvo: 'resumo' | 'aviso'; n: number } | null>(null);
+  const focar = (alvo: 'resumo' | 'aviso') => setPedidoFoco((atual) => ({ alvo, n: (atual?.n ?? 0) + 1 }));
+  useEffect(() => {
+    if (!pedidoFoco) return;
+    (pedidoFoco.alvo === 'resumo' ? resumo : aviso).current?.focus();
+  }, [pedidoFoco]);
 
   useEffect(() => {
     let ativo = true;
@@ -244,13 +254,13 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
     setErros(validacao.erros);
     if (!validacao.dados) {
       setSemAlteracao(false);
-      requestAnimationFrame(() => resumo.current?.focus());
+      focar('resumo');
       return;
     }
     // Edição vazia não vai ao servidor (contrato F6, 5.2).
     if (diferencasDocumento(base, validacao.dados, nomes(validacao.dados)).length === 0) {
       setSemAlteracao(true);
-      requestAnimationFrame(() => resumo.current?.focus());
+      focar('resumo');
       return;
     }
     setSemAlteracao(false);
@@ -293,12 +303,12 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
       setBase(atual);
       setConflito({ diferencas, editavel, motivo: editavel ? '' : motivoSemEdicao(atual) });
       aoConflito(atual);
-      requestAnimationFrame(() => aviso.current?.focus());
+      focar('aviso');
       return;
     }
     if (erro instanceof ErroApi && erro.codigo === 'codigo_revisao_existente') {
       setErrosServidor({ codigo: MENSAGEM_CODIGO_EXISTENTE });
-      requestAnimationFrame(() => resumo.current?.focus());
+      focar('resumo');
       return;
     }
     if (erro instanceof ErroApi && erro.codigo === 'dados_invalidos') {
@@ -309,13 +319,13 @@ export function DialogoEditarDados({ documento, eu, aberto, aoFechar, aoSalvar, 
       }
       if (Object.keys(doServidor).length > 0) {
         setErrosServidor(doServidor);
-        requestAnimationFrame(() => resumo.current?.focus());
+        focar('resumo');
         return;
       }
     }
     if (erro instanceof ErroApi && erro.codigo === 'sem_conexao') setSemConexao(true);
     setErroGeral(mensagemDeErro(erro));
-    requestAnimationFrame(() => aviso.current?.focus());
+    focar('aviso');
   }
 
   const exibidos: Erros = {};
