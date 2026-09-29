@@ -62,3 +62,24 @@
   font-weight: var(--fw-semibold);
   color: var(--text-primary);
 }
+
+/* Atalho do Início para uma tela que existe (ex.: "Abrir o painel"). */
+.atalho {
+  margin-top: var(--space-5);
+}
+
+.textoAtalho {
+  margin-bottom: var(--space-3);
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+}
+
+.linkAtalho {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--alvo-toque);
+  color: var(--cor-link);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+}

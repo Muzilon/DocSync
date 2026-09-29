@@ -21,7 +21,6 @@ async function axe(page: Page) {
 async function preencher(page: Page) {
   await page.getByLabel(/Título do documento/).fill('Procedimento de teste');
   await page.getByLabel(/Tipo de documento/).selectOption({ label: 'PR - Procedimento' });
-  await page.getByLabel(/Data de recebimento/).fill('2026-09-29');
   await page.getByLabel(/Arquivo do documento principal/).setInputFiles({
     name: 'principal.pdf',
     mimeType: 'application/pdf',
@@ -34,7 +33,7 @@ for (const tema of TEMAS) {
     await abrir(page, tema);
     await page.getByRole('button', { name: 'Registrar documento' }).click();
     const resumo = page.getByRole('alert');
-    await expect(resumo).toContainText('Corrija 4 campos antes de registrar');
+    await expect(resumo).toContainText('Corrija 3 campos antes de registrar');
     await expect(resumo).toBeFocused();
     await axe(page);
 

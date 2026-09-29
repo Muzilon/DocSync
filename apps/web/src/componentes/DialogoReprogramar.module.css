@@ -1,0 +1,65 @@
+/* Diálogo "Reprogramar prazo" (contrato F3, seção 5). */
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.documento {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--borda-fina) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.tituloDocumento {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.apoio,
+.prazoAtual {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.prazoAtual strong {
+  color: var(--text-primary);
+}
+
+.aviso,
+.erro,
+.resumoErros {
+  padding: var(--space-3) var(--space-4);
+  border: var(--borda-fina) solid var(--cor-alerta-ponto);
+  border-left-width: var(--borda-destaque);
+  border-radius: var(--radius-sm);
+  background: var(--cor-alerta-fundo);
+  color: var(--text-primary);
+  font-size: var(--fs-body-sm);
+}
+
+.erro,
+.resumoErros {
+  border-color: var(--cor-erro-ponto);
+  background: var(--cor-erro-fundo);
+}
+
+.avisoTitulo {
+  font-weight: var(--fw-bold);
+}
+
+.resumoErros ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.resumoErros a {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}

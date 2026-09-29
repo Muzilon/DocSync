@@ -26,6 +26,11 @@ function documentoDe(d: NovoDocumento): Documento {
     ...d,
     codigo: d.codigo,
     status: 'Recebido',
+    // Gravadas pelo servidor (decisões 0011 e 0012).
+    dataRecebimento: '2026-09-29',
+    dataRevisao: '2026-10-29',
+    reprogramado: false,
+    qtdReprogramacoes: 0,
     tipoDocumento: 'PR - Procedimento',
     area: 'Engenharia',
     nomePasta: d.titulo,
@@ -50,6 +55,8 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     documentosRecentes: vi.fn().mockResolvedValue([]),
     criarDocumento: vi.fn(async (d: NovoDocumento) => documentoDe(d)),
     documento: vi.fn().mockRejectedValue(new ErroApi(404, 'desconhecido')),
+    painel: vi.fn(),
+    reprogramarPrazo: vi.fn(),
     ...sobrescrever,
   };
 }
@@ -76,16 +83,15 @@ const inputAnexos = () => screen.getByLabelText(/Documentos complementares/) as 
 async function preencherObrigatorios(usuario: ReturnType<typeof userEvent.setup>, comArquivo = true) {
   await usuario.type(await screen.findByLabelText(/Título do documento/), 'Procedimento de compras');
   await usuario.selectOptions(screen.getByLabelText(/Tipo de documento/), 'T1');
-  await usuario.type(screen.getByLabelText(/Data de recebimento/), '2026-09-29');
   if (comArquivo) await usuario.upload(inputPrincipal(), pdf());
 }
 
 describe('validarDocumento', () => {
-  it('exige título, tipo, data, remetente, área e arquivo principal; revisão inteira >= 0', () => {
+  it('exige título, tipo, remetente, área e arquivo principal; revisão inteira >= 0', () => {
     const dados = { ...dadosIniciais(EU), remetente: ' ', revisao: '-1', areaId: '' };
     const erros = validarDocumento(dados, null, []);
     expect(Object.keys(erros).sort()).toEqual(
-      ['arquivoPrincipal', 'areaId', 'dataRecebimento', 'remetente', 'revisao', 'tipoDocumentoId', 'titulo'].sort(),
+      ['arquivoPrincipal', 'areaId', 'remetente', 'revisao', 'tipoDocumentoId', 'titulo'].sort(),
     );
   });
 
@@ -145,7 +151,7 @@ describe('TelaNovoDocumento', () => {
     expect(screen.getByRole('button', { name: 'Remover arquivo principal.pdf' })).toBeInTheDocument();
 
     await usuario.click(within(banner).getByRole('button', { name: 'Tentar novamente' }));
-    await screen.findByText('Documento registrado');
+    await screen.findByText(/^Documento registrado\./);
     const [primeiro] = criarDocumento.mock.calls[0] as [NovoDocumento];
     const [segundo] = criarDocumento.mock.calls[1] as [NovoDocumento];
     expect(primeiro.id).toMatch(/^DOC-[0-9a-f-]{36}$/);
@@ -160,10 +166,12 @@ describe('TelaNovoDocumento', () => {
     await usuario.type(screen.getByLabelText(/Remetente/), 'Outra Pessoa');
     await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));
 
-    await screen.findByText('Documento registrado');
+    await screen.findByText(/^Documento registrado\./);
     expect(screen.getByRole('button', { name: 'Ver na lista' })).toBeInTheDocument();
     const enviado = vi.mocked(api.criarDocumento).mock.calls[0]![0];
-    expect(enviado).toMatchObject({ dataRevisao: null, titulo: 'Procedimento de compras', remetente: 'Outra Pessoa', revisao: 0, codigo: null, areaId: 'a1' });
+    expect(enviado).not.toHaveProperty('dataRevisao');
+    expect(enviado).not.toHaveProperty('dataRecebimento');
+    expect(enviado).toMatchObject({ titulo: 'Procedimento de compras', remetente: 'Outra Pessoa', revisao: 0, codigo: null, areaId: 'a1' });
     expect(screen.getByLabelText(/Título do documento/)).toHaveValue('');
     expect(screen.getByLabelText(/Remetente/)).toHaveValue('Bruna Teste');
     expect(screen.getByLabelText(/^Área/)).toHaveValue('a1');
@@ -214,11 +222,19 @@ describe('TelaNovoDocumento', () => {
     ]);
   });
 
-  it('não mostra o campo de prazo (decisão 0010)', async () => {
+  it('não mostra campos de prazo nem de data de recebimento (decisões 0010, 0011 e 0012)', async () => {
     renderizar(apiSimulada());
     await screen.findByLabelText(/Título do documento/);
     expect(screen.queryByLabelText(/Data de revisão/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/prazo/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Data de recebimento/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/prazo/i)).not.toBeInTheDocument();
+  });
+
+  it('toast de sucesso mostra o prazo devolvido pelo servidor', async () => {
+    const usuario = renderizar(apiSimulada());
+    await preencherObrigatorios(usuario);
+    await usuario.click(screen.getByRole('button', { name: 'Registrar documento' }));
+    expect(await screen.findByText('Documento registrado. Prazo: 29/10/2026.')).toBeInTheDocument();
   });
 
   it('409 de código + revisão aparece no campo Código', async () => {
@@ -289,7 +305,7 @@ describe('TelaNovoDocumento', () => {
       .fn()
       .mockRejectedValueOnce(new ErroApi(409, 'id_existente'))
       .mockImplementation(async (d: NovoDocumento) => documentoDe(d));
-    const outro = { ...documentoDe({ ...dadosIniciais(EU), id: 'x', codigo: null, revisao: 0, dataRevisao: null, disciplina: null, observacao: null }), criadoPor: 'USR-OUTRO' };
+    const outro = { ...documentoDe({ ...dadosIniciais(EU), id: 'x', codigo: null, revisao: 0, disciplina: null, observacao: null }), criadoPor: 'USR-OUTRO' };
     const documento = vi.fn(async () => ({ documento: outro, eventos: [] }));
     const usuario = renderizar(apiSimulada({ criarDocumento, documento }));
     await preencherObrigatorios(usuario);
@@ -298,7 +314,7 @@ describe('TelaNovoDocumento', () => {
     expect(banner).toHaveTextContent('Um novo identificador foi gerado');
     expect(screen.getByLabelText(/Título do documento/)).toHaveValue('Procedimento de compras');
     await usuario.click(within(banner).getByRole('button', { name: 'Tentar novamente' }));
-    await screen.findByText('Documento registrado');
+    await screen.findByText(/^Documento registrado\./);
     const ids = criarDocumento.mock.calls.map((c) => (c as [NovoDocumento])[0].id);
     expect(ids[1]).not.toBe(ids[0]);
   });

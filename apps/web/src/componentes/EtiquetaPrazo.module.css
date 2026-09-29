@@ -1,0 +1,40 @@
+/* Etiquetas do cartão do Painel (contrato F3, 4.5). Cores semânticas da decisão 0009. */
+.etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-base);
+  white-space: nowrap;
+}
+
+.etiqueta svg {
+  flex-shrink: 0;
+}
+
+/* #047857 sobre #ECFDF5 */
+.verde {
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
+}
+
+/* #B45309 sobre #FFFBEB */
+.ambar {
+  background: var(--cor-alerta-fundo);
+  color: var(--cor-alerta-texto);
+}
+
+/* #B91C1C sobre #FEF2F2 */
+.vermelho {
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro);
+}
+
+/* #1D4ED8 sobre #EFF6FF */
+.info {
+  background: var(--cor-info-fundo);
+  color: var(--cor-info-texto);
+}

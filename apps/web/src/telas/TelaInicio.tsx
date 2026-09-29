@@ -1,3 +1,6 @@
+import { Link } from 'react-router';
+import { LayoutDashboard } from 'lucide-react';
+import { pode } from '@docsync/compartilhado';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import estilos from './Pagina.module.css';
 
@@ -36,6 +39,19 @@ export function TelaInicio() {
           </div>
         </dl>
       </section>
+      {/* O link só existe porque o destino passou a existir (F3). */}
+      {pode(eu, 'verDocumentos') && (
+        <section className={`${estilos.cartao} ${estilos.atalho}`} aria-labelledby="titulo-painel">
+          <h2 id="titulo-painel" className={estilos.tituloCartao}>
+            Painel de tramitação
+          </h2>
+          <p className={estilos.textoAtalho}>Veja os documentos por fase, os prazos e os atrasados.</p>
+          <Link to="/painel" className={estilos.linkAtalho}>
+            <LayoutDashboard size={16} aria-hidden="true" />
+            Abrir o painel
+          </Link>
+        </section>
+      )}
     </>
   );
 }

@@ -34,6 +34,8 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     criarDocumento: vi.fn(),
     documentosRecentes: vi.fn(),
     documento: vi.fn(),
+    painel: vi.fn(),
+    reprogramarPrazo: vi.fn(),
     ...sobrescrever,
   };
 }

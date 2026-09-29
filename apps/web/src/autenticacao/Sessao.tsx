@@ -93,6 +93,8 @@ function ProvedorSessao({ conta }: { conta: AccountInfo }) {
       criarDocumento: vigiar(base.criarDocumento),
       documentosRecentes: vigiar(base.documentosRecentes),
       documento: vigiar(base.documento),
+      painel: vigiar(base.painel),
+      reprogramarPrazo: vigiar(base.reprogramarPrazo),
     };
   }, [instance, conta, expirar]);
 

@@ -100,9 +100,10 @@
   --status-aprovado-cor: #047857;
   --status-aprovado-bg: #ecfdf5;
   --status-aprovado-borda: #10b981;
-  --status-cancelado-cor: #b91c1c;
-  --status-cancelado-bg: #fef2f2;
-  --status-cancelado-borda: #ef4444;
+  /* Cancelado em grafite (decisão 0009, escolha do Eric em 2026-09-29): #334155 sobre #E2E8F0 = 8,5:1. */
+  --status-cancelado-cor: #334155;
+  --status-cancelado-bg: #e2e8f0;
+  --status-cancelado-borda: #64748b;
 
   /* Tipografia (04, 3.1) */
   --font-primary: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -155,6 +156,8 @@
   --icone-nav: 18px;
   --icone-md: 20px;
   --dialogo-largura: 440px;
+  --dialogo-largura-larga: 760px;
+  --dialogo-altura-max: 85vh;
   --campo-altura: 40px;
   --borda-fina: 1px;
   --borda-destaque: 4px;
@@ -171,6 +174,12 @@
   --nav-gap: 10px;
   --nav-link-padding: 9px 12px;
   --logo-padding: 20px 18px;
+
+  /* Painel Kanban (F3): colunas com largura mínima; o quadro rola por dentro quando não cabem. */
+  --kanban-coluna-min: 216px;
+  --kanban-coluna-altura-min: 240px;
+  --kpi-valor: 28px;
+  --esqueleto-cartao: 96px;
 
   /* Raios (04, 3.3; botões e campos retangulares como no Vigen) */
   --radius-xs: 4px;
@@ -260,8 +269,9 @@
   --status-aprovacao-bg: rgba(245, 158, 11, 0.16);
   --status-aprovado-cor: #6ee7b7;
   --status-aprovado-bg: rgba(16, 185, 129, 0.16);
-  --status-cancelado-cor: #fca5a5;
-  --status-cancelado-bg: rgba(239, 68, 68, 0.16);
+  --status-cancelado-cor: #e2e8f0;
+  --status-cancelado-bg: rgba(100, 116, 139, 0.32);
+  --status-cancelado-borda: #94a3b8;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);

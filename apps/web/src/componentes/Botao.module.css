@@ -80,3 +80,11 @@
     animation-duration: var(--duracao-spinner-reduzido);
   }
 }
+
+/* Telas de toque (tablet): alvo mínimo de 44px (decisão 0005). */
+@media (pointer: coarse) {
+  .botao,
+  .compacto {
+    min-height: var(--alvo-toque);
+  }
+}

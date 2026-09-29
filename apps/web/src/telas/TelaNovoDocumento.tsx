@@ -15,6 +15,7 @@ import {
   type TipoDocumento,
 } from '@docsync/compartilhado';
 import { useApi } from '../api/cliente.ts';
+import { formatarData } from '../formatacao.ts';
 import { ErroApi, mensagemDeErro } from '../api/erros.ts';
 import { useSessao } from '../autenticacao/Sessao.tsx';
 import { BadgeStatus } from '../componentes/BadgeStatus.tsx';
@@ -35,7 +36,6 @@ type CampoTextoForm =
   | 'titulo'
   | 'codigo'
   | 'tipoDocumentoId'
-  | 'dataRecebimento'
   | 'remetente'
   | 'revisao'
   | 'areaId'
@@ -49,7 +49,6 @@ const ORDEM_CAMPOS: CampoForm[] = [
   'titulo',
   'codigo',
   'tipoDocumentoId',
-  'dataRecebimento',
   'remetente',
   'areaId',
   'disciplina',
@@ -63,7 +62,6 @@ export const ID_CAMPO: Record<CampoForm, string> = {
   titulo: 'doc-titulo',
   codigo: 'doc-codigo',
   tipoDocumentoId: 'doc-tipo',
-  dataRecebimento: 'doc-data-recebimento',
   remetente: 'doc-remetente',
   revisao: 'doc-revisao',
   areaId: 'doc-area',
@@ -77,7 +75,6 @@ const NOME_CAMPO: Record<CampoForm, string> = {
   titulo: 'Título do documento',
   codigo: 'Código do documento',
   tipoDocumentoId: 'Tipo de documento',
-  dataRecebimento: 'Data de recebimento',
   remetente: 'Remetente / solicitante',
   revisao: 'N° de revisão',
   areaId: 'Área',
@@ -91,14 +88,12 @@ const MENSAGEM_CODIGO_EXISTENTE = 'Já existe um documento com este código nest
 const MENSAGEM_UM_ARQUIVO = 'Solte apenas um arquivo. Os demais vão em "Documentos complementares".';
 const FORMATOS = LIMITES_ARQUIVO.extensoes.map((e) => e.toUpperCase()).join(', ');
 const ACEITAR = LIMITES_ARQUIVO.extensoes.map((e) => `.${e}`).join(',');
-const DATA_VALIDA = /^\d{4}-\d{2}-\d{2}$/;
 
 export function dadosIniciais(eu: Pessoa): DadosForm {
   return {
     titulo: '',
     codigo: '',
     tipoDocumentoId: '',
-    dataRecebimento: '',
     remetente: eu.nome,
     // P-05: o padrão é 0 e nada o sobrescreve depois que a pessoa digita.
     revisao: '0',
@@ -112,8 +107,6 @@ export function validarDocumento(dados: DadosForm, principal: File | null, anexo
   const erros: ErrosDocumento = {};
   if (!dados.titulo.trim()) erros.titulo = 'Informe o título do documento.';
   if (!dados.tipoDocumentoId) erros.tipoDocumentoId = 'Selecione o tipo de documento.';
-  if (!dados.dataRecebimento) erros.dataRecebimento = 'Informe a data de recebimento.';
-  else if (!DATA_VALIDA.test(dados.dataRecebimento)) erros.dataRecebimento = 'Informe uma data válida.';
   if (!dados.remetente.trim()) erros.remetente = 'Informe o remetente ou solicitante.';
   if (!/^\d+$/.test(dados.revisao.trim())) erros.revisao = 'Informe um número inteiro igual ou maior que 0.';
   if (!dados.areaId) erros.areaId = 'Selecione a área.';
@@ -137,9 +130,7 @@ function paraEnvio(id: string, dados: DadosForm): NovoDocumento {
     titulo: dados.titulo.trim(),
     tipoDocumentoId: dados.tipoDocumentoId,
     revisao: Number.parseInt(dados.revisao.trim(), 10),
-    dataRecebimento: dados.dataRecebimento,
-    // Decisão 0010: o prazo sai do cadastro (será calculado automaticamente no futuro).
-    dataRevisao: null,
+    // Decisões 0011 e 0012: data de recebimento e prazo são gravados pelo servidor (esquema fechado).
     remetente: dados.remetente.trim(),
     areaId: dados.areaId,
     disciplina: opcional(dados.disciplina),
@@ -147,12 +138,7 @@ function paraEnvio(id: string, dados: DadosForm): NovoDocumento {
   };
 }
 
-/** 'AAAA-MM-DD' → 'DD/MM/AAAA', sem passar por fuso horário. */
-export function formatarData(data: string | null): string {
-  if (!data) return '—';
-  const [ano, mes, dia] = data.slice(0, 10).split('-');
-  return ano && mes && dia ? `${dia}/${mes}/${ano}` : data;
-}
+export { formatarData };
 
 function focarCampo(campo: CampoForm) {
   const elemento = document.getElementById(ID_CAMPO[campo]);
@@ -479,7 +465,9 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
       aoRegistrar(documento);
       // Só depois da confirmação da gravação: limpa, repreenche e gera o ID do próximo cadastro.
       limpar();
-      toast('Documento registrado', { rotulo: 'Ver na lista', aoAcionar: () => aoVerNaLista(documento.id) });
+      // O prazo vem da resposta (calculado no servidor, decisão 0011); a tela nunca o calcula.
+      const prazo = documento.dataRevisao ? ` Prazo: ${formatarData(documento.dataRevisao)}.` : '';
+      toast(`Documento registrado.${prazo}`, { rotulo: 'Ver na lista', aoAcionar: () => aoVerNaLista(documento.id) });
     } catch (erro) {
       await tratarErro(erro);
     } finally {
@@ -614,15 +602,6 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
           ))}
         </CampoSelecao>
         <CampoTexto
-          id={ID_CAMPO.dataRecebimento}
-          rotulo="Data de recebimento"
-          type="date"
-          obrigatorio
-          value={dados.dataRecebimento}
-          erro={exibidos.dataRecebimento}
-          onChange={(e) => alterar('dataRecebimento', e.target.value)}
-        />
-        <CampoTexto
           id={ID_CAMPO.remetente}
           rotulo="Remetente / solicitante"
           obrigatorio
@@ -688,7 +667,9 @@ function FormularioDocumento({ eu, tipos, areas, areaTravada, aoRegistrar, aoVer
           <p>
             <BadgeStatus status={STATUS_INICIAL} />
           </p>
-          <p className={estilos.dicaFixa}>Todo documento novo começa como Recebido.</p>
+          <p className={estilos.dicaFixa}>
+            Todo documento novo começa como Recebido. A data de recebimento (hoje) e o prazo são gravados automaticamente.
+          </p>
         </div>
 
         <CampoAreaTexto

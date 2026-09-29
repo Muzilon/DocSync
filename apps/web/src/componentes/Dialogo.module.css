@@ -10,6 +10,22 @@
   z-index: var(--z-dialogo);
 }
 
+.larga {
+  width: min(var(--dialogo-largura-larga), calc(100vw - var(--space-8)));
+}
+
+/* Na janela larga, o cabeçalho e as ações ficam fixos e só o conteúdo rola. */
+.larga[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dialogo-altura-max);
+}
+
+.larga .conteudo {
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .dialogo[open] {
   animation: entrar var(--duracao-media) ease-out;
 }
