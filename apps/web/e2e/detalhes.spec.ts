@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-// Detalhes do documento e visualizador de PDF (F4) na vitrine: sessão e API simuladas,
+// Detalhes do documento (F4) na vitrine: sessão e API simuladas,
 // "hoje" fixo em 29/09/2026. O DOC-P6 tem eventos de todos os tipos, 1 principal + 3 anexos. Dados fictícios.
 const PAINEL = '/e2e/vitrine/index.html?rota=%2Fpainel';
 const DIRETO = `/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P6')}`;
@@ -37,6 +37,9 @@ async function semRolagemHorizontal(page: Page) {
 }
 
 const detalhes = (page: Page, titulo = TITULO) => page.getByRole('dialog', { name: titulo });
+/** Botão do título do cartão: o Chrome põe um espaço antes do texto oculto ", abrir detalhes". */
+const tituloCartao = (raiz: Page | ReturnType<Page['getByRole']>, titulo: string) =>
+  raiz.getByRole('button', { name: new RegExp(`^${titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ?, abrir detalhes$`) });
 const linhaDoTempo = (page: Page) => page.getByRole('region', { name: 'Linha do tempo' });
 
 for (const tema of TEMAS) {
@@ -65,43 +68,11 @@ for (const tema of TEMAS) {
     });
   }
 
-  test(`visualizador de PDF ${tema}: página desenhada, navegação, zoom, axe e Esc`, async ({ page }) => {
-    await abrir(page, { tema, url: DIRETO });
-    const visualizar = page.getByRole('button', { name: 'Visualizar PR-QUA-0007 Controle de informação documentada.pdf' });
-    await visualizar.click();
-    const visualizador = page.getByRole('dialog', { name: 'PR-QUA-0007 Controle de informação documentada.pdf' });
-    await expect(visualizador.getByText('Página 1 de 2')).toBeVisible();
-    const regiao = visualizador.getByRole('region', { name: 'Página 1 de 2' });
-    await expect(regiao).not.toHaveAttribute('aria-busy', 'true');
-    // A página foi desenhada: há pixels escuros (texto e marca d'água) no canvas.
-    const pintados = await visualizador.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
-      const contexto = canvas.getContext('2d')!;
-      const { data } = contexto.getImageData(0, 0, canvas.width, canvas.height);
-      let escuros = 0;
-      for (let i = 0; i < data.length; i += 4) if (data[i]! < 200 && data[i + 3]! > 0) escuros++;
-      return escuros;
-    });
-    expect(pintados).toBeGreaterThan(100);
-    await expect(visualizador).toContainText('CÓPIA NÃO CONTROLADA');
-    await visualizador.getByRole('button', { name: /Próxima/ }).click();
-    await expect(visualizador.getByText('Página 2 de 2')).toBeVisible();
-    await expect(visualizador.getByRole('button', { name: /Próxima/ })).toBeDisabled();
-    const antes = await visualizador.locator('canvas').evaluate((c) => c.getBoundingClientRect().width);
-    await visualizador.getByRole('button', { name: 'Aumentar zoom' }).click();
-    await expect.poll(() => visualizador.locator('canvas').evaluate((c) => c.getBoundingClientRect().width)).toBeGreaterThan(antes);
-    await expect(visualizador.getByRole('link')).toHaveCount(0);
-    await semRolagemHorizontal(page);
-    await axe(page);
-    await page.keyboard.press('Escape');
-    await expect(visualizador).toBeHidden();
-    await expect(detalhes(page)).toBeVisible();
-    await expect(visualizar).toBeFocused();
-  });
 }
 
 test('abrir pelo teclado: foco preso (Tab e Shift+Tab), Esc fecha e devolve o foco ao título do cartão', async ({ page }) => {
   await abrir(page);
-  const titulo = page.getByRole('button', { name: `${TITULO}, abrir detalhes` });
+  const titulo = tituloCartao(page, TITULO);
   await titulo.focus();
   await page.keyboard.press('Enter');
   const dialogo = detalhes(page);
@@ -122,7 +93,7 @@ test('abrir pelo teclado: foco preso (Tab e Shift+Tab), Esc fecha e devolve o fo
 
 test('Espaço no título abre; clique no corpo do cartão abre; Reprogramar não abre', async ({ page }) => {
   await abrir(page);
-  await page.getByRole('button', { name: 'Inspeção de andaimes, abrir detalhes' }).focus();
+  await tituloCartao(page, 'Inspeção de andaimes').focus();
   await page.keyboard.press(' ');
   await expect(detalhes(page, 'Inspeção de andaimes')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -138,7 +109,7 @@ test('janela de cancelados: o cartão abre os detalhes por cima e o Esc volta pa
   await abrir(page);
   await page.getByRole('button', { name: 'Cancelados (2)' }).click();
   const janela = page.getByRole('dialog', { name: 'Documentos cancelados (2)' });
-  const cartao = janela.getByRole('button', { name: 'Ata da reunião de análise crítica, abrir detalhes' });
+  const cartao = tituloCartao(janela, 'Ata da reunião de análise crítica');
   await cartao.click();
   const dialogo = detalhes(page, 'Ata da reunião de análise crítica');
   await expect(dialogo).toBeVisible();
@@ -152,19 +123,30 @@ test('janela de cancelados: o cartão abre os detalhes por cima e o Esc volta pa
   await expect(janela).toBeHidden();
 });
 
-test('Baixar: nome devolvido pelo servidor (prefixo nos que não são PDF), sem token na URL', async ({ page }) => {
+test('Baixar: nome devolvido pelo servidor, blob sem token na URL; sem Visualizar (saiu da F4)', async ({ page }) => {
+  // O Chromium headless ignora nome com acento no atributo download (vira "download"); o nome
+  // pedido pela tela é conferido no próprio <a download>, e o evento de download pelo nome ASCII.
+  await page.addInitScript(() => {
+    const original = HTMLAnchorElement.prototype.click;
+    (window as unknown as { nomes: string[] }).nomes = [];
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      (window as unknown as { nomes: string[] }).nomes.push(`${this.download}|${this.href.slice(0, 5)}`);
+      original.call(this);
+    };
+  });
   await abrir(page, { url: DIRETO });
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Baixar Checklist de revisão.xlsx' }).click(),
   ]);
-  expect(download.suggestedFilename()).toBe('COPIA-NAO-CONTROLADA_Checklist de revisão.xlsx');
   expect(download.url()).toMatch(/^blob:/);
+  expect(await page.evaluate(() => (window as unknown as { nomes: string[] }).nomes)).toEqual(['Checklist de revisão.xlsx|blob:']);
   const [pdf] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Baixar Anexo A - Fluxograma.pdf' }).click(),
   ]);
   expect(pdf.suggestedFilename()).toBe('Anexo A - Fluxograma.pdf');
+  await expect(detalhes(page).getByRole('button', { name: /Visualizar/ })).toHaveCount(0);
 });
 
 test('reprogramar dentro dos detalhes: modal e cartão se atualizam, evento novo no topo da linha do tempo', async ({ page }) => {
@@ -187,11 +169,10 @@ for (const [perfil, reprogramar] of [
   ['Leitor', false],
   ['Solicitante', false],
 ] as const) {
-  test(`${perfil}: Baixar e Visualizar visíveis, sem Reprogramar, axe`, async ({ page }) => {
+  test(`${perfil}: Baixar visível, sem Reprogramar, axe`, async ({ page }) => {
     await abrir(page, { url: DIRETO, extra: `&perfil=${perfil}` });
     const dialogo = detalhes(page);
     await expect(dialogo.getByRole('button', { name: /^Baixar/ })).toHaveCount(4);
-    await expect(dialogo.getByRole('button', { name: /^Visualizar/ })).toHaveCount(2);
     await expect(dialogo.getByRole('button', { name: 'Reprogramar' })).toHaveCount(reprogramar ? 1 : 0);
     await axe(page);
   });
@@ -212,11 +193,11 @@ for (const [estado, titulo, texto] of [
   });
 }
 
-test('visualizador com erro (409 arquivo_indisponivel): mensagem e axe', async ({ page }) => {
-  await abrir(page, { url: DIRETO, extra: '&visualizacao=erro' });
-  await page.getByRole('button', { name: 'Visualizar Anexo A - Fluxograma.pdf' }).click();
-  const visualizador = page.getByRole('dialog', { name: 'Anexo A - Fluxograma.pdf' });
-  await expect(visualizador.getByText(/Este arquivo não está disponível no momento/)).toBeVisible();
+test('Baixar com erro (arquivo_indisponivel): mensagem dentro do modal e axe', async ({ page }) => {
+  await abrir(page, { url: DIRETO, extra: '&download=erro' });
+  await page.getByRole('button', { name: 'Baixar Checklist de revisão.xlsx' }).click();
+  const alerta = page.getByRole('region', { name: 'Arquivos' }).getByRole('alert');
+  await expect(alerta).toContainText('Este arquivo não está disponível no momento');
   await axe(page);
 });
 
@@ -237,7 +218,7 @@ test('/documentos/:id redireciona para os detalhes no Painel', async ({ page }) 
 test.describe('toque emulado em 768px', () => {
   test.use({ hasTouch: true, isMobile: false });
 
-  test('botões dos detalhes, do visualizador e títulos dos cartões com no mínimo 44px', async ({ page }) => {
+  test('botões dos detalhes e títulos dos cartões com no mínimo 44px', async ({ page }) => {
     await abrir(page, { largura: 768, url: DIRETO });
     await expect(linhaDoTempo(page).locator('ol > li')).toHaveCount(9);
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
@@ -257,10 +238,5 @@ test.describe('toque emulado em 768px', () => {
     const titulos = await medir('main [data-cartao-id]');
     expect(titulos.length).toBeGreaterThan(0);
     for (const { nome, altura } of titulos) expect(altura, `altura de "${nome}"`).toBeGreaterThanOrEqual(44);
-    await abrir(page, { largura: 768, url: DIRETO });
-    await page.getByRole('button', { name: 'Visualizar Anexo A - Fluxograma.pdf' }).click();
-    await expect(page.getByText('Página 1 de 2')).toBeVisible();
-    const noVisualizador = await medir('dialog[open]:last-of-type button');
-    for (const { nome, altura } of noVisualizador) expect(altura, `altura de "${nome}"`).toBeGreaterThanOrEqual(44);
   });
 });

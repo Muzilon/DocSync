@@ -61,3 +61,33 @@ for (const tema of ['claro', 'escuro'] as const) {
     await page.screenshot({ path: `${pasta}/painel-cancelados-${tema}.png` });
   });
 }
+
+// F4: detalhes do documento (DOC-P6 tem eventos de todos os tipos e 1 principal + 3 anexos).
+const DETALHES = `/e2e/vitrine/index.html?rota=${encodeURIComponent('/painel?documento=DOC-P6')}`;
+for (const tema of ['claro', 'escuro'] as const) {
+  for (const largura of [1440, 1024, 768]) {
+    test(`captura detalhes-${largura}-${tema}`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+      await page.goto(DETALHES);
+      const linha = page.getByRole('region', { name: 'Linha do tempo' });
+      await linha.locator('ol > li').first().waitFor();
+      // Abre os detalhes do evento mais recente (reprogramação, com a justificativa) e volta ao topo.
+      await linha.getByRole('button', { name: /Detalhes/ }).first().click();
+      await page.evaluate(() => document.querySelectorAll('dialog[open] > div').forEach((d) => d.scrollTo(0, 0)));
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `${pasta}/detalhes-${largura}-${tema}.png` });
+    });
+  }
+
+  test(`captura detalhes-sobre-cancelados-${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem('docsync.tema', t), tema);
+    await page.goto('/e2e/vitrine/index.html?rota=%2Fpainel');
+    await page.getByRole('button', { name: 'Cancelados (2)' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Ata da reunião/ }).click();
+    await page.getByRole('region', { name: 'Linha do tempo' }).locator('ol > li').first().waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${pasta}/detalhes-sobre-cancelados-${tema}.png` });
+  });
+}

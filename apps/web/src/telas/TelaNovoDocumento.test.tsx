@@ -54,7 +54,6 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     alterarPessoa: vi.fn(),
     tiposDocumento: vi.fn().mockResolvedValue(TIPOS),
     baixarArquivo: vi.fn(),
-    visualizarArquivo: vi.fn(),
     documentosRecentes: vi.fn().mockResolvedValue([]),
     criarDocumento: vi.fn(async (d: NovoDocumento) => documentoDe(d)),
     documento: vi.fn().mockRejectedValue(new ErroApi(404, 'desconhecido')),

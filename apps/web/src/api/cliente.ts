@@ -59,7 +59,7 @@ export function nomeDoCabecalho(cabecalho: string | null, reserva: string): stri
   return limpo || reserva;
 }
 
-/** Conteúdo binário de um arquivo do documento (download ou visualização). */
+/** Conteúdo binário de um arquivo do documento (download). */
 export interface ArquivoBaixado {
   blob: Blob;
   /** Nome devolvido pelo servidor (Content-Disposition), já com o prefixo que ele decidir. */
@@ -85,11 +85,9 @@ export interface Api {
   reprogramarPrazo(id: string, dados: NovaReprogramacao): Promise<ResultadoReprogramacao>;
   /**
    * GET /documentos/:id/arquivos/:arquivoId (contrato F4, 4.4): fetch com Bearer, nunca token na URL.
-   * PDF já vem com a marca "CÓPIA NÃO CONTROLADA" (decisão 0013). `nomeOriginal` é só a reserva do nome.
+   * `nomeOriginal` é só a reserva do nome (vale o que o servidor devolver em Content-Disposition).
    */
   baixarArquivo(id: string, arquivoId: string, nomeOriginal: string): Promise<ArquivoBaixado>;
-  /** GET /documentos/:id/arquivos/:arquivoId/visualizacao (decisão 0013): PDF com marca, para o visualizador. */
-  visualizarArquivo(id: string, arquivoId: string): Promise<ArrayBuffer>;
 }
 
 /** Cliente HTTP real: prefixo /api (o proxy do Vite o remove) e token Bearer em toda chamada. */
@@ -170,10 +168,6 @@ export function criarApi(obterToken: () => Promise<string>): Api {
       const resposta = await binario(caminhoArquivo(id, arquivoId));
       const blob = await resposta.blob();
       return { blob, nomeArquivo: nomeDoCabecalho(resposta.headers.get('Content-Disposition'), nomeOriginal) };
-    },
-    visualizarArquivo: async (id, arquivoId) => {
-      const resposta = await binario(`${caminhoArquivo(id, arquivoId)}/visualizacao`);
-      return resposta.arrayBuffer();
     },
   };
 }

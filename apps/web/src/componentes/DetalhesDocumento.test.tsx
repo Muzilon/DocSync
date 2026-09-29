@@ -7,21 +7,7 @@ import { ErroApi } from '../api/erros.ts';
 import { ContextoSessao } from '../autenticacao/Sessao.tsx';
 import { formatarDataHora } from '../formatacao.ts';
 import { DetalhesDocumento, ehIdDocumento } from './DetalhesDocumento.tsx';
-import { NIVEIS_ZOOM, proximoZoom } from './VisualizadorPdf.tsx';
 
-// O pdfjs não roda no jsdom: o visualizador é testado com um PDF simulado de 2 páginas.
-vi.mock('../pdf/pdfjs.ts', () => ({
-  abrirPdf: vi.fn(async () => ({
-    numPages: 2,
-    loadingTask: { destroy: vi.fn(async () => undefined) },
-    getPage: vi.fn(async (n: number) => ({
-      numero: n,
-      getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
-      render: () => ({ promise: Promise.resolve() }),
-    })),
-  })),
-  textoDaPagina: vi.fn(async (pagina: { numero: number }) => `Texto fictício da página ${pagina.numero}`),
-}));
 
 // Dados fictícios (CLAUDE.md, seção 4).
 const HOJE = '2026-09-29';
@@ -74,7 +60,6 @@ function apiSimulada(sobrescrever: Partial<Api> = {}): Api {
     criarDocumento: vi.fn(), documentosRecentes: vi.fn(), painel: vi.fn(),
     documento: vi.fn().mockResolvedValue(detalhe()),
     baixarArquivo: vi.fn(async (_id: string, _arq: string, nome: string) => ({ blob: new Blob(['x']), nomeArquivo: `servidor-${nome}` })),
-    visualizarArquivo: vi.fn(async () => new ArrayBuffer(8)),
     reprogramarPrazo: vi.fn(async (_id, dados) => ({
       documento: { ...DOCUMENTO, dataRevisao: dados.novoPrazo, versao: 5, qtdReprogramacoes: 2 },
       evento: evento(9),
@@ -119,12 +104,6 @@ describe('funções puras dos detalhes', () => {
     expect(formatarDataHora('lixo')).toBe('—');
   });
 
-  it('proximoZoom anda pelos níveis a partir de qualquer escala', () => {
-    expect(proximoZoom(1, 1)).toBe(1.25);
-    expect(proximoZoom(1, -1)).toBe(0.75);
-    expect(proximoZoom(0.33, 1)).toBe(0.5);
-    expect(proximoZoom(NIVEIS_ZOOM[0], -1)).toBe(NIVEIS_ZOOM[0]);
-  });
 });
 
 describe('DetalhesDocumento', () => {
@@ -168,7 +147,7 @@ describe('DetalhesDocumento', () => {
     expect(within(dialogo).queryByRole('button', { name: /Editar|Histórico completo|Anexar|Atualizar Etapa|Cancelar/ })).not.toBeInTheDocument();
   });
 
-  it('Arquivos: principal primeiro, tamanho, Visualizar só em PDF e Baixar com o nome devolvido pelo servidor', async () => {
+  it('Arquivos: principal primeiro, tamanho e Baixar com o nome devolvido pelo servidor (sem Visualizar)', async () => {
     const api = apiSimulada();
     const { usuario } = renderizar(api);
     await modal();
@@ -177,8 +156,9 @@ describe('DetalhesDocumento', () => {
     expect(itens[0]).toHaveTextContent('Principal');
     expect(itens[0]).toHaveTextContent('245 KB');
     expect(itens[2]).toHaveTextContent('1,5 MB');
-    expect(screen.getAllByRole('button', { name: /^Visualizar/ })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' })).toBeInTheDocument();
+    // O visualizador de PDF saiu da F4 (decisão do Eric): só Baixar, nada de abrir em aba ou no Office.
+    expect(screen.queryByRole('button', { name: /Visualizar|Abrir/ })).not.toBeInTheDocument();
+    expect(within(secao('Arquivos')).queryByRole('link')).not.toBeInTheDocument();
 
     await usuario.click(screen.getByRole('button', { name: 'Baixar Checklist.xlsx' }));
     await waitFor(() => expect(api.baixarArquivo).toHaveBeenCalledWith('DOC-1', 'ARQ-2', 'Checklist.xlsx'));
@@ -203,7 +183,7 @@ describe('DetalhesDocumento', () => {
   it.each([
     ['Leitor', true, LEITOR],
     ['Solicitante de outra área', false, SOLICITANTE_OUTRA_AREA],
-  ])('%s: botões Baixar/Visualizar visíveis = %s', async (_nome, visiveis, eu) => {
+  ])('%s: botões Baixar visíveis = %s', async (_nome, visiveis, eu) => {
     renderizar(apiSimulada(), { eu });
     await modal();
     expect(screen.queryAllByRole('button', { name: /^Baixar/ })).toHaveLength(visiveis ? 3 : 0);
@@ -325,40 +305,5 @@ describe('DetalhesDocumento', () => {
     expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
   });
 
-  it('Visualizar: abre o visualizador com páginas, navegação, zoom e texto para o leitor de tela', async () => {
-    const api = apiSimulada();
-    const { usuario } = renderizar(api);
-    await modal();
-    await usuario.click(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' }));
-    const visualizador = await screen.findByRole('dialog', { name: 'Procedimento.pdf' });
-    expect(api.visualizarArquivo).toHaveBeenCalledWith('DOC-1', 'ARQ-1');
-    expect(within(visualizador).getByRole('button', { name: 'Fechar visualizador' })).toHaveFocus();
-    expect(await within(visualizador).findByText('Página 1 de 2')).toBeInTheDocument();
-    expect(await within(visualizador).findByText('Texto da página: Texto fictício da página 1')).toBeInTheDocument();
-    expect(within(visualizador).getByRole('button', { name: /Anterior/ })).toBeDisabled();
-    await usuario.click(within(visualizador).getByRole('button', { name: /Próxima/ }));
-    expect(await within(visualizador).findByText('Página 2 de 2')).toBeInTheDocument();
-    expect(await within(visualizador).findByText('Texto da página: Texto fictício da página 2')).toBeInTheDocument();
-    expect(within(visualizador).getByRole('button', { name: /Próxima/ })).toBeDisabled();
-    // jsdom não tem largura: "ajustar à largura" cai no mínimo (200px / 600px = 33%).
-    expect(within(visualizador).getByText('33%')).toBeInTheDocument();
-    await usuario.click(within(visualizador).getByRole('button', { name: 'Aumentar zoom' }));
-    expect(await within(visualizador).findByText('50%')).toBeInTheDocument();
-    expect(within(visualizador).getByRole('button', { name: 'Ajustar à largura' })).toHaveAttribute('aria-pressed', 'false');
-    // Sem abrir em nova aba (decisão 0013).
-    expect(within(visualizador).queryByRole('link')).not.toBeInTheDocument();
-    await usuario.click(within(visualizador).getByRole('button', { name: 'Fechar visualizador' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Procedimento.pdf' })).not.toBeInTheDocument());
-  });
 
-  it('Visualizar com erro (409 arquivo_indisponivel): mensagem e "Tentar novamente"', async () => {
-    const api = apiSimulada({ visualizarArquivo: vi.fn().mockRejectedValue(new ErroApi(409, 'arquivo_indisponivel')) });
-    const { usuario } = renderizar(api);
-    await modal();
-    await usuario.click(screen.getByRole('button', { name: 'Visualizar Procedimento.pdf' }));
-    const visualizador = await screen.findByRole('dialog', { name: 'Procedimento.pdf' });
-    expect(await within(visualizador).findByText(/Este arquivo não está disponível no momento/)).toBeInTheDocument();
-    await usuario.click(within(visualizador).getByRole('button', { name: 'Tentar novamente' }));
-    expect(api.visualizarArquivo).toHaveBeenCalledTimes(2);
-  });
 });

@@ -70,7 +70,7 @@ test('soltar mais de um arquivo no principal mostra a mensagem do documento 04',
   await expect(page.getByText('Solte apenas um arquivo. Os demais vão em "Documentos complementares".')).toBeVisible();
 });
 
-test('erro de envio: banner, "Tentar novamente" e sucesso com "Ver na lista" destacando o item', async ({ page }) => {
+test('erro de envio: banner, "Tentar novamente" e sucesso com "Abrir detalhes" levando aos detalhes no Painel', async ({ page }) => {
   await abrir(page, 'claro', '&envio=falha');
   await preencher(page);
   await page.getByRole('button', { name: 'Registrar documento' }).click();
@@ -84,10 +84,13 @@ test('erro de envio: banner, "Tentar novamente" e sucesso com "Ver na lista" des
   await expect(page.getByRole('status').filter({ hasText: 'Documento registrado' })).toBeVisible();
   await expect(page.getByLabel(/Título do documento/)).toHaveValue('');
   await expect(page.getByLabel(/Remetente/)).toHaveValue('Ana Exemplo');
-  await page.getByRole('button', { name: 'Ver na lista' }).click();
-  const linha = page.getByRole('row', { name: /Procedimento de teste/ });
-  await expect(linha).toBeFocused();
-  await expect(linha).toHaveClass(/destacado/);
+  await expect(page.getByRole('row', { name: /Procedimento de teste/ })).toBeVisible();
+  // F4: o toast leva a /documentos/<id>, que redireciona para /painel?documento=<id> (P-01).
+  await page.getByRole('button', { name: 'Abrir detalhes' }).click();
+  const detalhes = page.getByRole('dialog', { name: 'Procedimento de teste' });
+  await expect(detalhes).toBeVisible();
+  await expect(detalhes.getByRole('region', { name: 'Arquivos' })).toContainText('Principal');
+  await expect(page.getByRole('heading', { name: 'Painel', level: 1 })).toBeVisible();
 });
 
 test('Leitor não vê o link e, pela rota, volta ao Início', async ({ page }) => {

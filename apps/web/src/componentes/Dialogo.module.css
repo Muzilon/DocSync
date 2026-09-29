@@ -14,7 +14,7 @@
   width: min(var(--dialogo-largura-larga), calc(100vw - var(--space-8)));
 }
 
-/* Detalhes do documento (contrato F4, 5.2): 980px; em 768px ocupa a largura menos 2 × space-4. */
+/* Detalhes do documento (contrato F4, 5.2): 980px; em 768px ocupa a largura menos 2 × space-4 (= space-8). */
 .detalhes {
   width: min(var(--dialogo-largura-detalhes), calc(100vw - var(--space-8)));
 }
@@ -86,12 +86,6 @@
   .fechar {
     width: var(--alvo-toque);
     height: var(--alvo-toque);
-  }
-}
-
-@media (max-width: 860px) {
-  .detalhes {
-    width: calc(100vw - 2 * var(--space-4));
   }
 }
 

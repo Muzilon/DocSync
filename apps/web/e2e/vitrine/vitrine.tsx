@@ -41,7 +41,7 @@ import { aplicarTema, temaSalvo } from '../../src/tema.ts';
 const parametros = new URLSearchParams(location.search);
 // ?perfil=Leitor|Solicitante muda o perfil simulado; ?envio=falha faz o 1º envio falhar (sem conexão).
 // Painel: ?painel=vazio|erro|carregando; ?reprog=conflito faz a 1ª reprogramação dar 409 conflito_versao.
-// Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?visualizacao=erro.
+// Detalhes (F4): ?rota=/painel?documento=DOC-P6 abre direto; ?detalhes=erro|404|carregando; ?download=erro.
 const perfil = (parametros.get('perfil') ?? 'Administrador') as Perfil;
 const eu: Pessoa = { id: 'p1', nome: 'Ana Exemplo', email: 'ana@exemplo.test', perfil, area: 'Qualidade', areaId: 'a2', status: 'Ativo' };
 const pessoas: Pessoa[] = [
@@ -108,9 +108,9 @@ function documentoDoCartao(c: CartaoPainel): Documento {
 }
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Detalhes (F4). ?detalhes=erro|404|carregando força os estados; ?visualizacao=erro faz o visualizador falhar.
+// Detalhes (F4). ?detalhes=erro|404|carregando força os estados; ?download=erro faz o download falhar.
 const modoDetalhes = parametros.get('detalhes');
-const modoVisualizacao = parametros.get('visualizacao');
+const modoDownload = parametros.get('download');
 let sequenciaEvento = 0;
 function evento(
   idDocumento: string, tipoAcao: EventoHistorico['tipoAcao'], status: Documento['status'], statusAnterior: Documento['status'] | null,
@@ -147,7 +147,7 @@ eventosPorDocumento.set('DOC-P6', [
     detalhes: [
       { campo: 'titulo', antes: 'Controle de documentos', depois: 'Controle de informação documentada' },
       { campo: 'disciplina', antes: null, depois: 'Corporativo' },
-      { campo: 'dataRecebimento', antes: '2026-08-30', depois: '2026-09-01' },
+      { campo: 'dataRecebimento', antes: '2026-09-01', depois: '2026-09-03' },
     ],
   }),
   evento('DOC-P6', 'STATUS', 'Em revisão da qualidade', 'Devolvido para correção', '2026-09-09T14:00:00Z', 'Bruno Teste'),
@@ -191,40 +191,12 @@ function detalheDe(c: CartaoPainel) {
   return { documento, arquivos, eventos, hoje: HOJE };
 }
 
-/** PDF mínimo de 2 páginas com a marca "CÓPIA NÃO CONTROLADA" em diagonal no fundo (como o servidor entrega). */
-function pdfComMarca(titulo: string): ArrayBuffer {
-  const semAcento = titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[()\\]/g, '');
-  const pagina = (n: number) =>
-    `q /GS1 gs 0.55 g BT /F1 54 Tf 0.7071 0.7071 -0.7071 0.7071 120 190 Tm (C\\323PIA N\\303O CONTROLADA) Tj ET Q\n` +
-    `BT /F1 20 Tf 72 740 Td (${semAcento}) Tj ET\nBT /F1 12 Tf 72 700 Td (Pagina ${n} de 2 - conteudo ficticio para a vitrine de testes.) Tj ET\n`;
-  const objetos = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources 7 0 R /Contents 5 0 R >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources 7 0 R /Contents 6 0 R >>',
-    `<< /Length ${pagina(1).length} >>\nstream\n${pagina(1)}endstream`,
-    `<< /Length ${pagina(2).length} >>\nstream\n${pagina(2)}endstream`,
-    '<< /Font << /F1 8 0 R >> /ExtGState << /GS1 << /ca 0.4 >> >> >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
-  ];
-  let texto = '%PDF-1.4\n';
-  const posicoes: number[] = [];
-  objetos.forEach((o, i) => {
-    posicoes.push(texto.length);
-    texto += `${i + 1} 0 obj\n${o}\nendobj\n`;
-  });
-  const xref = texto.length;
-  texto += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n`;
-  for (const p of posicoes) texto += `${String(p).padStart(10, '0')} 00000 n \n`;
-  texto += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return new TextEncoder().encode(texto).buffer as ArrayBuffer;
-}
-function acharArquivo(id: string, arquivoId: string): { cartao: CartaoPainel; arquivo: ArquivoDocumento } {
+function acharArquivo(id: string, arquivoId: string): { arquivo: ArquivoDocumento } {
   const c = cartoes.find((x) => x.id === id);
   if (!c) throw new ErroApi(404, 'nao_encontrado');
   const achado = detalheDe(c).arquivos.find((a) => a.id === arquivoId);
   if (!achado) throw new ErroApi(404, 'nao_encontrado');
-  return { cartao: c, arquivo: achado };
+  return { arquivo: achado };
 }
 
 const api: Api = {
@@ -249,18 +221,10 @@ const api: Api = {
   },
   baixarArquivo: async (id, arquivoId) => {
     await esperar(400);
-    const { cartao: c, arquivo: a } = acharArquivo(id, arquivoId);
-    const pdf = a.nomeOriginal.toLowerCase().endsWith('.pdf');
-    // Como o servidor (decisão 0013): PDF com marca; os demais com o prefixo no nome.
-    return pdf
-      ? { blob: new Blob([pdfComMarca(c.titulo)], { type: 'application/pdf' }), nomeArquivo: a.nomeOriginal }
-      : { blob: new Blob(['conteudo ficticio'], { type: 'application/octet-stream' }), nomeArquivo: `COPIA-NAO-CONTROLADA_${a.nomeOriginal}` };
-  },
-  visualizarArquivo: async (id, arquivoId) => {
-    await esperar(200);
-    if (modoVisualizacao === 'erro') throw new ErroApi(409, 'arquivo_indisponivel');
-    const { cartao: c } = acharArquivo(id, arquivoId);
-    return pdfComMarca(c.titulo);
+    if (modoDownload === 'erro') throw new ErroApi(404, 'arquivo_indisponivel');
+    const { arquivo: a } = acharArquivo(id, arquivoId);
+    // O nome vem do servidor (Content-Disposition); aqui, o original. Conteúdo fictício.
+    return { blob: new Blob(['conteudo ficticio'], { type: 'application/octet-stream' }), nomeArquivo: a.nomeOriginal };
   },
   painel: async (consulta = {}) => {
     if (modoPainel === 'carregando') await new Promise(() => undefined);
@@ -304,11 +268,19 @@ const api: Api = {
       throw new ErroApi(0, 'sem_conexao');
     }
     const area = areas.find((a) => a.id === d.areaId) ?? areas[0]!;
-    return {
+    const criado: Documento = {
       ...documento(99, d.codigo, d.titulo, 'Recebido', area),
       id: d.id, revisao: d.revisao, dataRecebimento: HOJE, dataRevisao: somarDias(HOJE, 30), tipoDocumento: tipos.find((t) => t.id === d.tipoDocumentoId)?.nome ?? '',
-      nomeArquivoPrincipal: principal.name, qtdAnexos: anexos.length,
+      nomeArquivoPrincipal: principal.name, qtdAnexos: anexos.length, remetente: d.remetente, observacao: d.observacao,
     };
+    // Entra no quadro e nos detalhes ("Abrir detalhes" do toast, F4), com os arquivos enviados.
+    cartoes = [...cartoes, cartao(99, criado.codigo, criado.titulo, 'Recebido', area, 30, { id: criado.id, revisao: criado.revisao, remetente: criado.remetente, dataRecebimento: HOJE })];
+    extrasDocumento[criado.id] = { observacao: criado.observacao };
+    arquivosPorDocumento.set(criado.id, [
+      arquivo(900, 'principal', principal.name, principal.size),
+      ...anexos.map((f, i) => arquivo(901 + i, 'anexo', f.name, f.size)),
+    ]);
+    return criado;
   },
 };
 

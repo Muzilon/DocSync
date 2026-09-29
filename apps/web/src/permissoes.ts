@@ -18,8 +18,8 @@ export function podeReprogramar(eu: Pessoa, cartao: { areaId: string; status: St
 }
 
 /**
- * Mostra os botões Baixar e Visualizar nos detalhes (contrato F4, 4.5; decisão 0013)? Pergunta a
- * `pode` com a área do documento. A API decide de verdade (e registra cada acesso).
+ * Mostra o botão Baixar nos detalhes (contrato F4, 4.5)? Pergunta a `pode` com a área do
+ * documento. A API decide de verdade.
  */
 export function podeBaixarArquivo(eu: Pessoa, documento: { areaId: string }): boolean {
   return pode(eu, 'baixarArquivo', { areaId: documento.areaId });

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Download, Eye, File, FileImage, FileSpreadsheet, FileText } from 'lucide-react';
-import { ehPdf, extensaoArquivo, formatarTamanho, type ArquivoDocumento } from '@docsync/compartilhado';
+import { Download, File, FileImage, FileSpreadsheet, FileText } from 'lucide-react';
+import { extensaoArquivo, formatarTamanho, type ArquivoDocumento } from '@docsync/compartilhado';
 import { useApi } from '../api/cliente.ts';
 import { mensagemDeErro } from '../api/erros.ts';
 import { Botao } from './Botao.tsx';
@@ -19,6 +19,9 @@ function IconeArquivo({ nome }: { nome: string }) {
   return <Icone className={estilos.icone} size={20} aria-hidden="true" />;
 }
 
+/** Tempo até liberar a URL do blob depois do clique. */
+const ESPERA_REVOGAR_MS = 30_000;
+
 /**
  * Dispara o download de um blob com o nome dado, sem token em URL (contrato F4, 4.4): link
  * temporário com URL de objeto, revogada em seguida. O link fica dentro do diálogo aberto
@@ -35,8 +38,9 @@ export function salvarBlob(blob: Blob, nomeArquivo: string, dentroDe?: Element |
     link.click();
   } finally {
     link.remove();
-    // Revoga depois do clique ser processado pelo navegador.
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Revoga só depois de o navegador ter lido o blob (revogar logo em seguida faz o Chrome
+    // perder o nome do arquivo). O blob tem no máximo 20 MB (P-09).
+    window.setTimeout(() => URL.revokeObjectURL(url), ESPERA_REVOGAR_MS);
   }
 }
 
@@ -45,17 +49,18 @@ interface Props {
   arquivos: ArquivoDocumento[];
   /** Resultado de `podeBaixarArquivo` (a API decide de verdade). Sem permissão, só a lista. */
   podeBaixar: boolean;
-  /** Abre o visualizador para um PDF (decisão 0013). */
-  aoVisualizar: (arquivo: ArquivoDocumento) => void;
+  /** Um download começou (para limpar um erro anterior). */
+  aoBaixar?: () => void;
   /** Falha no download (mensagem pt-BR de api/erros.ts). */
   aoErro: (mensagem: string) => void;
 }
 
 /**
  * Lista de arquivos dos detalhes (contrato F4, 5.2): principal primeiro (ordem da API), nome,
- * etiqueta "Principal", tamanho, e os botões Visualizar (só PDF) e Baixar. Sem anexar (F7).
+ * etiqueta "Principal", tamanho e o botão Baixar. Sem anexar (F7), sem visualizador e sem abrir
+ * no Office (o visualizador de PDF saiu da F4 por decisão do Eric).
  */
-export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoVisualizar, aoErro }: Props) {
+export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoBaixar, aoErro }: Props) {
   const api = useApi();
   const [baixando, setBaixando] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState('');
@@ -64,6 +69,7 @@ export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoVisualizar,
   async function baixar(arquivo: ArquivoDocumento) {
     if (baixando) return;
     setBaixando(arquivo.id);
+    aoBaixar?.();
     setAnuncio(`Baixando ${arquivo.nomeOriginal}…`);
     try {
       const { blob, nomeArquivo } = await api.baixarArquivo(documentoId, arquivo.id, arquivo.nomeOriginal);
@@ -83,7 +89,6 @@ export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoVisualizar,
     <>
       <ul ref={lista} className={estilos.lista}>
         {arquivos.map((arquivo) => {
-          const pdf = ehPdf(arquivo.nomeOriginal);
           const esteBaixando = baixando === arquivo.id;
           return (
             <li key={arquivo.id} className={estilos.item}>
@@ -102,11 +107,6 @@ export function ListaArquivos({ documentoId, arquivos, podeBaixar, aoVisualizar,
               </div>
               {podeBaixar && (
                 <div className={estilos.acoes}>
-                  {pdf && (
-                    <Botao compacto icone={<Eye size={14} aria-hidden="true" />} onClick={() => aoVisualizar(arquivo)}>
-                      Visualizar <span className="visualmente-oculto">{arquivo.nomeOriginal}</span>
-                    </Botao>
-                  )}
                   <Botao
                     compacto
                     icone={<Download size={14} aria-hidden="true" />}

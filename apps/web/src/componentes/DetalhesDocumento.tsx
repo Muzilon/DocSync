@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { CalendarPlus } from 'lucide-react';
 import {
   contarDevolucoes,
   etiquetaPrazo,
-  type ArquivoDocumento,
   type DetalheDocumento,
   type Documento,
 } from '@docsync/compartilhado';
@@ -20,7 +19,6 @@ import { ErroCarregamento } from './Estados.tsx';
 import { EtiquetaPrazo, EtiquetaReprogramado } from './EtiquetaPrazo.tsx';
 import { LinhaDoTempo } from './LinhaDoTempo.tsx';
 import { ListaArquivos } from './ListaArquivos.tsx';
-import { VisualizadorPdf } from './VisualizadorPdf.tsx';
 import estilos from './DetalhesDocumento.module.css';
 
 /** ID de documento aceito na URL (`?documento=`): o resto nem chega à API (vira "não encontrado"). */
@@ -43,7 +41,7 @@ interface Props {
 
 /**
  * Modal de detalhes do documento (contrato F4, 5.2; respostas do Eric na seção 9): Dados, Arquivos
- * (Baixar; Visualizar para PDF) e Linha do tempo única. Faz o próprio GET /documentos/:id, então
+ * (Baixar) e Linha do tempo única. Faz o próprio GET /documentos/:id, então
  * abre também cancelados e documentos escondidos pela busca. Única ação além de Fechar e dos
  * arquivos: Reprogramar (mesma regra do cartão). Nada editável aqui (F5/F6).
  */
@@ -55,7 +53,6 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
   const [tentativa, setTentativa] = useState(0);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
   const [aviso, setAviso] = useState('');
-  const [visualizando, setVisualizando] = useState<ArquivoDocumento | null>(null);
   const [reprogramacao, setReprogramacao] = useState<{ chave: number; aberto: boolean } | null>(null);
   const chave = useRef(0);
   const idDados = useId();
@@ -71,7 +68,6 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
       setEstado({ tipo: 'carregando' });
       setErroArquivo(null);
       setAviso('');
-      setVisualizando(null);
       setReprogramacao(null);
       return;
     }
@@ -97,11 +93,6 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
       ativo = false;
     };
   }, [api, documentoId, tentativa, recarga]);
-
-  const carregarPdf = useCallback(
-    () => (documentoId && visualizando ? api.visualizarArquivo(documentoId, visualizando.id) : Promise.reject(new Error('fechado'))),
-    [api, documentoId, visualizando],
-  );
 
   const detalhe = estado.tipo === 'pronto' ? estado.detalhe : null;
   const documento = detalhe?.documento ?? null;
@@ -179,10 +170,7 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
                   documentoId={estado.detalhe.documento.id}
                   arquivos={estado.detalhe.arquivos}
                   podeBaixar={podeBaixarArquivo(eu, estado.detalhe.documento)}
-                  aoVisualizar={(arquivo) => {
-                    setErroArquivo(null);
-                    setVisualizando(arquivo);
-                  }}
+                  aoBaixar={() => setErroArquivo(null)}
                   aoErro={setErroArquivo}
                 />
               </section>
@@ -201,14 +189,6 @@ export function DetalhesDocumento({ documentoId, aoFechar, aoAtualizarDocumento 
         </p>
       </Dialogo>
 
-      {visualizando && (
-        <VisualizadorPdf
-          aberto
-          nomeArquivo={visualizando.nomeOriginal}
-          carregar={carregarPdf}
-          aoFechar={() => setVisualizando(null)}
-        />
-      )}
 
       {reprogramacao && detalhe && (
         <DialogoReprogramar
